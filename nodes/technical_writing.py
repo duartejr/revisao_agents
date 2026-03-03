@@ -11,12 +11,12 @@ from config import (
     MAX_REACT_ITERATIONS, EXTRACT_MIN_CHARS, TOP_K_OBSERVACAO,
     MAX_CORPUS_PROMPT, JUIZ_TOP_K, ANCORA_MIN_SIM_FAISS
 )
-from utils.tavily_client import search_web, search_images, extract_urls, score_url
 from utils.mongodb_corpus import CorpusMongoDB
 from utils.helpers import (
     normalizar, fuzzy_sim, fuzzy_search_in_text,
     resumir_secao, parse_plano_tecnico
 )
+from utils.tavily_client import search_web, search_images, extract_urls, score_url
 
 # Padrão para âncoras
 _ANCORA_PATTERN = re.compile(r'\[ÂNCORA:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
@@ -406,74 +406,7 @@ def _buscar_chunks_para_paragrafo(
         return "".join(partes)
     return corpus_prompt_completo[:JUIZ_MAX_CORPUS_CHARS]
 
-def _verificar_e_corrigir_secao(
-    texto_secao: str,
-    corpus: CorpusMongoDB,
-    corpus_prompt_completo: str,
-    titulo: str,
-) -> tuple:
-    """Verifica parágrafo a parágrafo e retorna texto corrigido, log e stats."""
-    blocos = re.split(r'\n{2,}', texto_secao.strip())
-
-    resultado = []
-    log_linhas = [f"### Verificação por Parágrafo — {titulo}\n"]
-    stats = {"total": 0, "aprovados": 0, "ajustados": 0, "corrigidos": 0, "pulados": 0}
-
-    for i, bloco in enumerate(blocos):
-        bloco = bloco.strip()
-        if not bloco:
-            continue
-
-        bloco_limpo = re.sub(r'\[ÂNCORA:\s*"[^"]*"\]', "", bloco).strip()
-        bloco_limpo = re.sub(r'  +', ' ', bloco_limpo)
-
-        if not _eh_paragrafo_verificavel(bloco_limpo):
-            resultado.append(bloco_limpo)
-            stats["pulados"] += 1
-            continue
-
-        stats["total"] += 1
-
-        fontes = _buscar_chunks_para_paragrafo(bloco, corpus, corpus_prompt_completo)
-
-        if not fontes.strip():
-            resultado.append(bloco_limpo)
-            stats["aprovados"] += 1
-            log_linhas.append(f"  ⏭️  par.{i+1} [SEM FONTES → APROVADO]: {bloco_limpo[:60]}...")
-            continue
-
-        texto_final, nivel, log_entry = _juiz_paragrafo(bloco_limpo, fontes)
-        resultado.append(texto_final)
-        log_linhas.append(f"  par.{i+1}: {log_entry}")
-
-        if nivel == "APROVADO":
-            stats["aprovados"] += 1
-        elif nivel == "AJUSTADO":
-            stats["ajustados"] += 1
-        else:
-            stats["corrigidos"] += 1
-
-    verificados = stats["aprovados"] + stats["ajustados"]
-    taxa = (verificados / stats["total"] * 100) if stats["total"] > 0 else 100.0
-
-    log_linhas.append(
-        f"\n**Resultado:** {verificados}/{stats['total']} verificados ({taxa:.0f}%) "
-        f"— {stats['aprovados']} aprovados, {stats['ajustados']} ajustados, "
-        f"{stats['corrigidos']} corrigidos | {stats['pulados']} pulados"
-    )
-
-    texto_corrigido = "\n\n".join(p for p in resultado if p)
-    texto_corrigido = re.sub(r'\[ÂNCORA:\s*"[^"]*"\]', "", texto_corrigido)
-    texto_corrigido = re.sub(r'\n{3,}', '\n\n', texto_corrigido)
-
-    print(f"     📊 {verificados}/{stats['total']} verificados ({taxa:.0f}%) "
-          f"— ✅{stats['aprovados']} aprovados  🔵{stats['ajustados']} ajustados  "
-          f"🔧{stats['corrigidos']} corrigidos  ⏭️{stats['pulados']} pulados")
-
-    return texto_corrigido, "\n".join(log_linhas), stats
-
 # --- Nós do grafo ---
-
 def parsear_plano_node(state: EscritaTecnicaState) -> dict:
     caminho = state["caminho_plano"]
     print(f"\n📖 Lendo plano: {caminho}")
@@ -496,6 +429,315 @@ def parsear_plano_node(state: EscritaTecnicaState) -> dict:
         "status": "plano_parseado",
         "caminho_plano": caminho,
     }
+
+# ============================================================================
+# SISTEMA DE VERIFICAÇÃO ADAPTATIVA v2
+# ============================================================================
+
+def _contar_claims_verificaveis(paragrafo: str) -> int:
+    """Conta claims que DEVEM ser verificadas (sem contar conhecimento geral)."""
+    p = paragrafo.strip()
+    
+    if len(p) < 80:
+        return 0
+    if p.startswith("#"):
+        return 0
+    if re.match(r"^\s*[-*]\s", p):
+        return 0
+    if p.startswith("```"):
+        return 0
+    if p.startswith("$$") or re.match(r"^\s*\$[^$]+\$", p):
+        return 0
+    if p.startswith("*Figura") or p.startswith("!["):
+        return 0
+    
+    num_claims = 0
+    num_claims += len(re.findall(r'\b\d+[\d.,]*\b', p))
+    num_claims += len(re.findall(r'\b[A-Z][a-z]+\s+(?:et\s+al|[A-Z][a-z]+|\(\d{4}\))', p))
+    num_claims += len(re.findall(r'\b(19|20)\d{2}\b|\bv\d+\.\d+', p))
+    num_claims += len(re.findall(r'[\+\-\*=/<>]', p))
+    
+    assertivas = ["foi", "é", "são", "demonstra", "prova", "mostra", "evidencia", 
+                  "encontrou", "observou", "descobriu", "propôs", "definiu"]
+    for ass in assertivas:
+        num_claims += len(re.findall(rf'\b{ass}\b', p, re.IGNORECASE))
+    
+    return min(num_claims, 5)
+
+
+def _juiz_paragrafo_melhorado(
+    paragrafo_limpo: str,
+    fontes: str,
+    titulo_secao: str,
+) -> tuple:
+    """
+    Juiz com 3 níveis + detecção de âncoras.
+    Retorna: (texto_final, nivel, log_entry, eh_verificavel)
+    """
+    
+    ancoras = _ANCORA_PATTERN.findall(paragrafo_limpo)
+    tem_ancoras = len([a for a in ancoras if len(a.strip()) > 20]) > 0
+    num_claims = _contar_claims_verificaveis(paragrafo_limpo)
+    
+    if num_claims == 0 and not tem_ancoras:
+        log_entry = f"⏭️  ESTRUTURAL  | {paragrafo_limpo[:70].replace(chr(10), ' ')}..."
+        return paragrafo_limpo, "ESTRUTURAL", log_entry, False
+    
+    if tem_ancoras and len(paragrafo_limpo) < 100:
+        log_entry = f"✅ APROVADO  | {paragrafo_limpo[:70].replace(chr(10), ' ')}..."
+        return paragrafo_limpo, "APROVADO", log_entry, True
+    
+    if num_claims == 0:
+        log_entry = f"✅ CONC.GERAL  | {paragrafo_limpo[:70].replace(chr(10), ' ')}..."
+        return paragrafo_limpo, "APROVADO", log_entry, True
+    
+    prompt = f"""Você é um verificador de fatos técnicos (BENEFÍCIO DA DÚVIDA).
+
+PARÁGRAFO PARA VERIFICAR:
+{paragrafo_limpo}
+
+SEÇÃO: {titulo_secao}
+
+FONTES DISPONÍVEIS (amostra):
+{fontes[:2000]}
+
+ESTRATÉGIA DE VERIFICAÇÃO:
+  ✅ APROVADO: (1) Todas as assertivas têm suporte nas fontes
+              (2) OU são conhecimento universal técnico estabelecido
+              (3) OU a fonte é incompleta MAS o parágrafo é defensável
+
+  🔵 AJUSTADO: A ideia está correta mas há imprecisão de termo/escopo
+              Corrija APENAS a imprecisão, mantenha o resto.
+
+  🔧 CORRIGIDO: (RARO) Há afirmação claramente ERRADA OU contradição explícita
+
+REGRA OURO: Se fontes insuficientes → use APROVADO (benefício da dúvida).
+           Só use CORRIGIDO se tiver certeza de erro factual.
+
+RESPONDA EXCLUSIVAMENTE:
+DECISÃO: [APROVADO|AJUSTADO|CORRIGIDO]
+TEXTO: [parágrafo final]"""
+
+    resp = llm_call(prompt, temperature=0.1)
+    
+    nivel = "APROVADO"
+    texto_final = paragrafo_limpo
+    
+    m_dec = re.search(r"DECIS[ÃA]O\s*:\s*(APROVADO|AJUSTADO|CORRIGIDO)", resp, re.IGNORECASE)
+    if m_dec:
+        nivel = m_dec.group(1).upper()
+    
+    m_txt = re.search(r"TEXTO\s*:\s*([\s\S]+)", resp, re.IGNORECASE)
+    if m_txt:
+        candidato = m_txt.group(1).strip()
+        candidato = re.sub(r"^DECIS[ÃA]O\s*:.*\n?", "", candidato, flags=re.IGNORECASE).strip()
+        if candidato and len(candidato) > 20:
+            texto_final = candidato
+    
+    trecho = paragrafo_limpo[:70].replace('\n', ' ')
+    if nivel == "APROVADO":
+        log_entry = f"✅ APROVADO  | {trecho}..."
+    elif nivel == "AJUSTADO":
+        corr = texto_final[:70].replace('\n', ' ')
+        log_entry = f"🔵 AJUSTADO  | {trecho}...\n     → {corr}..."
+    else:
+        corr = texto_final[:70].replace('\n', ' ')
+        log_entry = f"🔧 CORRIGIDO | {trecho}...\n     → {corr}..."
+    
+    return texto_final, nivel, log_entry, True
+
+
+def _monitorar_taxa_verificacao(stats: dict, titulo_secao: str) -> tuple:
+    """
+    Monitora se a taxa de verificação é aceitável.
+    Retorna: (precisa_buscar_mais, motivo)
+    """
+    total = stats.get("total", 0)
+    if total == 0:
+        return False, "Nenhum parágrafo verificado"
+    
+    verificaveis = stats.get("verificaveis", 0)
+    
+    if verificaveis == 0:
+        return False, "Sem parágrafos verificáveis"
+    
+    verificados = stats.get("aprovados", 0) + stats.get("ajustados", 0)
+    taxa = (verificados / verificaveis * 100) if verificaveis > 0 else 100
+    
+    if taxa < 40:
+        return True, f"Taxa crítica {taxa:.0f}%"
+    elif taxa < 60:
+        return True, f"Taxa baixa {taxa:.0f}%"
+    
+    return False, f"Taxa OK {taxa:.0f}%"
+
+
+def _buscar_conteudo_complementar(
+    titulo_secao: str,
+    conteudo_esperado: str,
+    corpus_atual: CorpusMongoDB,
+    urls_tentadas: set,
+) -> tuple:
+    """Busca conteúdo complementar quando muitos parágrafos falham."""
+    print(f"\n      🔄 BUSCA COMPLEMENTAR — {titulo_secao}")
+    
+    prompt_queries = (
+        f"Gere 2 queries de busca COMPLEMENTARES para '{titulo_secao}' "
+        f"({conteudo_esperado[:100]}).\nRetorne apenas 2 queries, uma por linha."
+    )
+    
+    queries_complementares = []
+    try:
+        resp = llm_call(prompt_queries, temperature=0.4)
+        queries_complementares = [q.strip() for q in resp.split('\n') if q.strip()][:2]
+    except Exception as e:
+        print(f"      ⚠️  Erro: {e}")
+        queries_complementares = [f"{titulo_secao} tutorial", f"{titulo_secao} técnico"]
+    
+    num_novos = 0
+    extraidos_novos = []
+    
+    for q in queries_complementares:
+        print(f"      • {q[:70]}")
+        try:
+            res = search_web(q, max_results=8)
+            urls_para_extrair = []
+            for r in res:
+                u = r.get("url", "")
+                if u and u not in urls_tentadas and not corpus_atual.url_exists(u):
+                    urls_para_extrair.append(u)
+                    urls_tentadas.add(u)
+                    if len(urls_para_extrair) >= 4:
+                        break
+            
+            if urls_para_extrair:
+                raw = extract_urls(urls_para_extrair)
+                for item in raw:
+                    if len(item.get("conteudo", "")) >= EXTRACT_MIN_CHARS:
+                        extraidos_novos.append(item)
+                        num_novos += 1
+            
+            time.sleep(1)
+        except Exception as e:
+            print(f"      ⚠️  Erro '{q[:50]}': {e}")
+    
+    if not extraidos_novos:
+        return 0, corpus_atual, "Nenhum novo conteúdo"
+    
+    corpus_novo = CorpusMongoDB().build(extraidos_novos, [])
+    if corpus_novo._n_docs > 0:
+        corpus_atual._urls_usadas.extend(corpus_novo._urls_usadas)
+        corpus_atual._total_chunks += corpus_novo._total_chunks
+        print(f"      ✅ +{num_novos} chunks indexados")
+    
+    return num_novos, corpus_atual, f"+{num_novos} chunks"
+
+
+def _verificar_e_corrigir_secao_adaptativa(
+    texto_secao: str,
+    corpus: CorpusMongoDB,
+    corpus_prompt_completo: str,
+    titulo: str,
+    conteudo_esperado: str = "",
+) -> tuple:
+    """Verificação com loop adaptativo."""
+    
+    urls_tentadas = set()
+    iteracao = 0
+    
+    while iteracao < 3:
+        iteracao += 1
+        print(f"\n     └─ Verificação iter {iteracao}/3")
+        
+        blocos = re.split(r'\n{2,}', texto_secao.strip())
+        resultado = []
+        log_linhas = [f"\n### Verificação Adaptativa — {titulo} (iter {iteracao})"]
+        
+        stats = {
+            "total": 0,
+            "aprovados": 0,
+            "ajustados": 0,
+            "corrigidos": 0,
+            "estruturais": 0,
+            "verificaveis": 0,
+            "pulados": 0,
+        }
+        
+        for i, bloco in enumerate(blocos):
+            bloco = bloco.strip()
+            if not bloco:
+                continue
+            
+            bloco_limpo = re.sub(r'\[ÂNCORA:\s*"[^"]*"\]', "", bloco).strip()
+            bloco_limpo = re.sub(r'  +', ' ', bloco_limpo)
+            
+            if bloco_limpo.startswith("#") or len(bloco_limpo) < 60:
+                resultado.append(bloco_limpo)
+                stats["pulados"] += 1
+                continue
+            
+            stats["total"] += 1
+            
+            fontes = corpus.render_prompt(bloco_limpo[:300], max_chars=3000)[0]
+            
+            if not fontes.strip():
+                resultado.append(bloco_limpo)
+                stats["aprovados"] += 1
+                stats["estruturais"] += 1
+                log_linhas.append(f"  par.{i+1}: ⏭️  SEM FONTES")
+                continue
+            
+            texto_final, nivel, log_entry, eh_verificavel = _juiz_paragrafo_melhorado(
+                bloco_limpo, fontes, titulo
+            )
+            
+            resultado.append(texto_final)
+            log_linhas.append(f"  par.{i+1}: {log_entry}")
+            
+            if eh_verificavel:
+                stats["verificaveis"] += 1
+            
+            if "APROVADO" in nivel or "ESTRUTURAL" in nivel:
+                stats["aprovados"] += 1
+            elif "AJUSTADO" in nivel:
+                stats["ajustados"] += 1
+            else:
+                stats["corrigidos"] += 1
+        
+        precisa_mais, motivo = _monitorar_taxa_verificacao(stats, titulo)
+        verificados = stats["aprovados"] + stats["ajustados"]
+        taxa = (verificados / stats["verificaveis"] * 100) if stats["verificaveis"] > 0 else 100
+        
+        log_linhas.append(f"\n**Resultado:** {verificados}/{stats['verificaveis']} ({taxa:.0f}%) — {motivo}")
+        print(f"     📊 {taxa:.0f}% | {motivo}")
+        
+        if not precisa_mais or iteracao >= 3:
+            break
+        
+        num_novos, corpus, msg = _buscar_conteudo_complementar(
+            titulo, conteudo_esperado, corpus, urls_tentadas
+        )
+        log_linhas.append(f"\n**Busca:** {msg}")
+        
+        if num_novos == 0:
+            break
+        
+        corpus_prompt_completo, _, _ = corpus.render_prompt(
+            f"{titulo} {conteudo_esperado}", max_chars=25000
+        )
+    
+    texto_corrigido = "\n\n".join(p for p in resultado if p)
+    texto_corrigido = re.sub(r'\[ÂNCORA:\s*"[^"]*"\]', "", texto_corrigido)
+    texto_corrigido = re.sub(r'\n{3,}', '\n\n', texto_corrigido)
+    
+    verificados = stats["aprovados"] + stats["ajustados"]
+    taxa_final = (verificados / stats["verificaveis"] * 100) if stats["verificaveis"] > 0 else 100
+    
+    print(f"\n     📊 FINAL: {verificados}/{stats['verificaveis']} ({taxa_final:.0f}%)")
+    
+    relatorio = "\n".join(log_linhas)
+    
+    return texto_corrigido, relatorio, stats
 
 def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
     tema = state["tema"]
@@ -657,29 +899,47 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
         log.append(f"Rascunho: {len(rascunho):,} chars | {n_ancoras} âncoras (hints)")
         print(f"     {len(rascunho):,} chars | {n_ancoras} âncoras")
 
-        # FASE 7: Verificação por parágrafo
-        print(f"\n  🔍 FASE 7 — Verificação por parágrafo...")
-        log.append("\n── FASE 7: VERIFICAÇÃO POR PARÁGRAFO ──")
-        texto_final, relatorio_verif, stats = _verificar_e_corrigir_secao(
-            rascunho, corpus, referencia_completa, titulo
+        # FASE 7: Verificação adaptativa com loop REACT
+        print(f"\n  🔍 FASE 7 — Verificação adaptativa...")
+        log.append("\n── FASE 7: VERIFICAÇÃO ADAPTATIVA (REACT) ──")
+        texto_final, relatorio_verif, stats = _verificar_e_corrigir_secao_adaptativa(
+            rascunho, 
+            corpus, 
+            referencia_completa, 
+            titulo,
+            conteudo_esperado=cont_esp,
         )
+
         log.append(relatorio_verif)
         stats_verificacao.append({"secao": titulo, **stats})
 
         if not texto_final.strip().startswith("## "):
             texto_final = f"## {titulo}\n\n{texto_final.strip()}"
 
+        # Calcula taxa só de parágrafos verificáveis
+        verificaveis = stats.get("verificaveis", 0)
+        if verificaveis == 0:
+            verificaveis = stats.get("total", 1)
+        
         verificados = stats.get("aprovados", 0) + stats.get("ajustados", 0)
-        taxa = (verificados / stats["total"] * 100) if stats["total"] > 0 else 100
-        if stats["total"] > 0 and taxa < 60:
+        taxa = (verificados / verificaveis * 100) if verificaveis > 0 else 100
+        
+        num_corrigidos = stats.get("corrigidos", 0)
+        if stats["total"] > 0 and (taxa < 40 or num_corrigidos > stats["total"] * 0.3):
             aviso = (
-                f"> ⚠️ **Confiabilidade: {taxa:.0f}%** — apenas "
-                f"{verificados}/{stats['total']} parágrafos verificados "
-                f"({stats.get('corrigidos',0)} com erros factuais). "
-                "Revisão manual recomendada.\n\n"
+                f"> ⚠️ **Confiabilidade: {taxa:.0f}%** "
+                f"({verificados}/{verificaveis} verificados). "
+                f"Revisão manual pode ser necessária.\n\n"
             )
             texto_final = re.sub(
                 r"(## .+?\n)", r"\1\n" + aviso, texto_final, count=1
+            )
+        elif taxa < 60 and stats["total"] > 0:
+            aviso = (
+                f"> ℹ️ **Verificação**: {taxa:.0f}% dos parágrafos verificados.\n\n"
+            )
+            texto_final = re.sub(
+                r"(## .+?\n)", r"\1\n" + aviso, texto_final, count=1, flags=re.DOTALL
             )
 
         print(f"  ✅ [{pos+1}/{n_total}] Seção concluída ({taxa:.0f}% verificado)")
