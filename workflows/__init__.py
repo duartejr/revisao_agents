@@ -1,0 +1,2 @@
+from .academic_workflow import build_academico_workflow
+from .technical_workflow import build_tecnico_workflow
