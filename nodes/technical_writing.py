@@ -17,6 +17,8 @@ from utils.helpers import (
     resumir_secao, parse_plano_tecnico
 )
 from utils.tavily_client import search_web, search_images, extract_urls, score_url
+from utils.fix_citation_remapping import sincronizar_texto_com_references
+
 
 # Padrão para âncoras
 _ANCORA_PATTERN = re.compile(r'\[ÂNCORA:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
@@ -891,10 +893,15 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
         # FASE 6: Rascunho ancorado
         print(f"\n  ✍️  FASE 6 — Rascunho ancorado...")
         log.append("\n── FASE 6: RASCUNHO ──")
-        rascunho, _ = _fase_rascunho(
+        rascunho, urls_usadas_fase6 = _fase_rascunho(
             tema, titulo, cont_esp, recursos, corpus, img_txt,
             resumo_acumulado, pos, n_total, titulos_todos, len(extraidos)
         )
+        # Rastrear qual fonte foi usada 
+        fonte_map_secao = {}
+        for i, url in enumerate(urls_usadas_fase6, 1):
+            fonte_map_secao[i] = url
+        # Guardar para consolidar node
         n_ancoras = len(_ANCORA_PATTERN.findall(rascunho))
         log.append(f"Rascunho: {len(rascunho):,} chars | {n_ancoras} âncoras (hints)")
         print(f"     {len(rascunho):,} chars | {n_ancoras} âncoras")
@@ -943,13 +950,18 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
             )
 
         print(f"  ✅ [{pos+1}/{n_total}] Seção concluída ({taxa:.0f}% verificado)")
+        fonte_map_secao = {}
+        for i, url in enumerate(urls_secao, 1):
+            fonte_map_secao[i] = url
 
         secoes_escritas.append({
             "indice": idx_num,
             "titulo": titulo,
             "texto": texto_final,
             "urls_usadas": urls_secao,
+            "fonte_map": fonte_map_secao,
             "imagens": imagens,
+            "font_map": fonte_map_secao
         })
 
         for u in urls_secao:
@@ -1056,23 +1068,41 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
         partes.append("\n\n---\n")
 
     partes += ["## Conclusão\n", resp_concl.strip(), "\n\n---\n", "## Referências\n"]
-    if all_urls:
-        for i, url in enumerate(all_urls[:80], 1):
-            partes.append(f"[{i}] {url}")
+    print(f"\n  🔗 Sincronizando citações com referências...")
+
+    # Coleta todos os fonte_maps das seções
+    fonte_map_consolidado = {}
+    contador = 1
+    for secao in secoes:
+        secao_fonte_map = secao.get("fonte_map", {})
+        for _, url in secao_fonte_map.items():
+            if url not in [fonte_map_consolidado.get(i) for i in fonte_map_consolidado]:
+                fonte_map_consolidado[contador] = url
+                contador += 1
+    
+    # Sincroniza texto com referências
+    documento_temp = "\n".join(partes)
+
+    print(f"\n  🔧 Sincronizando citações...")
+    documento, all_urls_sincronizadas = sincronizar_texto_com_references(
+        documento_temp,
+        fonte_map_consolidado
+    )
+
+    print(f"     ✅ {len(all_urls_sincronizadas)} referências sincronizadas")
+
+    documento += "\n## Referências\n"
+    
+    if all_urls_sincronizadas:
+        for i, url in enumerate(all_urls_sincronizadas[:80], 1):
+            documento += f"[{i}] {url}\n"
     else:
-        partes.append("*Nenhuma fonte utilizada.*")
-
-    all_img_urls = [img.get("url_imagem", "") for img in all_imagens if img.get("url_imagem")]
-    urls_inline = {img.get("url_imagem", "") for s in secoes for img in s.get("imagens", [])}
-    orfas = [u for u in all_img_urls if u and u not in urls_inline]
-    if orfas:
-        partes.append("\n\n## Apêndice — Recursos Visuais\n")
-        for i, img_url in enumerate(orfas, 1):
-            partes.append(f"![Figura extra {i}]({img_url})\n*Figura extra {i}*\n")
-
-    documento = "\n".join(partes)
+        documento += "*Nenhuma fonte utilizada.*\n"
+    
+    # ← RESTO do código continua (salvar arquivo, etc)
     slug = re.sub(r"[^\w\s-]", "", tema[:40]).strip().replace(" ", "_").lower()
     output_path = f"revisao_tecnica_{slug}.md"
+
     log_path = f"revisao_tecnica_{slug}.log"
 
     try:
