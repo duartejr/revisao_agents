@@ -99,14 +99,78 @@ def get_llm(temperature=0.3):
             google_api_key=os.getenv("GOOGLE_API_KEY", ""),
         )
 
-def llm_call(prompt: str, temperature: float = 0.2) -> str:
-    """Wrapper para chamadas ao LLM com tratamento de exceção."""
+import os
+from typing import Type, TypeVar, Union, Optional
+from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
+
+
+def llm_call(
+    prompt: str,
+    temperature: float = 0.2,
+    response_schema: Optional[Type[T]] = None,
+) -> Union[str, T]:
+    """
+    Wrapper para chamadas ao LLM com suporte a múltiplos providers e saída estruturada.
+
+    Env vars:
+        LLM_PROVIDER: 'openai' | 'gemini' | 'groq'  (default: 'openai')
+        LLM_MODEL:    nome do modelo (ex: 'gpt-4o', 'gemini-2.0-flash', 'llama-3.3-70b-versatile')
+
+    Args:
+        prompt:          Prompt a ser enviado ao LLM.
+        temperature:     Temperatura da geração (default 0.2).
+        response_schema: Classe Pydantic para estruturar a resposta (opcional).
+
+    Returns:
+        Instância do Pydantic fornecido, ou str se nenhum schema foi passado.
+    """
+    provider = os.getenv("LLM_PROVIDER", "groq").lower().strip()
+    model = os.getenv("LLM_MODEL", _default_model(provider))
+
     try:
-        resp = get_llm(temperature).invoke(prompt)
+        llm = _build_llm(provider, model, temperature)
+
+        if response_schema is not None:
+            structured_llm = llm.with_structured_output(response_schema)
+            return structured_llm.invoke(prompt)
+
+        resp = llm.invoke(prompt)
         return resp.content if hasattr(resp, "content") else str(resp)
+
     except Exception as e:
-        print(f"   ⚠️  LLM error: {e}")
-        return ""
+        print(f"   ⚠️  LLM error [{provider}/{model}]: {e}")
+        return None if response_schema else ""
+
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+def _default_model(provider: str) -> str:
+    defaults = {
+        "openai": "gpt-4o-mini",
+        "gemini": "gemini-2.5-flash",
+        "groq":   "llama-3.3-70b-versatile",
+    }
+    return defaults.get(provider, "llama-3.3-70b-versatile")
+
+
+def _build_llm(provider: str, model: str, temperature: float):
+    if provider == "openai":
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(model=model, temperature=temperature)
+
+    if provider == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        return ChatGoogleGenerativeAI(model=model, temperature=temperature)
+
+    if provider == "groq":
+        from langchain_groq import ChatGroq
+        return ChatGroq(model=model, temperature=temperature)
+
+    raise ValueError(
+        f"Provider '{provider}' não suportado. Use: openai | gemini | groq"
+    )
 
 def parse_json_safe(texto: str) -> dict | None:
     """Extrai JSON de uma resposta LLM mesmo com texto ao redor."""

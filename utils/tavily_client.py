@@ -55,7 +55,7 @@ def search_images(queries: List[str], max_results: int = 8) -> List[dict]:
     try:
         from tools.tavily_tool import search_tavily_images
         res = search_tavily_images.invoke({"queries": queries, "max_results": max_results})
-        return res.get("imagens", [])[:MAX_IMAGENS_SECAO]  # MAX_IMAGENS_SECAO deve estar em config
+        return res.get("imagens", [])[:max_results]  # MAX_IMAGENS_SECAO deve estar em config
     except Exception as e:
         print(f"   ⚠️  search_images: {e}")
         return []

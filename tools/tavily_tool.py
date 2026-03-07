@@ -11,6 +11,10 @@ Ferramentas Tavily para:
 RASTREABILIDADE:
   Cada busca gera automaticamente um arquivo .md em ./tavily_searchs/
   com o conteúdo completo retornado, para auditoria e reprodutibilidade.
+
+PRIORIZAÇÃO DE IDIOMA:
+  Todas as buscas priorizam conteúdo em INGLÊS, mas permitem português.
+  Resultados são ordenados dando preferência a fontes em inglês.
 """
 
 from utils.commons import get_clean_key
@@ -86,6 +90,7 @@ def _salvar_pesquisa_md(
             titulo   = r.get("title", r.get("titulo", ""))
             snippet  = r.get("snippet", r.get("content", r.get("conteudo", "")))
             score    = r.get("score", "")
+            idioma   = r.get("language", r.get("idioma", ""))
             imagens  = r.get("imagens", r.get("images", []))
             descr    = r.get("image_descriptions", {})
 
@@ -95,6 +100,8 @@ def _salvar_pesquisa_md(
                 linhas.append(f"**URL:** {url}")
             if score:
                 linhas.append(f"**Score:** {score:.4f}" if isinstance(score, float) else f"**Score:** {score}")
+            if idioma:
+                linhas.append(f"**Idioma:** {idioma}")
             if snippet:
                 linhas.append(f"")
                 linhas.append(f"**Conteúdo:**")
@@ -127,31 +134,91 @@ def _salvar_pesquisa_md(
 
 
 # ============================================================================
+# DETECÇÃO DE IDIOMA
+# ============================================================================
+
+def _detectar_idioma(texto: str) -> str:
+    """
+    Detecta se o texto é predominantemente em inglês ou português.
+    Retorna 'en' ou 'pt'.
+    """
+    if not texto:
+        return 'en'
+    
+    texto_lower = texto.lower()
+    
+    # Palavras comuns em português
+    palavras_pt = ['para', 'como', 'que', 'com', 'mais', 'dos', 'das', 'pela', 'pelo', 
+                   'são', 'foi', 'está', 'sobre', 'entre', 'através', 'também', 'ser',
+                   'por', 'uma', 'seus', 'suas', 'este', 'esta', 'pode', 'podem']
+    
+    # Palavras comuns em inglês
+    palavras_en = ['the', 'and', 'for', 'with', 'this', 'from', 'that', 'have',
+                   'was', 'are', 'been', 'their', 'which', 'were', 'when', 'through',
+                   'where', 'using', 'can', 'these', 'those', 'such', 'would', 'should']
+    
+    # Conta ocorrências
+    count_pt = sum(1 for p in palavras_pt if f' {p} ' in f' {texto_lower} ')
+    count_en = sum(1 for p in palavras_en if f' {p} ' in f' {texto_lower} ')
+    
+    # Também verifica caracteres especiais do português
+    if 'ã' in texto_lower or 'ç' in texto_lower or 'õ' in texto_lower:
+        count_pt += 3
+    
+    return 'en' if count_en >= count_pt else 'pt'
+
+
+def _priorizar_por_idioma(resultados: List[dict], boost_en: float = 0.3) -> List[dict]:
+    """
+    Reordena resultados priorizando inglês.
+    Adiciona boost ao score de resultados em inglês.
+    
+    Args:
+        resultados: lista de resultados com 'score', 'title', 'snippet'
+        boost_en: boost adicional para resultados em inglês (0.0 a 1.0)
+    
+    Returns:
+        Lista de resultados reordenada e enriquecida com campo 'language'
+    """
+    for r in resultados:
+        # Detecta idioma baseado no título + snippet
+        texto_detectar = f"{r.get('title', '')} {r.get('snippet', r.get('content', ''))}"
+        idioma = _detectar_idioma(texto_detectar)
+        r['language'] = idioma
+        
+        # Adiciona boost para inglês
+        if idioma == 'en':
+            r['score'] = min(1.0, r.get('score', 0) + boost_en)
+    
+    # Reordena: inglês primeiro, depois por score
+    resultados_ordenados = sorted(
+        resultados,
+        key=lambda x: (x.get('language', 'en') != 'en', -x.get('score', 0))
+    )
+    
+    return resultados_ordenados
+
+
+# ============================================================================
 # DOMÍNIOS BLOQUEADOS
 # ============================================================================
 
-BLOCKED_DOMAINS_ACADEMICO = [
-    "wikipedia.org", "wikipedia.com", "scribd.com", "medium.com",
-    "files.abrhidro.org.br", "lonepatient.top", "linkedin.com",
-    "facebook.com", "twitter.com", "instagram.com", "youtube.com",
-    "github.com", "gitlab.com", "bitbucket.org", "reddit.com",
-    "quora.com", "stackexchange.com", "stackoverflow.com", "amazon.com",
-    "ebay.com", "aliexpress.com", "etsy.com", "arxivdaily.com",
-    "answers.microsoft.com", "merriam-webster.com", "dictionary.com",
-    "thesaurus.com", "news.ycombinator.com", "collinsdictionary.com",
-    "oxforddictionaries.com", "thefreedictionary.com",
-    "dictionary.cambridge.org", "education.nationalgeographic.com",
-    "britannica.com", "worldometers.info", "statista.com",
-    "ourworldindata.org", "chrono24.com", "rankinggods.com", "theoi.com",
-]
-
-BLOCKED_DOMAINS_TECNICO = [
-    "facebook.com", "instagram.com", "twitter.com", "tiktok.com",
-    "linkedin.com", "pinterest.com", "amazon.com", "ebay.com",
-    "aliexpress.com", "etsy.com", "zantia.com", "wikipedia.org", "wikipedia.com",
-    "analisemacro.com.br", "ibram.org.br", "reddit.com", "quora.com", "stackexchange.com",
-    "beacademy.substack.com", "gov.br", "youtube.com", "blog.dsacademy.com.br/",
-    "mariofilho.com", "pt.hyee-ct-cv.com", "chatpaper.com"
+BLOCKED_DOMAINS = [
+           "wikipedia.org",                    "wikipedia.com",                       "scribd.com",        "lonepatient.top",          
+            "linkedin.com",                     "facebook.com",                      "twitter.com",          "instagram.com",
+             "youtube.com",                       "reddit.com",                        "quora.com",      "stackexchange.com",
+       "stackoverflow.com",                         "ebay.com",                   "aliexpress.com",               "etsy.com",
+          "arxivdaily.com",            "answers.microsoft.com",              "merriam-webster.com",         "dictionary.com",
+           "thesaurus.com",             "news.ycombinator.com",            "collinsdictionary.com", "oxforddictionaries.com", 
+   "thefreedictionary.com",         "dictionary.cambridge.org", "education.nationalgeographic.com",         "britannica.com", 
+       "worldometers.info",                     "statista.com",               "ourworldindata.org",           "chrono24.com", 
+         "rankinggods.com",                        "theoi.com",                       "tiktok.com",          "pinterest.com", 
+              "zantia.com",              "analisemacro.com.br",                     "ibram.org.br", "beacademy.substack.com", 
+                  "gov.br",           "blog.dsacademy.com.br/",                   "mariofilho.com",      "pt.hyee-ct-cv.com", 
+           "chatpaper.com",                "flusshidro.com.br",                         "otca.org",       "ler.letras.up.pt",
+             "oreilly.com",                       "neurips.cc",          "conference.ifas.ufl.edu", "atrium.lib.uoguelph.ca",
+           "datadoghq.com",                          "kumo.ai",                      "hydroai.net",         "geoawesome.com",
+            "blogs.egu.eu",
 ]
 
 
@@ -166,7 +233,7 @@ def _get_client() -> TavilyClient:
 def filtrar_urls_academicas(urls: List[str]) -> List[str]:
     filtradas = [
         url for url in urls
-        if not any(b.lower() in url.lower() for b in BLOCKED_DOMAINS_ACADEMICO)
+        if not any(b.lower() in url.lower() for b in BLOCKED_DOMAINS)
     ]
     removidos = len(urls) - len(filtradas)
     if removidos:
@@ -177,18 +244,19 @@ def filtrar_urls_academicas(urls: List[str]) -> List[str]:
 def filtrar_urls_tecnicas(urls: List[str]) -> List[str]:
     return [
         url for url in urls
-        if not any(b.lower() in url.lower() for b in BLOCKED_DOMAINS_TECNICO)
+        if not any(b.lower() in url.lower() for b in BLOCKED_DOMAINS)
     ]
 
 
 # ============================================================================
-# BUSCA ACADÊMICA
+# BUSCA ACADÊMICA COM PRIORIZAÇÃO DE INGLÊS
 # ============================================================================
 
 @tool
 def search_tavily(queries: List[str], max_results: int = 5) -> dict:
     """
     Busca artigos acadêmicos no Tavily.
+    PRIORIZA conteúdo em INGLÊS, mas permite português.
     Filtra domínios não científicos automaticamente.
     Salva cada busca em ./tavily_searchs/ para rastreabilidade.
 
@@ -204,35 +272,60 @@ def search_tavily(queries: List[str], max_results: int = 5) -> dict:
     all_results: List[dict] = []
 
     for q in queries:
-        print(f"🔎 Buscando (acadêmico): {q}")
+        print(f"🔎 Buscando (acadêmico, EN priorizado): {q}")
+        
+        # ESTRATÉGIA: Busca dupla - primeiro inglês, depois complementa
+        resultados_batch = []
+        
         try:
-            res = client.search(
+            # FASE 1: Busca prioritária em inglês
+            res_en = client.search(
                 query=q,
                 search_depth="advanced",
                 max_results=max_results,
-                exclude_domains=BLOCKED_DOMAINS_ACADEMICO,
+                exclude_domains=BLOCKED_DOMAINS,
             )
-            batch_results = []
-            for r in res.get("results", []):
+            
+            for r in res_en.get("results", []):
                 if r.get("score", 0) < 0.7:
-                    continue  # filtra resultados de baixa relevância
-                all_urls.append(r["url"])
+                    continue
+                
                 item = {
                     "url":     r["url"],
                     "title":   r.get("title", ""),
                     "snippet": r.get("content", "")[:300],
                     "score":   r.get("score", 0),
                 }
+                resultados_batch.append(item)
+            
+            # Prioriza por idioma (detecta e dá boost para inglês)
+            resultados_batch = _priorizar_por_idioma(resultados_batch, boost_en=0.3)
+            
+            # Adiciona aos resultados globais
+            for item in resultados_batch:
+                all_urls.append(item["url"])
                 all_results.append(item)
-                batch_results.append(item)
-
+            
+            # Log estatísticas de idioma
+            n_en = sum(1 for r in resultados_batch if r.get('language') == 'en')
+            n_pt = sum(1 for r in resultados_batch if r.get('language') == 'pt')
+            print(f"   📊 Idiomas: {n_en} inglês, {n_pt} português")
+            
             # ── Salva log desta query ────────────────────────────────────────
-            _salvar_pesquisa_md("academica", q, batch_results)
+            _salvar_pesquisa_md("academica", q, resultados_batch, 
+                               extra={"idioma_en": n_en, "idioma_pt": n_pt})
 
         except Exception as e:
             print(f"   ⚠️  Erro na query '{q[:50]}': {e}")
 
     urls_unicos = list(dict.fromkeys(all_urls))
+    
+    # Estatísticas finais
+    total_en = sum(1 for r in all_results if r.get('language') == 'en')
+    total_pt = sum(1 for r in all_results if r.get('language') == 'pt')
+    print(f"   📊 TOTAL: {total_en} inglês ({total_en/len(all_results)*100:.0f}%), "
+          f"{total_pt} português ({total_pt/len(all_results)*100:.0f}%)")
+    
     return {"urls_encontrados": urls_unicos, "resultados": all_results}
 
 
@@ -247,6 +340,7 @@ def search_tavily_incremental(
 ) -> dict:
     """
     Busca acadêmica incremental — acumula URLs sem duplicatas.
+    PRIORIZA conteúdo em INGLÊS.
     Salva log de cada busca em ./tavily_searchs/.
 
     Returns:
@@ -254,25 +348,16 @@ def search_tavily_incremental(
     """
     try:
         client = _get_client()
-        print(f"\n🔎 Busca Incremental: '{query}'")
+        print(f"\n🔎 Busca Incremental (EN priorizado): '{query}'")
 
         res = client.search(
             query=query,
             search_depth="advanced",
             max_results=max_results,
-            exclude_domains=BLOCKED_DOMAINS_ACADEMICO,
+            exclude_domains=BLOCKED_DOMAINS,
         )
-        urls_encontrados = [r["url"] for r in res.get("results", [])]
-        urls_encontrados = filtrar_urls_academicas(urls_encontrados)
-
-        urls_novos      = [u for u in urls_encontrados if u not in urls_anteriores]
-        total_acumulado = list(dict.fromkeys(urls_anteriores + urls_encontrados))
-
-        print(f"   ✔ Encontrados : {len(urls_encontrados)} URLs")
-        print(f"   ✔ Novos       : {len(urls_novos)} URLs")
-        print(f"   ✔ Total acum. : {len(total_acumulado)} URLs")
-
-        # ── Log ──────────────────────────────────────────────────────────────
+        
+        # Prepara resultados
         batch_results = [
             {
                 "url":     r["url"],
@@ -282,11 +367,36 @@ def search_tavily_incremental(
             }
             for r in res.get("results", []) if r.get("score", 0) >= 0.7
         ]
+        
+        # Prioriza por idioma
+        batch_results = _priorizar_por_idioma(batch_results, boost_en=0.3)
+        
+        urls_encontrados = [r["url"] for r in batch_results]
+        urls_encontrados = filtrar_urls_academicas(urls_encontrados)
+
+        urls_novos      = [u for u in urls_encontrados if u not in urls_anteriores]
+        total_acumulado = list(dict.fromkeys(urls_anteriores + urls_encontrados))
+
+        # Estatísticas
+        n_en = sum(1 for r in batch_results if r.get('language') == 'en')
+        n_pt = sum(1 for r in batch_results if r.get('language') == 'pt')
+        
+        print(f"   ✔ Encontrados : {len(urls_encontrados)} URLs")
+        print(f"   ✔ Novos       : {len(urls_novos)} URLs")
+        print(f"   ✔ Total acum. : {len(total_acumulado)} URLs")
+        print(f"   📊 Idiomas    : {n_en} inglês, {n_pt} português")
+
+        # ── Log ──────────────────────────────────────────────────────────────
         _salvar_pesquisa_md(
             "academica_incremental",
             query,
             batch_results,
-            extra={"urls_novos": len(urls_novos), "total_acumulado": len(total_acumulado)},
+            extra={
+                "urls_novos": len(urls_novos), 
+                "total_acumulado": len(total_acumulado),
+                "idioma_en": n_en,
+                "idioma_pt": n_pt,
+            },
         )
 
         return {"urls_novos": urls_novos, "total_acumulado": total_acumulado}
@@ -297,14 +407,15 @@ def search_tavily_incremental(
 
 
 # ============================================================================
-# BUSCA TÉCNICA
+# BUSCA TÉCNICA COM PRIORIZAÇÃO DE INGLÊS
 # ============================================================================
 
 @tool
 def search_tavily_tecnico(queries: List[str], max_results: int = 5) -> dict:
     """
     Busca técnica no Tavily — permite documentações, tutoriais,
-    Wikipedia, livros online, páginas de referência matemática, etc.
+    Wikipedia em inglês, livros online, páginas de referência, etc.
+    PRIORIZA conteúdo em INGLÊS.
     Salva cada busca em ./tavily_searchs/ para rastreabilidade.
 
     Args:
@@ -319,36 +430,58 @@ def search_tavily_tecnico(queries: List[str], max_results: int = 5) -> dict:
     all_results: List[dict] = []
 
     for q in queries:
-        print(f"🔎 Buscando (técnico): {q}")
+        print(f"🔎 Buscando (técnico, EN priorizado): {q}")
+        
         try:
             res = client.search(
                 query=q[:400],
                 search_depth="advanced",
                 max_results=max_results,
-                exclude_domains=BLOCKED_DOMAINS_TECNICO,
+                exclude_domains=BLOCKED_DOMAINS,
             )
+            
             batch_results = []
             for r in res.get("results", []):
                 if r.get("score", 0) < 0.7:
-                    continue  # filtra resultados de baixa relevância
-                all_urls.append(r["url"])
+                    continue
+                
                 item = {
                     "url":     r["url"],
                     "title":   r.get("title", ""),
                     "snippet": r.get("content", "")[:500],
                     "score":   r.get("score", 0),
                 }
-                all_results.append(item)
                 batch_results.append(item)
+            
+            # Prioriza por idioma
+            batch_results = _priorizar_por_idioma(batch_results, boost_en=0.3)
+            
+            for item in batch_results:
+                all_urls.append(item["url"])
+                all_results.append(item)
+            
+            # Estatísticas
+            n_en = sum(1 for r in batch_results if r.get('language') == 'en')
+            n_pt = sum(1 for r in batch_results if r.get('language') == 'pt')
+            print(f"   📊 Idiomas: {n_en} inglês, {n_pt} português")
 
             # ── Log ──────────────────────────────────────────────────────────
-            _salvar_pesquisa_md("tecnica", q, batch_results)
+            _salvar_pesquisa_md("tecnica", q, batch_results,
+                               extra={"idioma_en": n_en, "idioma_pt": n_pt})
 
         except Exception as e:
             print(f"   ⚠️  Erro na query '{q[:50]}': {e}")
 
     urls_unicos = list(dict.fromkeys(all_urls))
     urls_filtrados = filtrar_urls_tecnicas(urls_unicos)
+    
+    # Estatísticas finais
+    total_en = sum(1 for r in all_results if r.get('language') == 'en')
+    total_pt = sum(1 for r in all_results if r.get('language') == 'pt')
+    if all_results:
+        print(f"   📊 TOTAL: {total_en} inglês ({total_en/len(all_results)*100:.0f}%), "
+              f"{total_pt} português ({total_pt/len(all_results)*100:.0f}%)")
+    
     return {"urls_encontrados": urls_filtrados, "resultados": all_results}
 
 
@@ -402,7 +535,7 @@ def search_tavily_images(
                 max_results=max_results,
                 include_images=True,
                 include_image_descriptions=True,
-                exclude_domains=BLOCKED_DOMAINS_TECNICO,
+                exclude_domains=BLOCKED_DOMAINS,
             )
 
             # ── Imagens diretas retornadas pelo Tavily ───────────────────────
@@ -566,6 +699,7 @@ def search_tavily_tecnico_incremental(
 ) -> dict:
     """
     Busca técnica incremental — acumula URLs sem duplicatas.
+    PRIORIZA conteúdo em INGLÊS.
     Salva log em ./tavily_searchs/.
 
     Returns:
@@ -573,20 +707,16 @@ def search_tavily_tecnico_incremental(
     """
     try:
         client = _get_client()
-        print(f"\n🔎 Busca Técnica Incremental: '{query}'")
+        print(f"\n🔎 Busca Técnica Incremental (EN priorizado): '{query}'")
 
         res = client.search(
             query=query[:400],
             search_depth="advanced",
             max_results=max_results,
-            exclude_domains=BLOCKED_DOMAINS_TECNICO,
+            exclude_domains=BLOCKED_DOMAINS,
         )
-        todos = [r["url"] for r in res.get("results", [])]
-        todos = filtrar_urls_tecnicas(todos)
-
-        urls_novos      = [u for u in todos if u not in urls_anteriores]
-        total_acumulado = list(dict.fromkeys(urls_anteriores + todos))
-        resultados      = [
+        
+        resultados = [
             {
                 "url":     r["url"],
                 "title":   r.get("title", ""),
@@ -595,17 +725,36 @@ def search_tavily_tecnico_incremental(
             }
             for r in res.get("results", []) if r.get("score", 0) >= 0.7
         ]
+        
+        # Prioriza por idioma
+        resultados = _priorizar_por_idioma(resultados, boost_en=0.3)
+        
+        todos = [r["url"] for r in resultados]
+        todos = filtrar_urls_tecnicas(todos)
+
+        urls_novos      = [u for u in todos if u not in urls_anteriores]
+        total_acumulado = list(dict.fromkeys(urls_anteriores + todos))
+        
+        # Estatísticas
+        n_en = sum(1 for r in resultados if r.get('language') == 'en')
+        n_pt = sum(1 for r in resultados if r.get('language') == 'pt')
 
         print(f"   ✔ Encontrados : {len(todos)} URLs")
         print(f"   ✔ Novos       : {len(urls_novos)} URLs")
         print(f"   ✔ Total acum. : {len(total_acumulado)} URLs")
+        print(f"   📊 Idiomas    : {n_en} inglês, {n_pt} português")
 
         # ── Log ──────────────────────────────────────────────────────────────
         _salvar_pesquisa_md(
             "tecnica_incremental",
             query,
             resultados,
-            extra={"urls_novos": len(urls_novos), "total_acumulado": len(total_acumulado)},
+            extra={
+                "urls_novos": len(urls_novos), 
+                "total_acumulado": len(total_acumulado),
+                "idioma_en": n_en,
+                "idioma_pt": n_pt,
+            },
         )
 
         return {

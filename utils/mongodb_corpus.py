@@ -25,6 +25,7 @@ class Chunk(NamedTuple):
     titulo:    str
     fonte_idx: int
     file_path: Optional[str] = None  # opcional, para compatibilidade
+    chunk_idx: str = ""  # novo campo para identificar o chunk
 
 class CorpusMongoDB:
     def __init__(self):
@@ -322,6 +323,7 @@ class CorpusMongoDB:
                 texto = self._read_chunk_from_file(file_path)
 
             chunks.append(Chunk(
+                chunk_idx=r.get("_id", ""),
                 texto=texto,
                 url=r.get("url", ""),
                 titulo=r.get("titulo", ""),
@@ -330,6 +332,67 @@ class CorpusMongoDB:
             ))
 
         return chunks
+
+    def get_neighbors(
+        self,
+        chunk: Chunk,
+        window: int = 1,
+        include_self: bool = True,
+    ) -> List[Chunk]:
+        """
+        Dado um chunk de referência, retorna seus vizinhos no mesmo documento.
+
+        Args:
+            chunk:        Chunk de referência (precisa ter url e chunk_idx).
+            window:       Quantos chunks buscar para cada lado.
+            include_self: Se True, inclui o próprio chunk no resultado.
+
+        Returns:
+            Lista ordenada por chunk_idx (anterior → referência → posterior).
+        """
+        collection = self._get_collection()
+
+        idx = chunk.chunk_idx  # garanta que Chunk tem esse campo
+        idx_min = idx - window
+        idx_max = idx + window
+
+        try:
+            cursor = collection.find(
+                {
+                    "url": chunk.url,
+                    "chunk_idx": {"$gte": idx_min, "$lte": idx_max},
+                },
+                {"file_path": 1, "url": 1, "titulo": 1, "fonte_idx": 1, "chunk_idx": 1},
+            ).sort("chunk_idx", 1)
+
+            docs = list(cursor)
+            print(f"      📎 {len(docs)} chunks encontrados (janela ±{window} em '{chunk.url}')")
+        except Exception as e:
+            print(f"   ❌ Erro ao buscar vizinhos: {e}")
+            return []
+
+        results = []
+        for doc in docs:
+            if not include_self and doc.get("chunk_idx") == idx:
+                continue
+
+            fp = doc.get("file_path", "")
+            if fp and os.path.exists(fp):
+                texto = self._read_chunk_from_file(fp)
+            else:
+                print(f"      ⚠️ Arquivo não encontrado: {fp}")
+                texto = ""
+
+            results.append(Chunk(
+                texto=texto,
+                url=doc.get("url", ""),
+                titulo=doc.get("titulo", ""),
+                fonte_idx=doc.get("fonte_idx", 0),
+                file_path=fp,
+                chunk_idx=doc.get("chunk_idx", 0),
+            ))
+
+        return results
 
     def anchor_exists(self, ancora: str) -> tuple:
         if not ancora or len(ancora.strip()) < 15:
@@ -359,7 +422,7 @@ class CorpusMongoDB:
             return "", self._urls_usadas, self._fonte_map
 
         partes = []
-        urls_render = []
+        urls_render = {}
         chars = 0
         fontes_vistas = set()
 
@@ -367,17 +430,17 @@ class CorpusMongoDB:
             if chunk.fonte_idx not in fontes_vistas:
                 fontes_vistas.add(chunk.fonte_idx)
                 titulo = chunk.titulo or ""
-                cab = f"{'━'*55}\nFONTE [{chunk.fonte_idx}] — {titulo[:70]}\nURL: {chunk.url}\n{'─'*55}\n"
+                cab = f"{'━'*55}\nFONTE [{chunk.fonte_idx}] — {titulo}\nURL: {chunk.url}\n{'─'*55}\n"
             else:
-                cab = f"[cont. FONTE {chunk.fonte_idx}]\n"
+                cab = f"[cont. FONTE {chunk.fonte_idx} URL: {chunk.url}]\n"
 
             bloco = cab + chunk.texto + "\n\n"
             if chars + len(bloco) > max_chars:
                 break
 
             partes.append(bloco)
-            if chunk.url not in urls_render:
-                urls_render.append(chunk.url)
+            if chunk.chunk_idx not in urls_render.keys():
+                urls_render[chunk.chunk_idx] = chunk.url
             chars += len(bloco)
 
         contexto = "".join(partes)

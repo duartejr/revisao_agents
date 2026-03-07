@@ -1,23 +1,22 @@
 import re
 import time
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List
 
 from state import EscritaTecnicaState  # precisamos definir este estado
 from config import (
     llm_call, parse_json_safe,
-    TECNICO_MAX_RESULTS, MAX_URLS_EXTRACT, CTX_PLANO_CHARS, CTX_RESUMO_CHARS,
-    SECAO_MIN_PARAGRAFOS, MAX_IMAGENS_SECAO, DELAY_ENTRE_SECOES,
+    TECNICO_MAX_RESULTS, MAX_URLS_EXTRACT, CTX_RESUMO_CHARS,
+    SECAO_MIN_PARAGRAFOS, DELAY_ENTRE_SECOES,
     MAX_REACT_ITERATIONS, EXTRACT_MIN_CHARS, TOP_K_OBSERVACAO,
-    MAX_CORPUS_PROMPT, JUIZ_TOP_K, ANCORA_MIN_SIM_FAISS
+    MAX_CORPUS_PROMPT
 )
+from schemas.techinical_writing import RespostaSecao, Fonte
 from utils.mongodb_corpus import CorpusMongoDB
 from utils.helpers import (
-    normalizar, fuzzy_sim, fuzzy_search_in_text,
     resumir_secao, parse_plano_tecnico
 )
 from utils.tavily_client import search_web, search_images, extract_urls, score_url
-from utils.fix_citation_remapping import sincronizar_texto_com_references
 
 
 # Padrão para âncoras
@@ -43,10 +42,10 @@ def _fase_pensamento(tema: str, titulo: str, cont_esp: str, recursos: str) -> di
         "Liste:\n"
         "1. Quais informações, fatos, fórmulas, algoritmos, conceitos "
         "e dados de qualquer tipo precisam ser encontrados em fontes primárias?\n"
-        "2. Queries de busca que maximizem a chance de encontrar fontes "
+        "2. Queries de busca (em inglês)que maximizem a chance de encontrar fontes "
         "primárias completas (artigos, teses, documentações técnicas).\n"
         "3. Queries para busca de imagens (diagramas, arquiteturas, gráficos).\n"
-        "4. Todas as queries geradas em inglê e português. Sempre gera uma versão da mesma query nos dois idiomas\n"
+        "4. Todas as queries devem ser geradas unicamente em inglês. Nunca use outro idioma além do inglês para as queries\n"
         + schema,
         temperature=0.1,
     )
@@ -106,7 +105,7 @@ def _fase_observacao(informacoes_necessarias: List[str], corpus: CorpusMongoDB) 
 
 def _fase_rascunho(
     tema: str, titulo: str, cont_esp: str, recursos: str,
-    corpus: CorpusMongoDB, imagens_txt: str, resumo_acumulado: str,
+    corpus: str, urls_secao: List[str], resumo_acumulado: str,
     pos: int, n_total: int, titulos_todos: List[str], n_extraidos: int
 ) -> tuple:
     """Fase 6: gera rascunho ancorado."""
@@ -121,11 +120,6 @@ def _fase_rascunho(
     todas_txt = "\n".join(
         f"  {'→ ' if i == pos else '  '}{i+1}. {t}"
         for i, t in enumerate(titulos_todos)
-    )
-
-    query_retrieval = f"{titulo} {cont_esp} {recursos}"
-    corpus_prompt, urls_usadas, _ = corpus.render_prompt(
-        query_retrieval, max_chars=MAX_CORPUS_PROMPT
     )
 
     _PROMPT_ANCORA_INSTRUCOES = """
@@ -151,15 +145,15 @@ COBERTURA OBRIGATÓRIA DA ÂNCORA — para TUDO que for escrito:
   ✅ Qualquer afirmação que não seja de conhecimento universal básico
 
 EXEMPLOS CORRETOS:
-  "O modelo convergiu após 100 épocas [ÂNCORA: "convergiu após 100 épocas de treinamento"] [2]."
-  "A função de perda utilizada é o MSE [ÂNCORA: "mean squared error (MSE) is used as loss function"] [1]."
-  "LSTM supera modelos clássicos em séries não-estacionárias [ÂNCORA: "LSTM outperforms classical models on non-stationary time series"] [3]."
+  "O modelo convergiu após 100 épocas [ÂNCORA: chunk_id] [2]."
+  "A função de perda utilizada é o MSE [ÂNCORA: chunk_id] [1]."
+  "LSTM supera modelos clássicos em séries não-estacionárias [ÂNCORA: chunk_id] [3]."
 
 EXEMPLOS PROIBIDOS (âncoras inválidas):
   ❌ [ÂNCORA: "conforme esperado teoricamente"]      — invenção
   ❌ [ÂNCORA: "como é amplamente conhecido"]         — evasão
   ❌ [ÂNCORA: "resultados similares à literatura"]   — vaga
-  ❌ Afirmação factual SEM âncora nenhuma             — proibido
+  ❌ Afirmação factual SEM âncora nenhuma            — proibido
 
 SE NÃO HÁ ÂNCORA DISPONÍVEL NO CORPUS:
   Escreva explicitamente: "Informação não disponível nas fontes consultadas."
@@ -173,6 +167,38 @@ AFIRMAÇÕES QUE NÃO PRECISAM DE ÂNCORA (conhecimento universal básico):
 
 ══════════════════════════════════════════════════════════════════
 """
+    _PROMPT_FORMATO_SAIDA = """
+══════════════════════════════════════════════════════════════════
+FORMATO DE SAÍDA OBRIGATÓRIO
+══════════════════════════════════════════════════════════════════
+
+Retorne um objeto JSON com exatamente dois campos:
+
+1. "rascunho"
+   → String com o texto completo da seção em Markdown.
+   → Mantenha todas as âncoras [ÂNCORA: "..."] e citações [N] inline.
+   → Não remova nem separe as âncoras do corpo do texto.
+
+2. "fontes_usadas"
+   → Lista de objetos, um por fonte efetivamente citada no rascunho.
+   → Cada objeto contém:
+       - "id"     : número inteiro da fonte no corpus  (ex: 1)
+       - "url"    : URL completa extraída do corpus     (ex: "https://...")
+       - "titulo" : título do documento ou página       (ex: "Attention Is All You Need")
+   → Inclua SOMENTE fontes cujo [N] aparece no rascunho.
+   → NÃO inclua fontes do corpus que não foram citadas.
+   → NÃO repita a mesma fonte duas vezes.
+
+EXEMPLO DE SAÍDA VÁLIDA:
+{
+  "rascunho": "## Redes Neurais Recorrentes\n\nAs LSTMs foram propostas para resolver...[ÂNCORA: \"long short-term memory networks address the vanishing gradient\"] [1].\n\n...",
+  "fontes_usadas": [
+    {"id": 1, "url": "https://arxiv.org/abs/1409.3215", "titulo": "Sequence to Sequence Learning"},
+    {"id": 3, "url": "https://arxiv.org/abs/1706.03762", "titulo": "Attention Is All You Need"}
+  ]
+}
+
+═══"""
 
     prompt = (
         f"TEMA: {tema}\n"
@@ -185,10 +211,10 @@ AFIRMAÇÕES QUE NÃO PRECISAM DE ÂNCORA (conhecimento universal básico):
         f"CORPUS DE FONTES — {n_extraidos} documentos indexados "
         f"(abaixo: trechos mais relevantes recuperados por similaridade)\n"
         f"{'━'*60}\n"
-        f"{corpus_prompt}\n\n"
-        f"IMAGENS DISPONÍVEIS:\n{imagens_txt if imagens_txt else '  (Nenhuma)'}\n\n"
-        + _PROMPT_ANCORA_INSTRUCOES +
-        f"\nREGRAS ADICIONAIS DE ESCRITA:\n"
+        f"{corpus}\n\n"
+        + _PROMPT_ANCORA_INSTRUCOES
+        + _PROMPT_FORMATO_SAIDA
+        + f"\nREGRAS ADICIONAIS DE ESCRITA:\n"
         f"1. NÃO comece com meta-texto ('Esta seção aborda...').\n"
         f"2. Mínimo {SECAO_MIN_PARAGRAFOS} parágrafos densos (8-12 linhas).\n"
         f"3. LaTeX: inline $...$, bloco $$...$$ para equações.\n"
@@ -198,7 +224,10 @@ AFIRMAÇÕES QUE NÃO PRECISAM DE ÂNCORA (conhecimento universal básico):
         f"7. NÃO repita conceitos das seções anteriores.\n\n"
         f"## {titulo}\n"
     )
-    return llm_call(prompt, temperature=0.25), urls_usadas
+    resultado: RespostaSecao = llm_call(prompt, temperature=0.25, response_schema=RespostaSecao), urls_secao
+    rascunho = resultado[0].rascunho
+    fontes_usadas = resultado[0].fontes_usadas
+    return rascunho, fontes_usadas
 
 def _extrair_com_fallback(
     resultados: List[dict],
@@ -212,7 +241,6 @@ def _extrair_com_fallback(
     Retorna (extraidos_validos, resultados_enriquecidos, urls_tentadas)
     """
     from utils.tavily_client import extract_urls, search_web
-    from utils.mongodb_corpus import CorpusMongoDB
 
     # Seleciona URLs com score
     scored = sorted(
@@ -227,7 +255,7 @@ def _extrair_com_fallback(
         if url in urls_tentadas:
             continue
         if corpus.url_exists(url):
-            print(f"      ⏭️ URL já indexada, pulando extração: {url[:60]}")
+            print(f"      ⏭️ URL já indexada, pulando extração: {url[:]}")
             urls_tentadas.add(url)  # marca como tentada para não reprocessar
             continue
         urls_para_extrair.append(url)
@@ -247,10 +275,10 @@ def _extrair_com_fallback(
         c = item.get("conteudo", "")
         if len(c) >= EXTRACT_MIN_CHARS:
             validos.append(item)
-            print(f"      ✅ {url[:72]} ({len(c):,} chars)")
+            print(f"      ✅ {url[:]} ({len(c):,} chars)")
         else:
             falhos.append(url)
-            print(f"      ✖  {url[:72]} (<{EXTRACT_MIN_CHARS} chars)")
+            print(f"      ✖  {url[:]} (<{EXTRACT_MIN_CHARS} chars)")
 
     # Fallback
     if len(falhos) > len(validos) and queries_fallback:
@@ -270,143 +298,6 @@ def _extrair_com_fallback(
                 break
 
     return validos, resultados, urls_tentadas
-
-def _juiz_paragrafo(paragrafo_limpo: str, fontes: str) -> tuple:
-    """Juiz de 3 níveis para parágrafo."""
-    prompt = f"""Você é um verificador de fatos técnicos. Analise o parágrafo abaixo contra as fontes.
-
-PARÁGRAFO:
-{paragrafo_limpo}
-
-FONTES DISPONÍVEIS:
-{fontes}
-
-TAREFA: Classifique o parágrafo em um de três níveis e retorne o texto adequado.
-
-NÍVEL 1 — APROVADO
-  Use quando: todas as afirmações têm suporte nas fontes OU são conhecimento técnico universal estabelecido.
-  Ação: retorne o parágrafo sem nenhuma modificação.
-  DECISÃO: APROVADO
-  TEXTO: [parágrafo sem modificação]
-
-NÍVEL 2 — AJUSTADO
-  Use quando: o conteúdo essencial está correto mas há imprecisão de escopo (ex: "bacias hidrográficas"
-  quando a fonte diz "séries temporais") ou escolha de palavra inexata — não é erro factual grave.
-  Ação: corrija apenas a imprecisão específica, mantenha o restante idêntico.
-  DECISÃO: AJUSTADO
-  TEXTO: [parágrafo com mínima correção]
-
-NÍVEL 3 — CORRIGIDO
-  Use SOMENTE quando: há afirmação factualmente errada em relação às fontes, OU há afirmação específica
-  sem nenhum suporte nas fontes disponíveis (não é conhecimento universal).
-  Ação:
-    - Afirmação errada → corrija para o que a fonte diz
-    - Afirmação sem suporte → REMOVA a frase inteira
-    - NÃO adicione informações que não estejam nas fontes
-  DECISÃO: CORRIGIDO
-  TEXTO: [parágrafo corrigido]
-
-IMPORTANTE:
-  - Se as fontes forem insuficientes para verificar o parágrafo → use APROVADO (benefício da dúvida)
-  - NÃO use CORRIGIDO por diferença de estilo ou vocabulário
-  - NÃO use CORRIGIDO porque a fonte não confirma explicitamente algo que é conhecimento técnico geral
-  - RESPONDA APENAS com DECISÃO e TEXTO. Sem explicações adicionais."""
-
-    resp = llm_call(prompt, temperature=0.0).strip()
-
-    nivel = "APROVADO"
-    texto_final = paragrafo_limpo
-
-    m_dec = re.search(r"DECIS[ÃA]O\s*:\s*(APROVADO|AJUSTADO|CORRIGIDO)", resp, re.IGNORECASE)
-    if m_dec:
-        nivel = m_dec.group(1).upper()
-
-    m_txt = re.search(r"TEXTO\s*:\s*([\s\S]+)", resp, re.IGNORECASE)
-    if m_txt:
-        candidato = m_txt.group(1).strip()
-        candidato = re.sub(r"^DECIS[ÃA]O\s*:.*\n?", "", candidato, flags=re.IGNORECASE).strip()
-        if candidato:
-            texto_final = candidato
-
-    trecho = paragrafo_limpo[:70].replace('\n', ' ')
-    if nivel == "APROVADO":
-        log_entry = f"✅ APROVADO  | {trecho}..."
-    elif nivel == "AJUSTADO":
-        corr = texto_final[:70].replace('\n', ' ')
-        log_entry = f"🔵 AJUSTADO  | {trecho}...\n     → {corr}..."
-    else:
-        corr = texto_final[:70].replace('\n', ' ')
-        log_entry = f"🔧 CORRIGIDO | {trecho}...\n     → {corr}..."
-
-    return texto_final, nivel, log_entry
-
-def _eh_paragrafo_verificavel(paragrafo: str) -> bool:
-    """Retorna False para blocos que não precisam de verificação factual."""
-    p = paragrafo.strip()
-    if len(p) < 60:
-        return False
-    if p.startswith("#"): return False
-    if p.startswith("```"): return False
-    if p.startswith("$$"): return False
-    if p.startswith("---"): return False
-    if p.startswith("==="): return False
-    if p.startswith("*Figura"): return False
-    if p.startswith("!["): return False
-    if p.startswith(">"): return False
-    if p.startswith("```mermaid"): return False
-    if re.match(r"^\s*[-*]\s", p): return False
-    return True
-
-def _buscar_chunks_para_paragrafo(
-    paragrafo: str,
-    corpus: CorpusMongoDB,
-    corpus_prompt_completo: str,
-) -> str:
-    """Recupera chunks relevantes para verificar o parágrafo."""
-    texto_sem_ancoras = re.sub(r'\[ÂNCORA:\s*"[^"]*"\]', "", paragrafo)
-    texto_sem_ancoras = re.sub(r'\$\$[^$]+\$\$', "", texto_sem_ancoras)
-    texto_sem_ancoras = re.sub(r'\$[^$]+\$', "", texto_sem_ancoras)
-    texto_sem_ancoras = re.sub(r'\\\([^)]+\\\)', "", texto_sem_ancoras).strip()
-
-    ancoras = _ANCORA_PATTERN.findall(paragrafo)
-    ancoras_validas = [
-        a for a in ancoras
-        if len(a.strip()) >= 20
-        and not re.match(r'^[\\\$\{\}\[\]_\^]+', a.strip())
-    ]
-
-    queries = ancoras_validas[:3] + ([texto_sem_ancoras[:200]] if texto_sem_ancoras else [])
-
-    if (corpus._collection is not None) or (not queries):
-        return corpus_prompt_completo[:3000]
-
-    chunks_vistos = set()
-    partes = []
-    chars = 0
-    JUIZ_MAX_CORPUS_CHARS = 3000
-
-    for q in queries:
-        q = q.strip()
-        if not q:
-            continue
-        for chunk in corpus.query(q, top_k=5):
-            chave = chunk.texto[:100]
-            if chave in chunks_vistos:
-                continue
-            chunks_vistos.add(chave)
-
-            bloco = (
-                f"[FONTE {chunk.fonte_idx} | {chunk.url[:70]}]\n"
-                f"{chunk.texto}\n\n"
-            )
-            if chars + len(bloco) > JUIZ_MAX_CORPUS_CHARS:
-                break
-            partes.append(bloco)
-            chars += len(bloco)
-
-    if partes:
-        return "".join(partes)
-    return corpus_prompt_completo[:JUIZ_MAX_CORPUS_CHARS]
 
 # --- Nós do grafo ---
 def parsear_plano_node(state: EscritaTecnicaState) -> dict:
@@ -501,7 +392,7 @@ PARÁGRAFO PARA VERIFICAR:
 SEÇÃO: {titulo_secao}
 
 FONTES DISPONÍVEIS (amostra):
-{fontes[:2000]}
+{fontes}
 
 ESTRATÉGIA DE VERIFICAÇÃO:
   ✅ APROVADO: (1) Todas as assertivas têm suporte nas fontes
@@ -522,7 +413,6 @@ TEXTO: [parágrafo final]"""
 
     resp = llm_call(prompt, temperature=0.1)
     
-    nivel = "APROVADO"
     texto_final = paragrafo_limpo
     
     m_dec = re.search(r"DECIS[ÃA]O\s*:\s*(APROVADO|AJUSTADO|CORRIGIDO)", resp, re.IGNORECASE)
@@ -640,6 +530,7 @@ def _verificar_e_corrigir_secao_adaptativa(
     corpus: CorpusMongoDB,
     corpus_prompt_completo: str,
     titulo: str,
+    fontes_secao: List[Fonte],
     conteudo_esperado: str = "",
 ) -> tuple:
     """Verificação com loop adaptativo."""
@@ -680,7 +571,7 @@ def _verificar_e_corrigir_secao_adaptativa(
             
             stats["total"] += 1
             
-            fontes = corpus.render_prompt(bloco_limpo[:300], max_chars=3000)[0]
+            fontes = corpus.render_prompt(bloco_limpo, max_chars=3000)[0]
             
             if not fontes.strip():
                 resultado.append(bloco_limpo)
@@ -723,10 +614,6 @@ def _verificar_e_corrigir_secao_adaptativa(
         
         if num_novos == 0:
             break
-        
-        corpus_prompt_completo, _, _ = corpus.render_prompt(
-            f"{titulo} {conteudo_esperado}", max_chars=25000
-        )
     
     texto_corrigido = "\n\n".join(p for p in resultado if p)
     texto_corrigido = re.sub(r'\[ÂNCORA:\s*"[^"]*"\]', "", texto_corrigido)
@@ -843,48 +730,48 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
         # FASE 5: Observação
         print(f"\n  🔬 FASE 5 — Observação...")
         log.append("\n── FASE 5: OBSERVAÇÃO ──")
-        obs = _fase_observacao(informacoes, corpus)
-        log.extend([f"Suficiente: {obs.get('suficiente')}",
-                    f"Lacunas: {obs.get('lacunas', [])}"])
+        # obs = _fase_observacao(informacoes, corpus)
+        # log.extend([f"Suficiente: {obs.get('suficiente')}",
+        #             f"Lacunas: {obs.get('lacunas', [])}"])
 
-        for iter_n in range(1, MAX_REACT_ITERATIONS + 1):
-            if obs.get("suficiente", True):
-                break
-            q_comp = obs.get("query_complementar") or ""
-            if not q_comp:
-                break
-            print(f"\n  🔄 ITERAÇÃO {iter_n}: '{q_comp}'")
-            log.append(f"\n── ITERAÇÃO {iter_n}: '{q_comp}' ──")
-            res_comp = search_web(q_comp, max_results=8)
-            for r in res_comp:
-                u = r.get("url", "")
-                if u and u not in urls_vistas:
-                    urls_vistas.add(u)
-                    resultados.append(r)
-            novos, resultados, urls_vistas = _extrair_com_fallback(
-                res_comp, 
-                queries_fallback=[q_comp], 
-                urls_tentadas=urls_vistas,
-                corpus=corpus_check, 
-            )
-            extraidos.extend(novos)
-            corpus = CorpusMongoDB().build(extraidos, resultados, prefixo=prefixo)
-            corpus_prompt, urls_secao, _ = corpus.render_prompt(
-                query_retrieval, max_chars=MAX_CORPUS_PROMPT
-            )
-            obs = _fase_observacao(informacoes, corpus)
-            log.append(f"Suficiente após iter: {obs.get('suficiente')}")
-            time.sleep(2)
+        # for iter_n in range(1, MAX_REACT_ITERATIONS + 1):
+        #     if obs.get("suficiente", True):
+        #         break
+        #     q_comp = obs.get("query_complementar") or ""
+        #     if not q_comp:
+        #         break
+        #     print(f"\n  🔄 ITERAÇÃO {iter_n}: '{q_comp}'")
+        #     log.append(f"\n── ITERAÇÃO {iter_n}: '{q_comp}' ──")
+        #     res_comp = search_web(q_comp, max_results=8)
+        #     for r in res_comp:
+        #         u = r.get("url", "")
+        #         if u and u not in urls_vistas:
+        #             urls_vistas.add(u)
+        #             resultados.append(r)
+        #     novos, resultados, urls_vistas = _extrair_com_fallback(
+        #         res_comp, 
+        #         queries_fallback=[q_comp], 
+        #         urls_tentadas=urls_vistas,
+        #         corpus=corpus_check, 
+        #     )
+        #     extraidos.extend(novos)
+        #     corpus = CorpusMongoDB().build(extraidos, resultados, prefixo=prefixo)
+        #     corpus_prompt, urls_secao, _ = corpus.render_prompt(
+        #         query_retrieval, max_chars=MAX_CORPUS_PROMPT
+        #     )
+        #     obs = _fase_observacao(informacoes, corpus)
+        #     log.append(f"Suficiente após iter: {obs.get('suficiente')}")
+        #     time.sleep(2)
 
         # Imagens
         print(f"\n  🖼️  Buscando imagens...")
-        imagens = search_images(queries_img)
+        imagens = search_images(queries_img, max_results=3)
         img_txt = ""
         for i, img in enumerate(imagens, 1):
             url_img = img.get("url_imagem", "")
             desc = img.get("descricao", "") or "(sem descrição)"
             origem = img.get("titulo_pagina", img.get("url_origem", ""))
-            img_txt += f"  [{i}] {url_img}\n       Desc: {desc}\n       Fonte: {origem}\n"
+            img_txt += f"  [{i}] {url_img}\n       Desc imagem: {desc}\n       Fonte imagem: {origem}\n"
 
         referencia_completa = corpus_prompt
         if img_txt:
@@ -894,7 +781,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
         print(f"\n  ✍️  FASE 6 — Rascunho ancorado...")
         log.append("\n── FASE 6: RASCUNHO ──")
         rascunho, urls_usadas_fase6 = _fase_rascunho(
-            tema, titulo, cont_esp, recursos, corpus, img_txt,
+            tema, titulo, cont_esp, recursos, referencia_completa, urls_secao,
             resumo_acumulado, pos, n_total, titulos_todos, len(extraidos)
         )
         # Rastrear qual fonte foi usada 
@@ -914,6 +801,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
             corpus, 
             referencia_completa, 
             titulo,
+            fonte_map_secao,
             conteudo_esperado=cont_esp,
         )
 
@@ -949,11 +837,45 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
                 r"(## .+?\n)", r"\1\n" + aviso, texto_final, count=1, flags=re.DOTALL
             )
 
-        print(f"  ✅ [{pos+1}/{n_total}] Seção concluída ({taxa:.0f}% verificado)")
-        fonte_map_secao = {}
-        for i, url in enumerate(urls_secao, 1):
-            fonte_map_secao[i] = url
+        # ============================================================
+        # NOVA FUNCIONALIDADE: ADICIONAR REFERÊNCIAS AO FINAL DA SEÇÃO
+        # ============================================================
+        print(f"\n  📚 Adicionando referências da seção...")
+        
+        # Extrai todas as citações [N] do texto da seção
+        citacoes_encontradas = set()
+        for match in re.finditer(r'\[(\d+)\]', texto_final):
+            num = int(match.group(1))
+            citacoes_encontradas.add(num)
+        
+        # Usa TODAS as URLs do corpus (não apenas urls_secao limitado)
+        todas_urls_corpus = corpus._urls_usadas if hasattr(corpus, '_urls_usadas') else urls_secao
+        
+        # Cria lista de referências usadas nesta seção
+        referencias_secao = []
+        urls_faltantes = []
+        
+        for idx in sorted(citacoes_encontradas):
+            if idx <= len(todas_urls_corpus):
+                url = todas_urls_corpus[idx - 1]  # -1 porque índice começa em 1
+                referencias_secao.append(f"[{idx}] {url}")
+            else:
+                urls_faltantes.append(idx)
+        
+        # Adiciona seção de referências ao final
+        if referencias_secao:
+            texto_final += "\n\n### Referências desta seção\n\n"
+            texto_final += "\n".join(referencias_secao)
+            print(f"     ✅ {len(referencias_secao)} referências adicionadas")
+            if urls_faltantes:
+                print(f"     ⚠️  Citações sem URL correspondente: {urls_faltantes}")
+        else:
+            print(f"     ⚠️  Nenhuma citação encontrada nesta seção")
+        
+        # ============================================================
 
+        print(f"  ✅ [{pos+1}/{n_total}] Seção concluída ({taxa:.0f}% verificado)")
+        
         secoes_escritas.append({
             "indice": idx_num,
             "titulo": titulo,
@@ -961,7 +883,6 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
             "urls_usadas": urls_secao,
             "fonte_map": fonte_map_secao,
             "imagens": imagens,
-            "font_map": fonte_map_secao
         })
 
         for u in urls_secao:
@@ -1047,7 +968,7 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
     ]
     for s in secoes:
         partes.append(f"- {s['titulo']}")
-    partes += ["- Conclusão", "- Referências\n\n---\n",
+    partes += ["- Conclusão", "\n\n---\n",
                "## Introdução\n", resp_intro.strip(), "\n\n---\n"]
 
     for s in secoes:
@@ -1067,42 +988,18 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
         partes.append(s["texto"].strip())
         partes.append("\n\n---\n")
 
-    partes += ["## Conclusão\n", resp_concl.strip(), "\n\n---\n", "## Referências\n"]
-    print(f"\n  🔗 Sincronizando citações com referências...")
+    partes += ["## Conclusão\n", resp_concl.strip(), "\n\n"]
 
-    # Coleta todos os fonte_maps das seções
-    fonte_map_consolidado = {}
-    contador = 1
-    for secao in secoes:
-        secao_fonte_map = secao.get("fonte_map", {})
-        for _, url in secao_fonte_map.items():
-            if url not in [fonte_map_consolidado.get(i) for i in fonte_map_consolidado]:
-                fonte_map_consolidado[contador] = url
-                contador += 1
+    # ============================================================
+    # SEÇÃO DE REFERÊNCIAS CONSOLIDADA REMOVIDA
+    # (As referências agora estão ao final de cada seção)
+    # ============================================================
+    print(f"\n  ℹ️  Referências estão ao final de cada seção (não consolidadas)")
+
+    documento = "\n".join(partes)
     
-    # Sincroniza texto com referências
-    documento_temp = "\n".join(partes)
-
-    print(f"\n  🔧 Sincronizando citações...")
-    documento, all_urls_sincronizadas = sincronizar_texto_com_references(
-        documento_temp,
-        fonte_map_consolidado
-    )
-
-    print(f"     ✅ {len(all_urls_sincronizadas)} referências sincronizadas")
-
-    documento += "\n## Referências\n"
-    
-    if all_urls_sincronizadas:
-        for i, url in enumerate(all_urls_sincronizadas[:80], 1):
-            documento += f"[{i}] {url}\n"
-    else:
-        documento += "*Nenhuma fonte utilizada.*\n"
-    
-    # ← RESTO do código continua (salvar arquivo, etc)
     slug = re.sub(r"[^\w\s-]", "", tema[:40]).strip().replace(" ", "_").lower()
     output_path = f"revisao_tecnica_{slug}.md"
-
     log_path = f"revisao_tecnica_{slug}.log"
 
     try:
