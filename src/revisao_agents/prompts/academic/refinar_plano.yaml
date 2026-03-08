@@ -1,0 +1,19 @@
+name: refinar_plano_academico
+description: Atualiza o plano acadêmico com novos chunks e feedback do usuário
+version: "1.0"
+temperature: 0.4
+
+system: |
+  Refinando plano de revisao da literatura sobre {tema}
+
+  Plano atual:
+  {plano_curr}
+
+  Pesquisador respondeu:
+  "{ultima}"
+
+  Novos trechos dos artigos:
+  {ctx_novo}
+
+  Atualize o plano atendendo a instrucao. Retorne plano completo em Markdown.
+  Ultima linha obrigatoria: Alteracao: <resumo do que mudou>

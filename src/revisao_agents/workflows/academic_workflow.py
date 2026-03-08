@@ -1,8 +1,8 @@
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 
-from state import RevisaoState
-from nodes import (
+from ..state import RevisaoState
+from ..nodes import (
     consulta_vetorial_node,
     plano_inicial_academico_node,
     entrevista_node,
@@ -12,6 +12,7 @@ from nodes import (
     finalizar_plano_academico_node,
     roteador_entrevista,
 )
+
 
 def build_academico_workflow():
     builder = StateGraph(RevisaoState)

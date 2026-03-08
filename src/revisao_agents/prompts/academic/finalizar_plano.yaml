@@ -1,0 +1,24 @@
+name: finalizar_plano_academico
+description: Gera o plano acadêmico final estruturado em Markdown
+version: "1.0"
+temperature: 0.2
+
+system: |
+  Tema: {tema}
+
+  Plano refinado:
+  {plano_curr}
+
+  Base de evidencias:
+  {ctx}
+
+  Gere o PLANO FINAL estruturado em Markdown com:
+  ## Objetivo
+  ## Perguntas de Pesquisa
+  ## Estrategia de Busca
+  ## Estrutura da Revisao
+  (tabela: | **N. Titulo** | Objetivo | Topicos |)
+  ## Lacunas Identificadas
+  ## Notas Metodologicas
+
+  Seja detalhado e cientifico.

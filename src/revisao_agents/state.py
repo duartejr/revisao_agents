@@ -1,24 +1,37 @@
-# src/revisao_agents/state.py
-from typing import TypedDict, Annotated, Sequence
-from langchain_core.messages import BaseMessage
+from typing import TypedDict, Annotated, List
 import operator
 
 
-class ReviewState(TypedDict):
-    """Estado compartilhado entre os nós do grafo de revisão."""
+class RevisaoState(TypedDict):
+    """Estado compartilhado para workflows de revisão acadêmica e técnica."""
+    tema: str
+    tipo_revisao: str
+    chunks_relevantes: List[str]
+    snippets_tecnicos: List[dict]
+    urls_tecnicos: List[str]
+    plano_atual: str
+    historico_entrevista: Annotated[List[tuple], operator.add]
+    perguntas_feitas: int
+    max_perguntas: int
+    plano_final: str
+    plano_final_path: str
+    status: str
 
-    # Texto original e versões em progresso
-    original_text: str
-    current_text: str                  # texto sendo revisado a cada iteração
-    final_text: str | None             # saída final após todas as revisões
 
-    # Mensagens / histórico (para memória e debug)
-    messages: Annotated[Sequence[BaseMessage], operator.add]
+class EscritaTecnicaState(TypedDict):
+    """Estado específico para o workflow de escrita técnica."""
+    tema: str
+    resumo_plano: str
+    secoes: List[dict]
+    caminho_plano: str
+    secoes_escritas: List[dict]
+    refs_urls: List[str]
+    refs_imagens: List[dict]
+    resumo_acumulado: str
+    react_log: List[str]
+    stats_verificacao: List[dict]
+    status: str
 
-    # Feedback humano (quando HITL ativado)
-    human_feedback: str | None
 
-    # Metadados / controle de fluxo
-    revision_count: int = 0
-    needs_human_review: bool = False
-    error: str | None = None
+# Alias para compatibilidade com código legado
+ReviewState = RevisaoState

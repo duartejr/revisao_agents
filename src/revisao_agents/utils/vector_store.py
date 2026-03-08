@@ -4,7 +4,7 @@ import pymongo
 from pymongo.collection import Collection
 from openai import OpenAI
 
-from config import (
+from ..config import (
     MONGODB_URI, MONGODB_DB, MONGODB_COLLECTION,
     VECTOR_INDEX_NAME, CHUNK_MAX_CHARS, MAX_CHUNKS_TOTAL
 )

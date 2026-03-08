@@ -1,6 +1,6 @@
 import time
 from typing import List, Dict
-from config import TECNICO_MAX_RESULTS, DOMINIOS_PRIORITARIOS, DOMINIOS_BLOQUEADOS_EXTRACT
+from ..config import TECNICO_MAX_RESULTS, DOMINIOS_PRIORITARIOS, DOMINIOS_BLOQUEADOS_EXTRACT
 
 def buscar_conteudo_tecnico(query: str, urls_anteriores: List[str]) -> Dict:
     """

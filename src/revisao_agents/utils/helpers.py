@@ -1,8 +1,9 @@
+import os
 import re
 import json
 import difflib
 from typing import List, Optional
-from config import HIST_MAX_TURNS, PLANO_MAX_CHARS
+from ..config import HIST_MAX_TURNS, PLANO_MAX_CHARS
 
 
 def fmt_chunks(chunks: List[str], max_chars: int = 1200) -> str:
@@ -44,6 +45,9 @@ def salvar_md(conteudo: str, prefixo: str, tema: str) -> str:
     slug = re.sub(r"[^\w\s-]", "", tema[:40]).strip().replace(" ", "_").lower()
     path = f"{prefixo}_{slug}.md"
     try:
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(conteudo)
         print("\nSalvo em:", path)
@@ -89,7 +93,7 @@ def fuzzy_search_in_text(ancora_norm: str, corpus_norm: str) -> tuple:
 
 def resumir_secao(titulo: str, texto: str) -> str:
     """Gera um resumo curto de uma seção usando LLM."""
-    from config import llm_call
+    from ..config import llm_call
     resp = llm_call(
         f"Resuma em 3-4 frases CONCISAS os conceitos técnicos centrais de "
         f"'{titulo}'. Destaque fundamentos, fórmulas-chave e conclusões.\n\n"

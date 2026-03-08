@@ -1,27 +1,32 @@
-# src/revisao_agents/hitl.py
-from typing import Dict, Any
-from rich.console import Console
-from rich.prompt import Prompt
-
-console = Console()
-
-
-def human_feedback_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    """Nó de Human-in-the-Loop: pede feedback ao usuário quando necessário."""
-    current = state.get("current_text", "")
-    console.print("\n[bold yellow]=== AGUARDANDO FEEDBACK HUMANO ===[/bold yellow]")
-    console.print(f"Texto atual:\n{current[:800]}...\n")  # preview
-
-    feedback = Prompt.ask(
-        "[bold]Seu feedback / instruções de correção[/bold] (ou ENTER para aprovar)",
-        default="",
-    )
-
-    if feedback.strip():
-        state["human_feedback"] = feedback
-        state["needs_human_review"] = False  # continua após feedback
-    else:
-        state["human_feedback"] = None
-        state["needs_human_review"] = False  # aprova e segue
-
-    return state
+def run_hitl_loop(app, config, state_init):
+    """Loop de interação humana (Human-in-the-loop)."""
+    for _ in app.stream(state_init, config):
+        pass
+    while True:
+        state = app.get_state(config)
+        if not state.next:
+            print("\nPlanejamento concluido!")
+            break
+        if "pausa_humana" not in state.next:
+            print("\nNo inesperado:", str(state.next))
+            break
+        # Mostra a última pergunta do agente
+        for role, c in reversed(state.values.get("historico_entrevista", [])):
+            if role == "assistant":
+                print("\n🤖", c)
+                break
+        p  = state.values.get("perguntas_feitas", 0)
+        mp = state.values.get("max_perguntas", 3)
+        tp = state.values.get("tipo_revisao", "academico")
+        print(f"\n   [Rodada {p}/{mp} — {tp} — ok para finalizar]")
+        resp = input("👤 ").strip() or "Manter o plano atual."
+        hist = state.values.get("historico_entrevista", [])
+        app.update_state(config,
+            {"historico_entrevista": hist + [("user", resp)]},
+            as_node="pausa_humana")
+        print("\n[Refinando plano...]")
+        for _ in app.stream(None, config):
+            pass
+        if not app.get_state(config).next:
+            print("\nPlanejamento concluido!")
+            break

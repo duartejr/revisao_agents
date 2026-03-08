@@ -2,14 +2,14 @@ import os
 import hashlib
 import json
 from pathlib import Path
-from typing import List, Dict, Any, Optional, NamedTuple, Tuple
+from typing import List, Dict, Any, Optional, Tuple
 import pymongo
 from pymongo.collection import Collection
 from openai import OpenAI
 import tiktoken
 import time
 
-from config import (
+from ..config import (
     MONGODB_URI, MONGODB_DB, MONGODB_COLLECTION, VECTOR_INDEX_NAME,
     OPENAI_API_KEY, OPENAI_EMBEDDING_MODEL,
     CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_ESCRITA, TOP_K_VERIFICACAO,
@@ -18,14 +18,7 @@ from config import (
 )
 from .helpers import normalizar, fuzzy_sim, fuzzy_search_in_text
 from .tavily_client import score_url  # import local
-
-class Chunk(NamedTuple):
-    texto:     str
-    url:       str
-    titulo:    str
-    fonte_idx: int
-    file_path: Optional[str] = None  # opcional, para compatibilidade
-    chunk_idx: str = ""  # novo campo para identificar o chunk
+from ..core.schemas.corpus import Chunk
 
 class CorpusMongoDB:
     def __init__(self):
