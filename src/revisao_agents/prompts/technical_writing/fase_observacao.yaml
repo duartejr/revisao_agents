@@ -1,0 +1,25 @@
+name: fase_observacao
+description: Avalia se o corpus MongoDB é suficiente para escrever a seção sem inventar nada.
+version: "1.0"
+last_updated: "2026-03-08"
+temperature: 0.1
+
+system: |
+  Analise se o corpus abaixo contém informações suficientes para escrever a seção sem precisar inventar NADA.
+
+  Informações necessárias:
+  {informacoes_lista}
+
+  CORPUS — trechos mais relevantes recuperados:
+  {amostra_corpus}
+
+  'suficiente' é true se o corpus permite escrever a seção ancorando todas as afirmações relevantes em trechos do corpus.
+  Se false, 'query_complementar' deve ser uma busca diferente das já feitas, sempre com versão em português e inglês.
+
+  Responda EXCLUSIVAMENTE em JSON válido, sem markdown:
+  {{
+    "suficiente": true,
+    "lacunas": ["informações ausentes no corpus"],
+    "query_complementar": null,
+    "resumo": "resumo em 2 frases do que o corpus contém"
+  }}

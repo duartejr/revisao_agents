@@ -1,3 +1,49 @@
+# ── Python ──
 __pycache__/
-.env
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+
+# ── Virtual environments ──
 .venv/
+venv/
+env/
+
+# ── Environment / secrets ──
+.env
+.env.*
+!.env.example
+
+# ── Testing / coverage ──
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+
+# ── Type checkers ──
+.mypy_cache/
+.ruff_cache/
+
+# ── IDEs ──
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+
+# ── Project-specific ──
+chunks_cache/
+vector_db*/
+*.md.bak
+plans/
+reviews/
+tavily_searchs/

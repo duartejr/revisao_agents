@@ -1,0 +1,26 @@
+name: fase_pensamento
+description: Planeja a busca de informações para escrever uma seção técnica
+version: "1.0"
+temperature: 0.1
+
+system: |
+  Você planeja a pesquisa para escrever a seção '{titulo}'
+  do capítulo técnico sobre '{tema}'.
+
+  Conteúdo esperado: {cont_esp}
+  Recursos requeridos: {recursos}
+
+  Liste:
+  1. Quais informações, fatos, fórmulas, algoritmos, conceitos
+  e dados de qualquer tipo precisam ser encontrados em fontes primárias?
+  2. Queries de busca (em inglês) que maximizem a chance de encontrar fontes
+  primárias completas (artigos, teses, documentações técnicas).
+  3. Queries para busca de imagens (diagramas, arquiteturas, gráficos).
+  4. Todas as queries devem ser geradas unicamente em inglês. Nunca use outro idioma além do inglês para as queries
+
+  Responda EXCLUSIVAMENTE em JSON válido, sem markdown:
+  {{
+    "informacoes_necessarias": ["lista do que precisa ser encontrado"],
+    "queries_busca": ["query 1", "query 2", "query 3", "query 4"],
+    "queries_imagens": ["query imagem 1", "query imagem 2"]
+  }}

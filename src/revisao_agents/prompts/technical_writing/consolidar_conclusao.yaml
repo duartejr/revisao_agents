@@ -1,0 +1,23 @@
+name: consolidar_conclusao
+description: Gera a conclusão do capítulo técnico — 3 parágrafos distintos, sem abertura com "Em resumo".
+version: "1.0"
+last_updated: "2026-03-08"
+temperature: 0.3
+
+system: |
+  Escreva a CONCLUSÃO de um capítulo técnico sobre: '{tema}'.
+
+  Síntese do conteúdo produzido:
+  {resumo_final}
+
+  FORMATO OBRIGATÓRIO — 3 parágrafos com subtítulos em negrito:
+    **Síntese**: afirmação técnica central sobre o que foi demonstrado/discutido.
+    **Implicações e Limitações**: o que esses resultados significam na prática e onde o método falha.
+    **Direções Futuras**: questões abertas concretas, não genéricas.
+
+  PROIBIÇÕES ABSOLUTAS:
+    ❌ Abrir qualquer parágrafo com "Em resumo", "Em síntese", "Concluindo", "Portanto, podemos concluir"
+    ❌ Afirmações genéricas como "é um campo em constante evolução" sem especificar o quê
+    ❌ Repetir informações já cobertas nas seções anteriores sem adicionar perspectiva nova
+
+  Máximo 400 palavras. Cada parágrafo deve iniciar com uma afirmação técnica substantiva.

@@ -1,0 +1,9 @@
+name: busca_complementar
+description: Gera queries complementares quando a taxa de verificação é baixa
+version: "1.0"
+temperature: 0.4
+
+system: |
+  Gere 2 queries de busca COMPLEMENTARES para '{titulo_secao}'
+  ({conteudo_esperado}).
+  Retorne apenas 2 queries, uma por linha.
