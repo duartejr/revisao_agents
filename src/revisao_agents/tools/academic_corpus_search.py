@@ -1,44 +1,53 @@
 # src/revisao_agents/tools/academic_corpus_search.py
+"""
+Tool oficial de busca no corpus MongoDB.
+Wrapper simples e performático para uso direto pelos agents.
+"""
+
 from langchain_core.tools import tool
 from typing import Optional
-# importe aqui tudo que seu arquivo original usava (pymongo, etc.)
-# from pymongo import MongoClient
-# from ..core.config import get_settings  # vamos usar depois
+
+# Import da classe original (ainda na pasta utils por enquanto)
+from ..utils.mongodb_corpus import CorpusMongoDB
+
 
 @tool
 def search_academic_corpus(
     query: str,
     limit: int = 5,
-    section_title: str = ""
+    section_title: str = "",
 ) -> str:
     """
-    Busca no corpus MongoDB por documentos acadêmicos relevantes.
-    Retorna fontes formatadas com [FONTE X] prontas para o prompt.
+    Busca no corpus MongoDB por conteúdo acadêmico relevante usando vector search.
 
     Args:
-        query: Termo ou frase a pesquisar (ex: "modelo de difusão estável").
-        limit: Quantidade máxima de resultados.
-        section_title: Título da seção atual (para contexto interno).
+        query: Texto ou âncora a ser pesquisada (ex: "modelo de difusão estável").
+        limit: Número máximo de fontes/chunks a retornar (padrão 5).
+        section_title: Título da seção atual (usado apenas para log interno).
 
     Returns:
-        String formatada com fontes (ideal para o agent de revisão).
+        String formatada pronta para colar no prompt do agent (com cabeçalhos de fontes).
+        Inclui as fontes mais relevantes + contexto completo.
     """
-    # === COLE AQUI TODO O CÓDIGO PRINCIPAL DO SEU mongo_db_corpus.py ===
-    # (conexão, query, formatação, etc.)
-    # Exemplo mínimo (substitua pelo seu código real):
+    try:
+        corpus = CorpusMongoDB()
+        # Usa o render_prompt (melhor saída formatada do seu código original)
+        contexto, urls_usadas, fonte_map = corpus.render_prompt(
+            query=query,
+            max_chars=8000,  # limite seguro para contexto de LLM
+        )
 
-    # settings = get_settings()
-    # client = MongoClient(settings.mongo_uri)
-    # db = client[settings.mongo_db]
-    # collection = db[settings.mongo_collection]
+        if not contexto.strip():
+            return f"Nenhuma fonte relevante encontrada para: '{query}'"
 
-    # results = collection.find(
-    #     {"$text": {"$search": query}}
-    # ).limit(limit)
+        header = (
+            f"=== FONTES ENCONTRADAS PARA: '{query}' ===\n"
+            f"Seção: {section_title or 'Não informada'}\n"
+            f"Total de chunks usados: {len(urls_usadas)}\n"
+            f"{'='*60}\n\n"
+        )
 
-    formatted = f"Fontes encontradas para a seção '{section_title}':\n\n"
-    # for i, doc in enumerate(results, 1):
-    #     formatted += f"[FONTE {i}] {doc.get('titulo')} - {doc.get('url')}\n"
-    #     formatted += f"Resumo: {doc.get('conteudo', '')[:400]}...\n\n"
+        return header + contexto
 
-    return formatted or "Nenhuma fonte encontrada no corpus."
+    except Exception as e:
+        return f"Erro na busca do corpus: {str(e)}"

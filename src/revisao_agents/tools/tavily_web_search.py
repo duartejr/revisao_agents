@@ -1,30 +1,20 @@
+# src/revisao_agents/tools/tavily_web_search.py
 """
-tavily_tool.py
-==============
-Ferramentas Tavily para:
-  • search_tavily              — busca acadêmica (com filtro de domínios)
-  • search_tavily_incremental  — busca acadêmica incremental acumulada
-  • search_tavily_tecnico      — busca técnica livre (sem filtro acadêmico)
-  • search_tavily_images       — busca com imagens + descrições via Tavily
-  • extract_tavily             — extrai conteúdo completo de URLs (texto + imagens)
-
-RASTREABILIDADE:
-  Cada busca gera automaticamente um arquivo .md em ./tavily_searchs/
-  com o conteúdo completo retornado, para auditoria e reprodutibilidade.
-
-PRIORIZAÇÃO DE IDIOMA:
-  Todas as buscas priorizam conteúdo em INGLÊS, mas permitem português.
-  Resultados são ordenados dando preferência a fontes em inglês.
+Tavily Web Search Tools — versão migrada para o novo pacote.
+Mantém todas as funcionalidades originais (rastreabilidade, idioma, filtros acadêmicos).
 """
 
-from utils.commons import get_clean_key
-from tavily import TavilyClient
-from langchain.tools import tool
-from typing import List, Optional
+from langchain_core.tools import tool   # ← atualizado (melhor prática 2026)
+from typing import List, Optional, Dict
 import os
 import re
 import json
 from datetime import datetime
+
+# Imports relativos ao novo pacote (serão ajustados quando migrarmos utils/)
+from ..utils.commons import get_clean_key   # ← ajuste automático na próxima etapa
+from tavily import TavilyClient
+
 
 # ============================================================================
 # PASTA DE RASTREABILIDADE
