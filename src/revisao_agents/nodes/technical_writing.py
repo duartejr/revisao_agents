@@ -1312,14 +1312,25 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
     print(f"     ✅ {n_global_sources} fontes globais | {len(mapa_global)} citações remapeadas")
 
     # 6. Rebuild per-section "### Referências desta seção" blocks
-    #    Split the synced document at section headings (## N. Title)
+    #    First, split out the conclusion so it doesn't contaminate the
+    #    last section block (the old code skipped any block containing
+    #    '## Conclusão', silently dropping the last section's refs).
+    _CONCLUSAO_MARKER = "\n## Conclusão"
+    if _CONCLUSAO_MARKER in documento_sync:
+        _c_idx = documento_sync.index(_CONCLUSAO_MARKER)
+        doc_sections_part = documento_sync[:_c_idx]
+        doc_conclusao_part = documento_sync[_c_idx:]
+    else:
+        doc_sections_part = documento_sync
+        doc_conclusao_part = ""
+
     section_pattern = re.compile(r'(?=\n<!-- Parágrafos:)')
-    section_blocks = section_pattern.split(documento_sync)
+    section_blocks = section_pattern.split(doc_sections_part)
 
     rebuilt_parts = []
     for block in section_blocks:
-        # Find citations in this block (excluding conclusion, intro)
-        if '## Conclusão' in block or not re.search(r'## \d', block):
+        # Only process blocks that contain a numbered section heading
+        if not re.search(r'## \d', block):
             rebuilt_parts.append(block)
             continue
 
@@ -1351,7 +1362,7 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
                 )
         rebuilt_parts.append(block)
 
-    documento = "".join(rebuilt_parts)
+    documento = "".join(rebuilt_parts) + doc_conclusao_part
 
     # Update all_urls count for header
     all_urls_final = list(global_fonte_map_sync.values())
