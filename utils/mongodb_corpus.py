@@ -553,9 +553,6 @@ class CorpusMongoDB:
             ...     ("MSE is used as loss", "https://papers.nips.cc/..."),
             ... ])
         """
-        if not self._collection or not ancoras_com_urls:
-            return "", [], 0
-        
         partes = []
         chars_acumulados = 0
         urls_usadas = []
