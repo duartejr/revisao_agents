@@ -68,3 +68,6 @@ system: |
   ❌ Frases meta-organizacionais: "O objetivo desta revisão é...", "Esta seção apresenta...",
      "The objective of this section is...", "This section aims to..."
   ❌ Qualquer texto após o parágrafo final no campo TEXTO.
+  ❌ Referências a "Figura X", "Tabela Y", "Figure X", "Table Y", "Equação X", "Equation X",
+     "Gráfico X" ou "Quadro X" de documentos-fonte que NÃO estão presentes na revisão gerada.
+     Remova essas referências e descreva resultados qualitativamente.

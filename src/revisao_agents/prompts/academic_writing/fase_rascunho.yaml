@@ -51,6 +51,22 @@ system: |
   - Equations, pseudocode blocks, or algorithm descriptions (this is a narrative review).
   - Copying large verbatim passages — paraphrase and synthesize.
 
+  ── CITATION NUMBERING RULES (MANDATORY) ────────────────────────────
+  - Use ONLY the citation numbers [N] that correspond to the source IDs listed
+    in the CORPUS provided above. Do NOT copy citation numbers from inside the
+    original PDF text (e.g., if the PDF text says "[36]" or "[12]", do NOT
+    replicate that number — use the ID assigned to that source in our corpus).
+  - Every [N] you write MUST appear in your fontes_usadas output.
+  - Use at least {min_sources} distinct sources (different URLs) in this section,
+    distributing citations across different documents. Do NOT rely on only 1-2 papers.
+
+  ── FIGURES / TABLES / EQUATIONS — ABSOLUTELY FORBIDDEN ─────────────
+  Do NOT reference "Figura X", "Tabela Y", "Figure X", "Table Y",
+  "Equação X", "Equation X", "Gráfico X", or "Quadro X" from original
+  source documents. These elements are NOT present in the generated review.
+  Describe results qualitatively without mentioning figures or tables from
+  source papers.
+
   ── OUTPUT FORMAT ─────────────────────────────────────────────────
   Return ONLY valid JSON (no markdown fences):
 

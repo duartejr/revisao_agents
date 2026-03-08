@@ -52,6 +52,7 @@ class WriterConfig:
     output_prefix: str = "revisao_tecnica"
     review_type_label: str = "Revisão Técnica"
     language: ReviewLanguage = "pt"
+    min_sources_per_section: int = 0  # 0 = no constraint; set via CLI
 
     @property
     def language_label(self) -> str:
@@ -63,7 +64,7 @@ class WriterConfig:
     # --------------------------------------------------------------------------
 
     @classmethod
-    def technical(cls, language: str = "pt") -> "WriterConfig":
+    def technical(cls, language: str = "pt", min_sources: int = 0) -> "WriterConfig":
         """Default technical writing configuration."""
         return cls(
             mode="technical",
@@ -72,10 +73,11 @@ class WriterConfig:
             output_prefix="revisao_tecnica",
             review_type_label="Revisão Técnica",
             language=language,
+            min_sources_per_section=min_sources,
         )
 
     @classmethod
-    def academic(cls, language: str = "pt") -> "WriterConfig":
+    def academic(cls, language: str = "pt", min_sources: int = 4) -> "WriterConfig":
         """Academic systematic-review writing configuration."""
         return cls(
             mode="academic",
@@ -84,6 +86,7 @@ class WriterConfig:
             output_prefix="revisao_academica",
             review_type_label="Revisão Acadêmica da Literatura",
             language=language,
+            min_sources_per_section=min_sources,
         )
 
     # --------------------------------------------------------------------------
@@ -108,6 +111,7 @@ class WriterConfig:
             output_prefix=data.get("output_prefix", "revisao_tecnica"),
             review_type_label=data.get("review_type_label", "Revisão Técnica"),
             language=data.get("language", "pt"),
+            min_sources_per_section=data.get("min_sources_per_section", 0),
         )
 
     @property

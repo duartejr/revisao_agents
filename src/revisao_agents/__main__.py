@@ -77,6 +77,21 @@ def main():
             writer_config = WriterConfig.technical(language=lang_opt)
         print(f"   ✔  Idioma: {'Português (pt-BR)' if lang_opt == 'pt' else 'English'}")
 
+        # --- Minimum distinct sources per section ---
+        default_min = 4 if escolha_modo == "b" else 0
+        print("\n" + "-" * 70)
+        print("MÍNIMO DE FONTES DISTINTAS POR SEÇÃO:")
+        print(f"  (padrão = {default_min}; 0 = sem restrição)")
+        min_src_input = input(f"\nMínimo de fontes por seção [{default_min}]: ").strip()
+        try:
+            min_src = int(min_src_input) if min_src_input else default_min
+        except ValueError:
+            min_src = default_min
+        if min_src < 0:
+            min_src = 0
+        writer_config.min_sources_per_section = min_src
+        print(f"   ✔  Mínimo fontes/seção: {min_src}")
+
         # --- Tavily search option ---
         print("\n" + "-" * 70)
         print("Deseja permitir busca web/imagens via Tavily?")

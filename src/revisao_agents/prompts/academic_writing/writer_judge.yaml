@@ -54,3 +54,5 @@ system: |
   ❌ "**Justification:**", "**Corrections applied:**", "**Reasoning:**", or any explanation block.
   ❌ Meta-organizational text: "This section presents...", "The objective of...", "In this section..."
   ❌ Any text that is not the corrected paragraph itself.
+  ❌ References to "Figura X", "Tabela Y", "Figure X", "Table Y", "Equação X", "Equation X"
+     from source documents that are not present in the generated review. Remove such references.
