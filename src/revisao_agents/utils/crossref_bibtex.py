@@ -1,19 +1,21 @@
 """
-Crossref API integration for retrieving BibTeX bibliographic data.
-Enables conversion of PDF URLs/DOIs to standard citation format.
+REACT agent for bibliographic data retrieval.
+Uses multiple strategies (Crossref, ArXiv, Tavily, MongoDB chunks, PDF metadata)
+to find DOI and generate ABNT citations.
 """
 
 import re
 import urllib.request
 import urllib.error
 import json
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Any
 from pathlib import Path
 import logging
 
 logger = logging.getLogger(__name__)
 
 CROSSREF_API_BASE = "https://api.crossref.org/works"
+ARXIV_API_BASE = "http://export.arxiv.org/api/query"
 
 
 def get_bibtex_from_doi(doi: str, timeout: int = 10) -> Optional[str]:
@@ -89,11 +91,11 @@ def search_crossref_by_title(title: str, timeout: int = 10) -> Optional[str]:
 
 def extract_doi_from_url(file_path: str) -> Optional[str]:
     """
-    Attempt to extract or find DOI from a file path.
-    Tries common patterns and searches Crossref if needed.
+    Extract DOI from URL or file path.
+    Handles common DOI URL patterns and embedded DOIs.
     
     Args:
-        file_path: Path to PDF or document URL
+        file_path: URL or path that might contain a DOI
         
     Returns:
         DOI string if found, None otherwise
@@ -101,45 +103,347 @@ def extract_doi_from_url(file_path: str) -> Optional[str]:
     if not file_path:
         return None
     
-    # Pattern 1: DOI already in path (rare but possible)
-    doi_match = re.search(r'10\.\d{4,}/[^\s]+', file_path)
+    # Pattern 1: doi.org URLs
+    doi_url_match = re.search(r'doi\.org/([10]\.\S+)', file_path)
+    if doi_url_match:
+        return doi_url_match.group(1).rstrip('/')
+    
+    # Pattern 2: DOI embedded in URL or path (10.XXXX/...)
+    doi_match = re.search(r'(10\.\d{4,9}/[^\s\]]+)', file_path)
     if doi_match:
-        return doi_match.group(0)
-    
-    # Pattern 2: Extract filename and try to search
-    file_name = Path(file_path).stem  # filename without extension
-    file_name_clean = re.sub(r'[\._\-]+', ' ', file_name)  # Replace separators with spaces
-    
-    # Search Crossref with the filename (might work for PDF names like "Smith_2023_Title")
-    if len(file_name_clean) > 10:
-        doi = search_crossref_by_title(file_name_clean)
-        if doi:
-            return doi
+        return doi_match.group(1).rstrip('/')
     
     return None
 
 
-def url_to_bibtex(file_path: str, timeout: int = 10) -> Optional[str]:
+def extract_arxiv_id(file_path: str) -> Optional[str]:
     """
-    Convert a file path/URL to BibTeX citation.
-    Tries to find DOI and retrieve BibTeX from Crossref.
+    Extract ArXiv ID from URL or file path.
     
     Args:
-        file_path: Path to PDF or document
+        file_path: URL or path that might contain an ArXiv ID
+        
+    Returns:
+        ArXiv ID if found, None otherwise
+    """
+    if not file_path:
+        return None
+    
+    # Pattern: arxiv.org/abs/XXXX.XXXXX or arxiv.org/pdf/XXXX.XXXXX
+    arxiv_match = re.search(r'arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})', file_path, re.IGNORECASE)
+    if arxiv_match:
+        return arxiv_match.group(1)
+    
+    # Pattern: just the ID in the path
+    arxiv_id_match = re.search(r'(\d{4}\.\d{4,5})', file_path)
+    if arxiv_id_match:
+        return arxiv_id_match.group(1)
+    
+    return None
+
+
+def search_doi_in_text(text: str) -> Optional[str]:
+    """
+    Search for DOI pattern in text (useful for PDF first pages).
+    
+    Args:
+        text: Text content to search
+        
+    Returns:
+        DOI if found, None otherwise
+    """
+    if not text:
+        return None
+    
+    # Common DOI patterns in academic papers
+    # Pattern 1: explicit "DOI: 10.XXXX/..."
+    doi_explicit = re.search(r'DOI\s*:?\s*(10\.\d{4,9}/[^\s\]]+)', text, re.IGNORECASE)
+    if doi_explicit:
+        return doi_explicit.group(1).rstrip('.,;')
+    
+    # Pattern 2: doi.org URL
+    doi_url = re.search(r'doi\.org/(10\.\d{4,9}/[^\s\]]+)', text, re.IGNORECASE)
+    if doi_url:
+        return doi_url.group(1).rstrip('.,;')
+    
+    # Pattern 3: standalone DOI
+    doi_standalone = re.search(r'\b(10\.\d{4,9}/[^\s\]]+)\b', text)
+    if doi_standalone:
+        candidate = doi_standalone.group(1).rstrip('.,;')
+        # Validate it looks like a real DOI (has at least one / and reasonable length)
+        if '/' in candidate and len(candidate) > 8:
+            return candidate
+    
+    return None
+
+
+def get_bibtex_from_arxiv(arxiv_id: str, timeout: int = 10) -> Optional[str]:
+    """
+    Retrieve BibTeX from ArXiv API.
+    
+    Args:
+        arxiv_id: ArXiv identifier (e.g., "2301.12345")
         timeout: HTTP request timeout
         
     Returns:
         BibTeX string if successful, None otherwise
     """
-    # Try to extract/find DOI
-    doi = extract_doi_from_url(file_path)
+    if not arxiv_id:
+        return None
     
-    if doi:
-        bibtex = get_bibtex_from_doi(doi, timeout=timeout)
-        if bibtex:
-            return bibtex
+    url = f"{ARXIV_API_BASE}?id_list={arxiv_id}"
+    
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "ReviewAgent/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            xml_data = response.read().decode('utf-8')
+            
+            # Parse ArXiv XML to extract basic info
+            title_match = re.search(r'<title>([^<]+)</title>', xml_data)
+            author_match = re.findall(r'<name>([^<]+)</name>', xml_data)
+            published_match = re.search(r'<published>(\d{4})-', xml_data)
+            
+            if title_match and author_match and published_match:
+                title = title_match.group(1).strip()
+                authors = ' and '.join(author_match[:3])  # First 3 authors
+                year = published_match.group(1)
+                
+                # Generate simple BibTeX
+                bibtex = f"""@article{{arxiv{arxiv_id.replace('.', '')},
+  author = {{{authors}}},
+  title = {{{title}}},
+  year = {{{year}}},
+  eprint = {{{arxiv_id}}},
+  archivePrefix = {{arXiv}}
+}}"""
+                return bibtex
+    except Exception as e:
+        logger.debug(f"ArXiv API failed for {arxiv_id}: {e}")
     
     return None
+
+
+def search_doi_in_mongo_chunks(file_path: str, mongo_corpus: Any) -> Optional[str]:
+    """
+    Search for DOI in MongoDB chunks of the document.
+    Useful for local PDFs where we have indexed content.
+    
+    Args:
+        file_path: Path to the document
+        mongo_corpus: CorpusMongoDB instance
+        
+    Returns:
+        DOI if found in chunks, None otherwise
+    """
+    if not file_path or not mongo_corpus:
+        return None
+    
+    try:
+        # Query MongoDB for chunks from this document (first 3 chunks likely contain DOI)
+        chunks = mongo_corpus.query_similar(
+            "DOI digital object identifier publication",
+            top_k=10,
+            url_filter=file_path
+        )
+        
+        for chunk in chunks[:5]:  # Check first 5 chunks
+            text = chunk.get('text', '')
+            doi = search_doi_in_text(text)
+            if doi:
+                logger.info(f"Found DOI in MongoDB chunk: {doi}")
+                return doi
+    except Exception as e:
+        logger.debug(f"MongoDB chunk search failed: {e}")
+    
+    return None
+
+
+def search_paper_with_tavily(file_path: str, tavily_client: Any = None) -> Optional[Dict[str, str]]:
+    """
+    Use Tavily web search to find paper metadata and DOI.
+    
+    Args:
+        file_path: URL or path to search for
+        tavily_client: Tavily search client (if available)
+        
+    Returns:
+        Dict with 'doi', 'title', 'url' if found, None otherwise
+    """
+    if not tavily_client:
+        # Try to import and use tavily_client if available
+        try:
+            from ..utils.tavily_client import search_web
+            tavily_client = search_web
+        except ImportError:
+            return None
+    
+    # Extract filename as search query
+    file_name = Path(file_path).stem
+    file_name_clean = re.sub(r'[\._\-]+', ' ', file_name)
+    
+    if len(file_name_clean) < 10:
+        return None
+    
+    try:
+        # Search for the paper title
+        results = tavily_client(f'"{file_name_clean}" DOI', max_results=3)
+        
+        for result in results:
+            url = result.get('url', '')
+            content = result.get('content', '')
+            
+            # Try to extract DOI from URL or content
+            doi = extract_doi_from_url(url) or search_doi_in_text(content)
+            if doi:
+                return {
+                    'doi': doi,
+                    'title': result.get('title', ''),
+                    'url': url
+                }
+    except Exception as e:
+        logger.debug(f"Tavily search failed: {e}")
+    
+    return None
+
+
+def get_reference_data_react(
+    file_path: str,
+    mongo_corpus: Any = None,
+    tavily_enabled: bool = False,
+    max_iterations: int = 5,
+    timeout: int = 10
+) -> Dict[str, Any]:
+    """
+    REACT agent for retrieving bibliographic data.
+    Tries multiple strategies intelligently to find DOI and generate citation.
+    
+    Strategies:
+    1. Extract DOI from URL
+    2. Extract ArXiv ID from URL
+    3. Search DOI in MongoDB chunks (if corpus available)
+    4. Use Tavily web search (if enabled)
+    5. Search Crossref by filename/title
+    
+    Args:
+        file_path: URL or path to document
+        mongo_corpus: CorpusMongoDB instance (optional)
+        tavily_enabled: Whether to use Tavily search
+        max_iterations: Maximum number of strategies to try
+        timeout: HTTP request timeout
+        
+    Returns:
+        Dict with keys: 'doi', 'arxiv_id', 'bibtex', 'abnt', 'source'
+    """
+    result = {
+        'doi': None,
+        'arxiv_id': None,
+        'bibtex': None,
+        'abnt': None,
+        'source': 'unknown',
+        'url': file_path
+    }
+    
+    logger.info(f"REACT: Starting bibliography search for: {file_path[:80]}")
+    
+    # Strategy 1: Extract DOI from URL
+    doi = extract_doi_from_url(file_path)
+    if doi:
+        logger.info(f"REACT: Found DOI in URL: {doi}")
+        bibtex = get_bibtex_from_doi(doi, timeout=timeout)
+        if bibtex:
+            result['doi'] = doi
+            result['bibtex'] = bibtex
+            result['abnt'] = bibtex_to_abnt(bibtex, url=file_path)
+            result['source'] = 'url_doi'
+            return result
+        else:
+            result['doi'] = doi  # Keep DOI even if BibTeX fetch failed
+    
+    # Strategy 2: Extract ArXiv ID from URL
+    arxiv_id = extract_arxiv_id(file_path)
+    if arxiv_id:
+        logger.info(f"REACT: Found ArXiv ID: {arxiv_id}")
+        bibtex = get_bibtex_from_arxiv(arxiv_id, timeout=timeout)
+        if bibtex:
+            result['arxiv_id'] = arxiv_id
+            result['bibtex'] = bibtex
+            result['abnt'] = bibtex_to_abnt(bibtex, url=file_path)
+            result['source'] = 'arxiv'
+            return result
+    
+    # Strategy 3: Search DOI in MongoDB chunks (for local PDFs)
+    if mongo_corpus and Path(file_path).exists():
+        logger.info("REACT: Searching DOI in MongoDB chunks...")
+        doi = search_doi_in_mongo_chunks(file_path, mongo_corpus)
+        if doi:
+            logger.info(f"REACT: Found DOI in chunks: {doi}")
+            bibtex = get_bibtex_from_doi(doi, timeout=timeout)
+            if bibtex:
+                result['doi'] = doi
+                result['bibtex'] = bibtex
+                result['abnt'] = bibtex_to_abnt(bibtex, url=file_path)
+                result['source'] = 'mongo_chunks'
+                return result
+            else:
+                result['doi'] = doi
+    
+    # Strategy 4: Use Tavily search (if enabled)
+    if tavily_enabled:
+        logger.info("REACT: Trying Tavily web search...")
+        tavily_result = search_paper_with_tavily(file_path)
+        if tavily_result and tavily_result.get('doi'):
+            doi = tavily_result['doi']
+            logger.info(f"REACT: Found DOI via Tavily: {doi}")
+            bibtex = get_bibtex_from_doi(doi, timeout=timeout)
+            if bibtex:
+                result['doi'] = doi
+                result['bibtex'] = bibtex
+                result['abnt'] = bibtex_to_abnt(bibtex, url=file_path)
+                result['source'] = 'tavily'
+                return result
+            else:
+                result['doi'] = doi
+    
+    # Strategy 5: Search Crossref by title (extracted from filename)
+    file_name = Path(file_path).stem
+    file_name_clean = re.sub(r'[\._\-]+', ' ', file_name)
+    if len(file_name_clean) > 10:
+        logger.info("REACT: Searching Crossref by title...")
+        doi = search_crossref_by_title(file_name_clean, timeout=timeout)
+        if doi:
+            logger.info(f"REACT: Found DOI via Crossref title search: {doi}")
+            bibtex = get_bibtex_from_doi(doi, timeout=timeout)
+            if bibtex:
+                result['doi'] = doi
+                result['bibtex'] = bibtex
+                result['abnt'] = bibtex_to_abnt(bibtex, url=file_path)
+                result['source'] = 'crossref_title'
+                return result
+            else:
+                result['doi'] = doi
+    
+    # Fallback: Generate simple ABNT citation from path
+    logger.warning(f"REACT: No bibliographic data found, using fallback")
+    result['abnt'] = _generate_fallback_abnt(file_path)
+    result['source'] = 'fallback'
+    
+    return result
+
+
+def _generate_fallback_abnt(file_path: str) -> str:
+    """
+    Generate a fallback ABNT citation when no bibliographic data is found.
+    
+    Args:
+        file_path: Path or URL to document
+        
+    Returns:
+        Simple ABNT-like citation string
+    """
+    file_name = Path(file_path).stem
+    file_name_clean = " ".join(file_name.split("_")[:5])  # First 5 words
+    
+    return f"{file_name_clean}. Disponível em: {file_path}"
 
 
 def bibtex_to_abnt(bibtex: str, url: Optional[str] = None) -> str:
@@ -192,5 +496,5 @@ def bibtex_to_abnt(bibtex: str, url: Optional[str] = None) -> str:
     return abnt
 
 
-# Add urllib.parse import at the top if not already present
+# Import urllib.parse for URL encoding
 import urllib.parse

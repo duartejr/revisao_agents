@@ -10,8 +10,11 @@ Full implementation:
 import re
 import os
 import time
+import logging
 from datetime import datetime
 from typing import List, Tuple, Optional
+
+logger = logging.getLogger(__name__)
 
 from ..state import EscritaTecnicaState
 from ..config import (
@@ -26,7 +29,7 @@ from ..utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_acad
 from ..core.schemas.writer_config import WriterConfig
 from ..utils.tavily_client import search_web, search_images, extract_urls, score_url
 from ..utils.prompt_loader import load_prompt
-from ..utils.crossref_bibtex import get_bibtex_from_doi, extract_doi_from_url, bibtex_to_abnt
+from ..utils.crossref_bibtex import get_reference_data_react, bibtex_to_abnt
 
 # Anchor pattern (kept local — not a simple scalar constant)
 _ANCORA_PATTERN = re.compile(r'\[ÂNCORA:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
@@ -1378,29 +1381,51 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
     print(f"\n  ℹ️  Referências reconstruídas por seção ({n_global_sources} fontes globais)")
 
     # ══════════════════════════════════════════════════════════════════
-    # BUILD UNIFIED ABNT REFERENCES SECTION
+    # BUILD UNIFIED ABNT REFERENCES SECTION using REACT agent
     # ══════════════════════════════════════════════════════════════════
     print(f"\n  📚 Construindo seção de Referências em ABNT...")
+    
+    # Prepare MongoDB corpus and tavily_enabled flag
+    tavily_enabled = state.get("tavily_enabled", False)
+    try:
+        mongo_corpus = CorpusMongoDB()
+        mongo_corpus.connect()
+    except Exception as e:
+        logger.warning(f"MongoDB connection failed for bibliography: {e}")
+        mongo_corpus = None
     
     abnt_references = []
     for idx in sorted(global_fonte_map_sync.keys()):
         url = global_fonte_map_sync[idx]
         
-        # Try to fetch BibTeX from Crossref
-        bibtex = None
-        doi = extract_doi_from_url(url)
-        if doi:
-            bibtex = get_bibtex_from_doi(doi)
+        # Use REACT agent to intelligently find bibliographic data
+        ref_data = get_reference_data_react(
+            file_path=url,
+            mongo_corpus=mongo_corpus,
+            tavily_enabled=tavily_enabled,
+            max_iterations=5,
+            timeout=10
+        )
         
-        # If no BibTeX, use the URL as fallback
-        if bibtex:
-            abnt_citation = bibtex_to_abnt(bibtex, url=url)
+        # Format as "[N] ABNT_citation"
+        if ref_data.get('abnt'):
+            abnt_citation = f"[{idx}] {ref_data['abnt']}"
         else:
-            # Fallback: simple ABNT-like format with URL
+            # Final fallback if REACT failed completely
             file_name = url.split('/')[-1]
             abnt_citation = f"[{idx}] {file_name}. Disponível em: {url}"
         
         abnt_references.append(abnt_citation)
+        
+        # Log the source strategy used
+        logger.info(f"Ref [{idx}]: {ref_data.get('source', 'unknown')} for {url[:60]}")
+    
+    # Close MongoDB connection if opened
+    if mongo_corpus:
+        try:
+            mongo_corpus.close()
+        except:
+            pass
     
     # Append unified references section to document
     if abnt_references:
