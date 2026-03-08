@@ -37,7 +37,7 @@ try:
         _fase_pensamento, _juiz_paragrafo_melhorado,
         _buscar_conteudo_complementar,
     )
-    from revisao_agents.utils.prompt_loader import load_prompt
+    from revisao_agents.utils.llm_utils.prompt_loader import load_prompt
     from revisao_agents.workflows.technical_writing_workflow import build_workflow
     print("✅ All imports OK")
 except ImportError as e:
@@ -77,7 +77,7 @@ print(f"✅ Plan file found: {Path(PLAN_FILE).name}")
 
 # 4. Parse plan sections
 try:
-    from revisao_agents.utils.helpers import parse_plano_tecnico
+    from revisao_agents.utils.file_utils.helpers import parse_plano_tecnico
     with open(PLAN_FILE, "r", encoding="utf-8") as f:
         plan_text = f.read()
     tema, resumo, secoes = parse_plano_tecnico(plan_text)

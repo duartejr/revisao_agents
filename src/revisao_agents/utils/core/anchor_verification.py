@@ -1,8 +1,8 @@
 import re
 from typing import List, Tuple
-from .vector_store import buscar_chunks  # nossa nova função que usa MongoDB/OpenAI
-from .helpers import normalizar, extrair_ancoras, eh_paragrafo_verificavel
-from ..config import JUIZ_MAX_CORPUS_CHARS, JUIZ_TOP_K, get_llm
+from ..vector_utils.vector_store import buscar_chunks  # nossa nova função que usa MongoDB/OpenAI
+from ..file_utils.helpers import normalizar, extrair_ancoras, eh_paragrafo_verificavel
+from ...config import JUIZ_MAX_CORPUS_CHARS, JUIZ_TOP_K, get_llm
 
 def buscar_chunks_para_paragrafo(
     paragrafo: str,

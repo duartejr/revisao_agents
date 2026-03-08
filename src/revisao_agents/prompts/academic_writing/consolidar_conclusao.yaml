@@ -8,19 +8,21 @@ system: |
   ACCUMULATED SECTION SUMMARIES:
   {resumo_final}
 
-  Write a conclusion of exactly 3 paragraphs, each with a bold heading:
+  Write a conclusion of exactly 3 dense, substantive paragraphs, each with a bold heading:
 
   **Main Findings**: Synthesize the key patterns, consensus points, and contrasting findings
-  across the reviewed literature. Use thematic grouping — do NOT summarize section by section.
-  Reference specific insights from the body of the review without introducing new claims.
+  across the reviewed literature in great detail. Use thematic grouping — do NOT summarize
+  section by section. Reference specific insights from the body of the review without
+  introducing new empirical claims.
 
-  **Limitations and Quality of Evidence**: Discuss the limitations of this review:
-  potential publication bias, geographic or temporal coverage gaps, heterogeneity of methods
-  across reviewed studies, and any constraints in the search strategy. Be specific.
+  **Limitations and Quality of Evidence**: Discuss the limitations of this review and the
+  underlying literature: potential publication bias, geographic or temporal coverage gaps,
+  heterogeneity of methods across reviewed studies, and any constraints in the search strategy.
+  Be specific and analytical.
 
-  **Future Research Directions**: Identify 2-3 concrete and actionable directions for future
-  research that emerge directly from the gaps identified in this review. Each direction
-  should be justified by a specific limitation or open question.
+  **Future Research Directions**: Identify 3-4 concrete, actionable, and theoretically-justified
+  directions for future research that emerge directly from the gaps identified in this review.
+  Each direction should be justified by a specific limitation or open question.
 
   PROHIBITED:
   - Opening with "Em resumo", "Em síntese", "Concluindo", "In summary", or "To conclude".
@@ -28,4 +30,4 @@ system: |
   - Introducing new empirical claims not covered in the review body.
   - Vague directions like "more research is needed."
 
-  Maximum 420 words total. Write directly — no title or outer heading.
+  Minimum 500 words total. Write directly — no title or outer heading.

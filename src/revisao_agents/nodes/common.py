@@ -10,9 +10,9 @@ Prompts are loaded from YAML files in prompts/common/.
 """
 
 from ..state import RevisaoState
-from ..utils.llm_providers import get_llm
-from ..utils.helpers import fmt_chunks, fmt_snippets, resumir_hist, truncar
-from ..utils.prompt_loader import load_prompt, get_prompt_field
+from ..utils.llm_utils.llm_providers import get_llm
+from ..utils.file_utils.helpers import fmt_chunks, fmt_snippets, resumir_hist, truncar
+from ..utils.llm_utils.prompt_loader import load_prompt, get_prompt_field
 
 # Constants (may need to be moved to config)
 ENCERRAMENTO = {"fim", "terminar", "sair", "encerrar", "pronto", "acabar"}

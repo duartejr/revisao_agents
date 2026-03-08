@@ -10,8 +10,12 @@ Full implementation:
 import re
 import os
 import time
+import logging
 from datetime import datetime
+from pathlib import Path
 from typing import List, Tuple, Optional
+
+logger = logging.getLogger(__name__)
 
 from ..state import EscritaTecnicaState
 from ..config import (
@@ -21,11 +25,12 @@ from ..config import (
     DELAY_ENTRE_SECOES, MAX_REACT_ITERATIONS, TOP_K_OBSERVACAO,
 )
 from ..core.schemas.techinical_writing import RespostaSecao, Fonte
-from ..utils.mongodb_corpus import CorpusMongoDB
-from ..utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
+from ..utils.vector_utils.mongodb_corpus import CorpusMongoDB
+from ..utils.file_utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
 from ..core.schemas.writer_config import WriterConfig
-from ..utils.tavily_client import search_web, search_images, extract_urls, score_url
-from ..utils.prompt_loader import load_prompt
+from ..utils.search_utils.tavily_client import search_web, search_images, extract_urls, score_url
+from ..utils.llm_utils.prompt_loader import load_prompt
+from ..utils.bib_utils.crossref_bibtex import get_reference_data_react, bibtex_to_abnt
 
 # Anchor pattern (kept local — not a simple scalar constant)
 _ANCORA_PATTERN = re.compile(r'\[ÂNCORA:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
@@ -62,6 +67,29 @@ def _strip_justification_blocks(text: str) -> str:
 def _strip_meta_sentences(text: str) -> str:
     """Remove meta-organizational opening sentences from a paragraph."""
     return _META_SENTENCE_RE.sub("", text).strip()
+
+
+# Pattern to detect references to figures/tables/equations not present in the essay
+_FIGURE_TABLE_RE = re.compile(
+    r'(?:^|(?<=\.\s)|(?<=\n))'                       # sentence boundary
+    r'[^.]*?'                                         # leading part of sentence
+    r'(?:'
+    r'[Ff]igura\s+\d+|[Ff]ig(?:ure)?\.?\s*\d+'
+    r'|[Tt]abela\s+\d+|[Tt]able\s+\d+'
+    r'|[Ee]qua[çc][ãa]o\s+\d+|[Ee]quation\s+\d+'
+    r'|[Qq]uadro\s+\d+|[Gg]r[áa]fico\s+\d+'
+    r')'
+    r'[^.]*\.\s*',                                    # rest of sentence
+    re.MULTILINE,
+)
+
+
+def _strip_figure_table_refs(text: str) -> str:
+    """Remove sentences referencing figures/tables/equations not present in the essay."""
+    cleaned = _FIGURE_TABLE_RE.sub("", text)
+    # Normalize extra blank lines left by removals
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    return cleaned.strip()
 
 
 # ============================================================================
@@ -125,6 +153,7 @@ def _fase_rascunho(
     pos: int, n_total: int, titulos_todos: List[str], n_extraidos: int,
     prompt_dir: str = "technical_writing",
     language: str = "pt",
+    min_sources: int = 0,
 ) -> tuple:
     """Phase 6: generate anchored draft — uses prompts/{prompt_dir}/fase_rascunho.yaml."""
     ctx_anteriores = ""
@@ -144,6 +173,7 @@ def _fase_rascunho(
         f"{prompt_dir}/fase_rascunho",
         secao_min_paragrafos=SECAO_MIN_PARAGRAFOS,
         language=language,
+        min_sources=min_sources if min_sources > 0 else 2,
     )
     prompt = (
         f"TEMA: {tema}\n"
@@ -380,6 +410,8 @@ def _juiz_paragrafo_melhorado(
         candidato = _strip_justification_blocks(candidato)
         # Remove meta-organizational sentences
         candidato = _strip_meta_sentences(candidato).strip()
+        # Remove references to figures/tables/equations not present in the essay
+        candidato = _strip_figure_table_refs(candidato)
         if candidato and len(candidato) > 20:
             texto_final = candidato
 
@@ -961,6 +993,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
             resumo_acumulado, pos, n_total, titulos_todos, len(extraidos),
             prompt_dir=prompt_dir,
             language=config.language,
+            min_sources=config.min_sources_per_section,
         )
         # Track source map
         fonte_map_secao = {}
@@ -971,6 +1004,47 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
                 fonte_map_secao[fonte.get('id', i)] = fonte.get('url', '')
             else:
                 fonte_map_secao[i] = str(fonte)
+
+        # ── Source diversity check ─────────────────────────────────────
+        min_src = config.min_sources_per_section
+        n_distinct = len(set(fonte_map_secao.values()))
+        if min_src > 0 and n_distinct < min_src:
+            print(f"     ⚠️  Apenas {n_distinct} fontes distintas (mínimo: {min_src}). Tentando novamente...")
+            log.append(f"⚠️  Retry: {n_distinct}/{min_src} fontes distintas")
+            diversity_hint = (
+                f"\n\n{'━'*60}\n"
+                f"INSTRUÇÃO OBRIGATÓRIA: Use pelo menos {min_src} fontes DISTINTAS nesta seção.\n"
+                f"Distribua as citações entre diferentes documentos do corpus.\n"
+                f"NÃO dependa de apenas 1-2 artigos.\n"
+                f"{'━'*60}\n"
+            )
+            rascunho_retry, urls_retry = _fase_rascunho(
+                tema, titulo, cont_esp, recursos,
+                referencia_completa + diversity_hint, urls_secao,
+                resumo_acumulado, pos, n_total, titulos_todos, len(extraidos),
+                prompt_dir=prompt_dir,
+                language=config.language,
+                min_sources=config.min_sources_per_section,
+            )
+            fonte_map_retry = {}
+            for i, fonte in enumerate(urls_retry, 1):
+                if hasattr(fonte, 'id') and hasattr(fonte, 'url'):
+                    fonte_map_retry[fonte.id] = fonte.url
+                elif isinstance(fonte, dict):
+                    fonte_map_retry[fonte.get('id', i)] = fonte.get('url', '')
+                else:
+                    fonte_map_retry[i] = str(fonte)
+            n_distinct_retry = len(set(fonte_map_retry.values()))
+            if n_distinct_retry > n_distinct:
+                print(f"     ✅ Retry melhorou: {n_distinct_retry} fontes distintas")
+                rascunho = rascunho_retry
+                urls_usadas_fase6 = urls_retry
+                fonte_map_secao = fonte_map_retry
+                n_distinct = n_distinct_retry
+            else:
+                print(f"     ℹ️  Retry não melhorou ({n_distinct_retry} fontes). Mantendo original.")
+            if n_distinct < min_src:
+                log.append(f"<!-- WARNING: apenas {n_distinct} fontes distintas usadas (mín: {min_src}) -->")
 
         n_ancoras = len(_ANCORA_PATTERN.findall(rascunho))
         log.append(f"Rascunho: {len(rascunho):,} chars | {n_ancoras} âncoras (hints)")
@@ -1170,10 +1244,212 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
 
     partes += ["## Conclusão\n", resp_concl.strip(), "\n\n"]
 
-    # References are at the end of each section (not consolidated here)
-    print(f"\n  ℹ️  Referências estão ao final de cada seção (não consolidadas)")
+    # ══════════════════════════════════════════════════════════════════
+    # GLOBAL CITATION SYNCHRONIZATION + PER-SECTION REFERENCE REBUILD
+    # ══════════════════════════════════════════════════════════════════
+    print(f"\n  🔗 Sincronizando citações globais...")
 
-    documento = "\n".join(partes)
+    # 1. Build consolidated fonte_map: {original_citation_number: url}
+    #    Merge all per-section fonte_maps; keep the first URL seen per index.
+    #    Keys may be int or str depending on serialization — normalize to int.
+    fonte_map_consolidado: dict = {}
+    for s in secoes:
+        s_map = s.get("fonte_map", {})
+        for idx, url in s_map.items():
+            idx_int = int(idx)
+            if idx_int not in fonte_map_consolidado:
+                fonte_map_consolidado[idx_int] = url
+
+    # Also add URLs from corpus that might be cited but not in fonte_maps
+    for i, url in enumerate(all_urls, 1):
+        if i not in fonte_map_consolidado:
+            fonte_map_consolidado[i] = url
+
+    documento_raw = "\n".join(partes)
+
+    # 2. Strip old "### Referências desta seção" blocks before renumbering
+    documento_clean = re.sub(
+        r'\n*### Referências desta seção\s*\n(?:\[?\d+\]?[^\n]*\n?)*',
+        '',
+        documento_raw,
+    )
+
+    # 3. Strip invalid figure/table/equation references
+    documento_clean = _strip_figure_table_refs(documento_clean)
+
+    # 4. Extract all [N] from entire document and create global renumbering
+    citacoes_originais = re.findall(r'\[(\d+)\]', documento_clean)
+    citacoes_unicas = []
+    seen = set()
+    for c in citacoes_originais:
+        n = int(c)
+        if n not in seen:
+            seen.add(n)
+            citacoes_unicas.append(n)
+
+    # old_idx → new_idx (first-appearance order)
+    mapa_global: dict = {}
+    for new_idx, old_idx in enumerate(citacoes_unicas, 1):
+        mapa_global[old_idx] = new_idx
+
+    # Build synchronized global fonte map: {new_idx: url}
+    global_fonte_map_sync: dict = {}
+    for old_idx, new_idx in mapa_global.items():
+        url = fonte_map_consolidado.get(old_idx, "")
+        if url:
+            global_fonte_map_sync[new_idx] = url
+
+    # 5. Renumber all [N] in the document
+    def _renumber(match):
+        old = int(match.group(1))
+        new = mapa_global.get(old, old)
+        return f"[{new}]"
+
+    documento_sync = re.sub(r'\[(\d+)\]', _renumber, documento_clean)
+    # Also handle [N, M] compound citations
+    def _renumber_compound(match):
+        nums = re.findall(r'\d+', match.group(0))
+        new_nums = [str(mapa_global.get(int(n), int(n))) for n in nums]
+        return "[" + ", ".join(new_nums) + "]"
+    documento_sync = re.sub(r'\[\d+(?:\s*,\s*\d+)+\]', _renumber_compound, documento_sync)
+
+    n_global_sources = len(global_fonte_map_sync)
+    print(f"     ✅ {n_global_sources} fontes globais | {len(mapa_global)} citações remapeadas")
+
+    # 6. Rebuild per-section "### Referências desta seção" blocks
+    #    First, split out the conclusion so it doesn't contaminate the
+    #    last section block (the old code skipped any block containing
+    #    '## Conclusão', silently dropping the last section's refs).
+    _CONCLUSAO_MARKER = "\n## Conclusão"
+    if _CONCLUSAO_MARKER in documento_sync:
+        _c_idx = documento_sync.index(_CONCLUSAO_MARKER)
+        doc_sections_part = documento_sync[:_c_idx]
+        doc_conclusao_part = documento_sync[_c_idx:]
+    else:
+        doc_sections_part = documento_sync
+        doc_conclusao_part = ""
+
+    section_pattern = re.compile(r'(?=\n<!-- Parágrafos:)')
+    section_blocks = section_pattern.split(doc_sections_part)
+
+    rebuilt_parts = []
+    for block in section_blocks:
+        # Only process blocks that contain a numbered section heading
+        if not re.search(r'## \d', block):
+            rebuilt_parts.append(block)
+            continue
+
+        # Extract all [N] referenced in block body
+        cits_in_block = set()
+        for m in re.finditer(r'\[(\d+)\]', block):
+            cits_in_block.add(int(m.group(1)))
+        # Also handle [N, M]
+        for m in re.finditer(r'\[(\d+(?:\s*,\s*\d+)+)\]', block):
+            for n in re.findall(r'\d+', m.group(1)):
+                cits_in_block.add(int(n))
+
+        if cits_in_block:
+            refs_lines = []
+            for idx in sorted(cits_in_block):
+                url = global_fonte_map_sync.get(idx, "")
+                if url:
+                    refs_lines.append(f"[{idx}] {url}")
+            if refs_lines:
+                # Remove trailing --- if present, we'll re-add it
+                block_trimmed = block.rstrip()
+                if block_trimmed.endswith("---"):
+                    block_trimmed = block_trimmed[:-3].rstrip()
+                block = (
+                    block_trimmed
+                    + "\n\n### Referências desta seção\n\n"
+                    + "\n".join(refs_lines)
+                    + "\n\n\n---\n"
+                )
+        rebuilt_parts.append(block)
+
+    documento = "".join(rebuilt_parts) + doc_conclusao_part
+
+    # Update all_urls count for header
+    all_urls_final = list(global_fonte_map_sync.values())
+    # Update the header line with correct source count
+    documento = re.sub(
+        r'\*\*Fontes:\*\* \d+',
+        f'**Fontes:** {len(all_urls_final)}',
+        documento,
+        count=1,
+    )
+
+    print(f"\n  ℹ️  Referências reconstruídas por seção ({n_global_sources} fontes globais)")
+
+    # ══════════════════════════════════════════════════════════════════
+    # BUILD UNIFIED ABNT REFERENCES SECTION using REACT agent
+    # ══════════════════════════════════════════════════════════════════
+    print(f"\n  📚 Construindo seção de Referências em ABNT...")
+    
+    # Prepare MongoDB corpus and tavily_enabled flag
+    tavily_enabled = state.get("tavily_enabled", False)
+    try:
+        mongo_corpus = CorpusMongoDB()
+        mongo_corpus.connect()
+        logger.info("📊 MongoDB connection established for bibliography")
+    except Exception as e:
+        logger.warning(f"📊 MongoDB connection failed for bibliography: {e}")
+        mongo_corpus = None
+    
+    abnt_references = []
+    total_refs = len(global_fonte_map_sync)
+    successful_refs = 0
+    
+    logger.info(f"📚 Processing {total_refs} references for ABNT formatting...")
+    
+    for i, idx in enumerate(sorted(global_fonte_map_sync.keys())):
+        url = global_fonte_map_sync[idx]
+        
+        logger.info(f"📖 Processing reference {i+1}/{total_refs}: {Path(url).name if Path(url).exists() else url[:50]+'...'}")
+        
+        # Use REACT agent to intelligently find bibliographic data
+        ref_data = get_reference_data_react(
+            file_path=url,
+            mongo_corpus=mongo_corpus,
+            tavily_enabled=tavily_enabled,
+            max_iterations=5,
+            timeout=10
+        )
+        
+        # Track success/failure
+        if ref_data.get('source') != 'fallback':
+            successful_refs += 1
+            logger.info(f"✅ Reference {i+1} processed successfully via {ref_data.get('source', 'unknown')}")
+        else:
+            logger.info(f"⚠️ Reference {i+1} using fallback formatting")
+        
+        # Format as "[N] ABNT_citation"
+        if ref_data.get('abnt'):
+            abnt_citation = f"[{idx}] {ref_data['abnt']}"
+        else:
+            # Final fallback if REACT failed completely
+            file_name = url.split('/')[-1]
+            abnt_citation = f"[{idx}] {file_name}. Disponível em: {url}"
+        
+        abnt_references.append(abnt_citation)
+    
+    # Log final summary
+    logger.info(f"📊 Bibliography processing complete: {successful_refs}/{total_refs} references successfully formatted")
+    
+    # Close MongoDB connection if opened
+    if mongo_corpus:
+        try:
+            mongo_corpus.close()
+        except:
+            pass
+    
+    # Append unified references section to document
+    if abnt_references:
+        documento += "\n\n---\n\n## Referências\n\n"
+        documento += "\n\n".join(abnt_references)
+        print(f"     ✅ {len(abnt_references)} referências em ABNT adicionadas")
+    else:
+        print(f"     ⚠️  Nenhuma referência para construir")
 
     slug = re.sub(r"[^\w\s-]", "", tema[:40]).strip().replace(" ", "_").lower()
     output_path = f"reviews/{config.output_prefix}_{slug}.md"

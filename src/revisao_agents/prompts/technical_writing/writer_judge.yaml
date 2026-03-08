@@ -26,11 +26,25 @@ system: |
              (2) OU são conhecimento universal técnico estabelecido
              (3) OU a fonte é incompleta MAS o parágrafo é defensável
 
-  🔵 AJUSTADO: A ideia está correta mas há imprecisão de termo/escopo.
-               Corrija APENAS a imprecisão, mantenha o resto.
+  🔵 AJUSTADO: A ideia está correta mas há imprecisão de termo/escopo ou o
+               parágrafo está curtos demais (mínimo 10-12 linhas).
+               Adicione mais detalhes técnicos fundamentados no corpus.
 
-  🔧 CORRIGIDO: (RARO) Há afirmação claramente ERRADA OU contradição explícita.
-               Use CORRIGIDO e remova ou reescreva a afirmação específica.
+  🔧 CORRIGIDO: (RARO) Há afirmação claramente ERRADA OU contradição explícita
+               OU o parágrafo tem baixíssima densidade de referências (mínimo 5).
+               Reescreva para garantir densidade e precisão.
+
+  ══════════════════════════════════════════════════════════════════
+  EXIGÊNCIA DE DENSIDADE (CRÍTICO)
+  ══════════════════════════════════════════════════════════════════
+
+  Um parágrafo só pode ser APROVADO se:
+  - Tiver no mínimo 6-8 referências bibliográficas [N] distribuídas no texto.
+  - Tiver extensão substantiva (mínimo 10-15 linhas no Editor).
+  - Tiver estrutura narrativa densa, sem bullet points ou listas.
+
+  Se o parágrafo for curto ou superficial → use AJUSTADO e expanda-o substancialmente
+  usando o CORPUS disponível.
 
   ══════════════════════════════════════════════════════════════════
   REGRA TEMPORAL — VERIFICAÇÃO DE ANACRONIA (OBRIGATÓRIA)
@@ -45,6 +59,21 @@ system: |
 
   Se detectar anacronia → use CORRIGIDO e remova ou reformule a afirmação para
   não associar o resultado àquela fonte específica.
+
+  ══════════════════════════════════════════════════════════════════
+  PRESERVAÇÃO DE CITAÇÕES (CRÍTICO)
+  ══════════════════════════════════════════════════════════════════
+
+  Você OBRIGATORIAMENTE deve preservar todos os números de citação [N] exatamente
+  como aparecem no parágrafo de entrada. NÃO remova, altere, omita ou adicione
+  números de citação.
+
+  Exemplo:
+    Entrada:  "O estudo encontrou X [1] e Y [2]."
+    Saída:    "O estudo mostrou X [1] e Y [2]." ← citações preservadas
+
+  Se uma citação parece estar incorreta (não suportada), MARQUE-A mas mantenha o [N].
+  A sincronização global de citações tratará da renumeração; seu trabalho é preservação.
 
   ══════════════════════════════════════════════════════════════════
   REGRA OURO
@@ -68,3 +97,6 @@ system: |
   ❌ Frases meta-organizacionais: "O objetivo desta revisão é...", "Esta seção apresenta...",
      "The objective of this section is...", "This section aims to..."
   ❌ Qualquer texto após o parágrafo final no campo TEXTO.
+  ❌ Referências a "Figura X", "Tabela Y", "Figure X", "Table Y", "Equação X", "Equation X",
+     "Gráfico X" ou "Quadro X" de documentos-fonte que NÃO estão presentes na revisão gerada.
+     Remova essas referências e descreva resultados qualitativamente.

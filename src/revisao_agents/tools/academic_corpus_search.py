@@ -8,7 +8,7 @@ from langchain_core.tools import tool
 from typing import Optional
 
 # Import da classe original (ainda na pasta utils por enquanto)
-from ..utils.mongodb_corpus import CorpusMongoDB
+from ..utils.vector_utils.mongodb_corpus import CorpusMongoDB
 
 
 @tool

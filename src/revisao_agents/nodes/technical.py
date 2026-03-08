@@ -11,10 +11,10 @@ Prompts are loaded from YAML files in prompts/technical/.
 """
 
 from ..state import RevisaoState
-from ..utils.llm_providers import get_llm
-from ..utils.tavily_client import buscar_conteudo_tecnico
-from ..utils.helpers import fmt_snippets, truncar, salvar_md
-from ..utils.prompt_loader import load_prompt
+from ..utils.llm_utils.llm_providers import get_llm
+from ..utils.search_utils.tavily_client import buscar_conteudo_tecnico
+from ..utils.file_utils.helpers import fmt_snippets, truncar, salvar_md
+from ..utils.llm_utils.prompt_loader import load_prompt
 
 
 def busca_tecnica_inicial_node(state: RevisaoState) -> dict:

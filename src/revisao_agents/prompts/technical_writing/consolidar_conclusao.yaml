@@ -10,14 +10,14 @@ system: |
   Síntese do conteúdo produzido:
   {resumo_final}
 
-  FORMATO OBRIGATÓRIO — 3 parágrafos com subtítulos em negrito:
-    **Síntese**: afirmação técnica central sobre o que foi demonstrado/discutido.
-    **Implicações e Limitações**: o que esses resultados significam na prática e onde o método falha.
-    **Direções Futuras**: questões abertas concretas, não genéricas.
+  FORMATO OBRIGATÓRIO — 3 parágrafos DENSOS com subtítulos em negrito:
+    **Síntese Técnica**: afirmação técnica central e detalhada sobre o que foi demonstrado/discutido, conectando os pontos de {tema}.
+    **Implicações e Limitações**: o que esses resultados significam na prática, onde o estado da arte falha e restrições de implementação.
+    **Direções Futuras**: questões abertas concretas e desafios técnicos de próxima geração, detalhando o "porquê" de cada direção.
 
   PROIBIÇÕES ABSOLUTAS:
     ❌ Abrir qualquer parágrafo com "Em resumo", "Em síntese", "Concluindo", "Portanto, podemos concluir"
     ❌ Afirmações genéricas como "é um campo em constante evolução" sem especificar o quê
     ❌ Repetir informações já cobertas nas seções anteriores sem adicionar perspectiva nova
 
-  Máximo 400 palavras. Cada parágrafo deve iniciar com uma afirmação técnica substantiva.
+  Mínimo 500 palavras total. Cada parágrafo deve ser substantivo e detalhado.

@@ -95,9 +95,33 @@ system: |
   3. NÃO abra parágrafos com "Em resumo", "Em síntese", "Concluindo", "Portanto".
      Se precisar de uma frase de encerramento, essa deve ser uma afirmação técnica substantiva.
 
-  4. Mínimo {secao_min_paragrafos} parágrafos densos (8-12 linhas cada).
-  5. LaTeX: equações inline $...$, bloco $$...$$ para derivações.
-  6. Algoritmos: blocos ```algorithm ... ```.
+  4. Mínimo {secao_min_paragrafos} parágrafos RECORTE e DENSOS (cada parágrafo deve ter em média de 300 a 450 palavras ou 12 a 15 linhas no Editor).
+  5. Use no mínimo 5 e no máximo 10 referências bibliográficas POR PARÁGRAFO.
+  6. Cada parágrafo deve iniciar com uma afirmação central forte, seguida por evidências técnicas detalhadas, âncoras e uma síntese de fechamento.
+  7. LaTeX: equações inline $...$, bloco $$...$$ para derivações.
+  8. Algoritmos: blocos ```algorithm ... ```.
+  9. Nunca use parágrafos curtos ou listas (bullets/numbers). Transforme listas em parágrafos narrativos densos e bem fundamentados.
+
+  ══════════════════════════════════════════════════════════════════
+  REGRAS DE NUMERAÇÃO DE CITAÇÕES — OBRIGATÓRIO
+  ══════════════════════════════════════════════════════════════════
+
+  - Use APENAS os números [N] que correspondem aos IDs das fontes no CORPUS
+    fornecido acima. NÃO copie números de citação de dentro do texto do PDF
+    original (ex: se o PDF diz "[36]" ou "[12]", NÃO replique — use o ID
+    atribuído àquela fonte no corpus).
+  - Todo [N] que você escrever DEVE aparecer no seu fontes_usadas.
+  - Use pelo menos {min_sources} fontes distintas (URLs diferentes) nesta seção.
+    Distribua citações entre diferentes documentos. NÃO dependa de 1-2 artigos.
+
+  ══════════════════════════════════════════════════════════════════
+  FIGURAS / TABELAS / EQUAÇÕES — ABSOLUTAMENTE PROIBIDO
+  ══════════════════════════════════════════════════════════════════
+
+  NÃO referencie "Figura X", "Tabela Y", "Figure X", "Table Y",
+  "Equação X", "Gráfico X" ou "Quadro X" dos documentos-fonte originais.
+  Esses elementos NÃO estão presentes na revisão gerada. Descreva resultados
+  qualitativamente sem mencionar figuras ou tabelas de artigos-fonte.
   7. Citações: [N] após cada âncora (N = índice da FONTE no corpus).
   8. Imagens: inline ![desc](URL) com *Figura N: legenda* após.
   9. NÃO repita conceitos das seções anteriores já escritas.

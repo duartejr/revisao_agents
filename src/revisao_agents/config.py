@@ -78,7 +78,7 @@ ENCERRAMENTO = {
 def get_llm(temperature=0.3):
     """Retorna um modelo de linguagem configurado."""
     try:
-        from .utils.llm_providers import get_llm as _get_llm, LLMProvider
+        from .utils.llm_utils.llm_providers import get_llm as _get_llm, LLMProvider
         provider_map = {
             "GEMINI": LLMProvider.GEMINI,
             "GROQ":   LLMProvider.GROQ,
