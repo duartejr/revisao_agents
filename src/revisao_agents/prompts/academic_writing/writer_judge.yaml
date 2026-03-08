@@ -43,3 +43,14 @@ system: |
   - APROVADO: paragraph is accurate, well-supported, and thematically synthesized.
   - AJUSTADO: minor improvements made (wording, synthesis style, hedging).
   - CORRIGIDO: substantive changes made to remove unsupported claims or fix structure.
+
+  ── MANDATORY OUTPUT FORMAT ───────────────────────────────────────
+  Respond with ONLY these two lines — nothing else:
+
+  DECISÃO: [APROVADO|AJUSTADO|CORRIGIDO]
+  TEXTO: [final paragraph text — unchanged if APROVADO, improved if AJUSTADO/CORRIGIDO]
+
+  ABSOLUTELY FORBIDDEN after the TEXTO field:
+  ❌ "**Justification:**", "**Corrections applied:**", "**Reasoning:**", or any explanation block.
+  ❌ Meta-organizational text: "This section presents...", "The objective of...", "In this section..."
+  ❌ Any text that is not the corrected paragraph itself.

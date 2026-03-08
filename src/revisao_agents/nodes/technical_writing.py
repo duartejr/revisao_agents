@@ -30,16 +30,50 @@ from ..utils.prompt_loader import load_prompt
 # Anchor pattern (kept local — not a simple scalar constant)
 _ANCORA_PATTERN = re.compile(r'\[ÂNCORA:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
 
+# Patterns for LLM-generated justification/meta blocks that must be stripped from output
+_JUSTIFICATION_BLOCK_RE = re.compile(
+    r'(?:^|\n{0,2})(\*{0,2}(?:Justificativa|Correções\s+aplicadas|Correção\s+aplicada|'
+    r'Raciocínio|Correção|Justification|Applied\s+corrections|Reasoning)\s*[:\：\*]\*{0,2}'
+    r'[\s\S]*)',
+    re.IGNORECASE,
+)
+
+# Sentence-level meta-organizational patterns to remove from generated paragraphs
+_META_SENTENCE_RE = re.compile(
+    r'(?:^|(?<=\n))'
+    r'(?:O objetivo d[eo](?: estud[oa]| capítulo| se[çc][ãa]o| revis[ãa]o)?[^.]*?[.!]\s*'
+    r'|The objective of(?:this| the)[^.]*?[.!]\s*'
+    r'|This (?:section|chapter|review|study) (?:aims|seeks|intends|presents|provides|explores)[^.]*?[.!]\s*'
+    r'|Esta (?:se[çc][ãa]o|revis[ãa]o|an[áa]lise|pesquisa) (?:busca|visa|objetiva|apresenta|explora|aborda)[^.]*?[.!]\s*'
+    r'|Nesta se[çc][ãa]o[^.]*?(?:apresentamos|discutimos|analisamos|exploraremos|abordaremos)[^.]*?[.!]\s*'
+    r')',
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _strip_justification_blocks(text: str) -> str:
+    """Remove LLM-generated justification/reasoning blocks from verified paragraph text."""
+    m = _JUSTIFICATION_BLOCK_RE.search(text)
+    if m:
+        text = text[:m.start()].rstrip()
+    return text
+
+
+def _strip_meta_sentences(text: str) -> str:
+    """Remove meta-organizational opening sentences from a paragraph."""
+    return _META_SENTENCE_RE.sub("", text).strip()
+
 
 # ============================================================================
 # INTERNAL PHASE FUNCTIONS
 # ============================================================================
 
-def _fase_pensamento(tema: str, titulo: str, cont_esp: str, recursos: str, prompt_dir: str = "technical_writing") -> dict:
+def _fase_pensamento(tema: str, titulo: str, cont_esp: str, recursos: str, prompt_dir: str = "technical_writing", language: str = "pt") -> dict:
     """Phase 1: search planning — uses prompts/{prompt_dir}/fase_pensamento.yaml."""
     prompt = load_prompt(
         f"{prompt_dir}/fase_pensamento",
         tema=tema, titulo=titulo, cont_esp=cont_esp, recursos=recursos,
+        language=language,
     )
     resp = llm_call(prompt.text, temperature=prompt.temperature)
     resultado = parse_json_safe(resp)
@@ -52,7 +86,7 @@ def _fase_pensamento(tema: str, titulo: str, cont_esp: str, recursos: str, promp
     }
 
 
-def _fase_observacao(informacoes_necessarias: List[str], corpus: CorpusMongoDB, prompt_dir: str = "technical_writing") -> dict:
+def _fase_observacao(informacoes_necessarias: List[str], corpus: CorpusMongoDB, prompt_dir: str = "technical_writing", language: str = "pt") -> dict:
     """Phase 5: check if corpus is sufficient — uses prompts/{prompt_dir}/fase_observacao.yaml."""
     if corpus._n_docs == 0:
         return {
@@ -71,6 +105,7 @@ def _fase_observacao(informacoes_necessarias: List[str], corpus: CorpusMongoDB, 
         f"{prompt_dir}/fase_observacao",
         informacoes_lista=informacoes_lista,
         amostra_corpus=amostra_corpus,
+        language=language,
     )
     resp = llm_call(prompt_obs.text, temperature=prompt_obs.temperature)
     resultado = parse_json_safe(resp)
@@ -89,6 +124,7 @@ def _fase_rascunho(
     corpus: str, urls_secao: List[str], resumo_acumulado: str,
     pos: int, n_total: int, titulos_todos: List[str], n_extraidos: int,
     prompt_dir: str = "technical_writing",
+    language: str = "pt",
 ) -> tuple:
     """Phase 6: generate anchored draft — uses prompts/{prompt_dir}/fase_rascunho.yaml."""
     ctx_anteriores = ""
@@ -107,6 +143,7 @@ def _fase_rascunho(
     instru = load_prompt(
         f"{prompt_dir}/fase_rascunho",
         secao_min_paragrafos=SECAO_MIN_PARAGRAFOS,
+        language=language,
     )
     prompt = (
         f"TEMA: {tema}\n"
@@ -297,6 +334,7 @@ def _juiz_paragrafo_melhorado(
     fontes: str,
     titulo_secao: str,
     prompt_dir: str = "technical_writing",
+    language: str = "pt",
 ) -> tuple:
     """
     3-level judge + anchor detection.
@@ -323,6 +361,7 @@ def _juiz_paragrafo_melhorado(
         paragrafo_limpo=paragrafo_limpo,
         titulo_secao=titulo_secao,
         fontes=fontes,
+        language=language,
     )
     resp = llm_call(p.text, temperature=0.1)
 
@@ -337,6 +376,10 @@ def _juiz_paragrafo_melhorado(
     if m_txt:
         candidato = m_txt.group(1).strip()
         candidato = re.sub(r"^DECIS[ÃA]O\s*:.*\n?", "", candidato, flags=re.IGNORECASE).strip()
+        # Strip any justification/reasoning block the LLM appended after the paragraph
+        candidato = _strip_justification_blocks(candidato)
+        # Remove meta-organizational sentences
+        candidato = _strip_meta_sentences(candidato).strip()
         if candidato and len(candidato) > 20:
             texto_final = candidato
 
@@ -379,6 +422,7 @@ def _buscar_conteudo_complementar(
     corpus_atual: CorpusMongoDB,
     urls_tentadas: set,
     prompt_dir: str = "technical_writing",
+    language: str = "pt",
 ) -> tuple:
     """Searches for complementary content when many paragraphs fail."""
     print(f"\n      🔄 BUSCA COMPLEMENTAR — {titulo_secao}")
@@ -389,6 +433,7 @@ def _buscar_conteudo_complementar(
             f"{prompt_dir}/busca_complementar",
             titulo_secao=titulo_secao,
             conteudo_esperado=conteudo_esperado[:100],
+            language=language,
         )
         resp = llm_call(p.text, temperature=p.temperature)
         queries_complementares = [q.strip() for q in resp.split('\n') if q.strip()][:2]
@@ -445,6 +490,7 @@ def _verificar_e_corrigir_secao_adaptativa(
     titulo: str,
     fontes_secao: List[Fonte],
     conteudo_esperado: str = "",
+    language: str = "pt",
 ) -> tuple:
     """Verification with adaptive loop."""
     from ..helpers.ancora_helpers import extrair_ancora_principal, limpar_ancoras, extrair_citacao_ancora, extrair_ancoras_com_citacoes
@@ -522,7 +568,7 @@ def _verificar_e_corrigir_secao_adaptativa(
             break
 
         num_novos, corpus, msg = _buscar_conteudo_complementar(
-            titulo, conteudo_esperado, corpus, urls_tentadas
+            titulo, conteudo_esperado, corpus, urls_tentadas, language=language
         )
         log_linhas.append(f"\n**Busca:** {msg}")
         if num_novos == 0:
@@ -546,6 +592,7 @@ def _verificar_paragrafo_com_ancora(
     fonte_map: dict,
     titulo_secao: str,
     prompt_dir: str = "technical_writing",
+    language: str = "pt",
 ) -> Tuple[str, str, str, bool]:
     """
     Verifies a paragraph using anchors for directed search.
@@ -612,7 +659,7 @@ def _verificar_paragrafo_com_ancora(
         return bloco_limpo, "APROVADO", "✅ SEM FONTES", True
 
     texto_final, nivel, log_entry, eh_verificavel = _juiz_paragrafo_melhorado(
-        bloco_limpo, fontes, titulo_secao, prompt_dir=prompt_dir
+        bloco_limpo, fontes, titulo_secao, prompt_dir=prompt_dir, language=language
     )
     return texto_final, nivel, log_entry, eh_verificavel
 
@@ -624,6 +671,7 @@ def _verificar_e_corrigir_secao_com_ancora(
     titulo: str,
     conteudo_esperado: str = "",
     prompt_dir: str = "technical_writing",
+    language: str = "pt",
 ) -> Tuple[str, str, dict]:
     """
     Adaptive verification using anchors for directed search.
@@ -666,6 +714,7 @@ def _verificar_e_corrigir_secao_com_ancora(
                 fonte_map=fonte_map,
                 titulo_secao=titulo,
                 prompt_dir=prompt_dir,
+                language=language,
             )
 
             resultado.append(texto_final)
@@ -698,6 +747,7 @@ def _verificar_e_corrigir_secao_com_ancora(
         num_novos, corpus, msg = _buscar_conteudo_complementar(
             titulo, conteudo_esperado, corpus, urls_tentadas,
             prompt_dir=prompt_dir,
+            language=language,
         )
         log_linhas.append(f"\n**Busca:** {msg}")
         if num_novos == 0:
@@ -789,7 +839,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
         # FASE 1: Pensamento
         print(f"\n  🧠 FASE 1 — Pensamento...")
         log.append("\n── FASE 1: PENSAMENTO ──")
-        plano = _fase_pensamento(tema, titulo, cont_esp, recursos, prompt_dir=prompt_dir)
+        plano = _fase_pensamento(tema, titulo, cont_esp, recursos, prompt_dir=prompt_dir, language=config.language)
         queries = plano.get("queries_busca", [f"{tema} {titulo}"])
         queries_img = plano.get("queries_imagens", [f"{titulo} diagram"])
         informacoes = plano.get("informacoes_necessarias", [cont_esp[:120]])
@@ -808,7 +858,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
         if config.is_corpus_first:
             print(f"\n  🔬 FASE 5 — Observação (corpus-first, antes da busca)...")
             log.append("\n── FASE 5: OBSERVAÇÃO (corpus-first) ──")
-            obs = _fase_observacao(informacoes, corpus_check, prompt_dir=prompt_dir)
+            obs = _fase_observacao(informacoes, corpus_check, prompt_dir=prompt_dir, language=config.language)
             _corpus_suficiente = obs.get("suficiente", False)
             log.append(
                 f"Corpus suficiente: {_corpus_suficiente} | "
@@ -910,6 +960,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
             tema, titulo, cont_esp, recursos, referencia_completa, urls_secao,
             resumo_acumulado, pos, n_total, titulos_todos, len(extraidos),
             prompt_dir=prompt_dir,
+            language=config.language,
         )
         # Track source map
         fonte_map_secao = {}
@@ -935,6 +986,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
             titulo,
             cont_esp,
             prompt_dir=prompt_dir,
+            language=config.language,
         )
 
         log.append(relatorio_verif)
@@ -1074,12 +1126,14 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
         f"{config.prompt_dir}/consolidar_intro",
         tema=tema,
         titulos=", ".join(titulos),
+        language=config.language,
     )
     resp_intro = llm_call(p_intro.text, temperature=p_intro.temperature)
     p_concl = load_prompt(
         f"{config.prompt_dir}/consolidar_conclusao",
         tema=tema,
         resumo_final=resumo_final,
+        language=config.language,
     )
     resp_concl = llm_call(p_concl.text, temperature=p_concl.temperature)
 

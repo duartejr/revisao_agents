@@ -53,6 +53,18 @@ system: |
   Se fontes insuficientes para verificar → use APROVADO (benefício da dúvida).
   Só use CORRIGIDO se tiver certeza de erro factual ou anacronia clara.
 
-  RESPONDA EXCLUSIVAMENTE no seguinte formato:
+  ══════════════════════════════════════════════════════════════════
+  FORMATO DE RESPOSTA — OBRIGATÓRIO E EXCLUSIVO
+  ══════════════════════════════════════════════════════════════════
+
+  Responda EXCLUSIVAMENTE com as duas linhas abaixo, nada mais:
+
   DECISÃO: [APROVADO|AJUSTADO|CORRIGIDO]
   TEXTO: [parágrafo final corrigido ou aprovado]
+
+  PROIBIDO ABSOLUTAMENTE:
+  ❌ Blocos de "**Justificativa:**", "**Correções aplicadas:**", "**Raciocínio:**",
+     "**Correction:**", "**Applied corrections:**" ou qualquer explicação após o TEXTO.
+  ❌ Frases meta-organizacionais: "O objetivo desta revisão é...", "Esta seção apresenta...",
+     "The objective of this section is...", "This section aims to..."
+  ❌ Qualquer texto após o parágrafo final no campo TEXTO.

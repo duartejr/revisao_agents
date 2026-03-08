@@ -91,6 +91,24 @@ def load_prompt(prompt_path: str, **variables: Any) -> Prompt:
             f"  Variables provided:    {sorted(all_vars.keys())}"
         ) from e
 
+    # If a language is provided, prepend a mandatory enforcement header so the LLM
+    # always writes exclusively in the requested language and never mixes idioms.
+    lang = variables.get("language") or extra_fields.get("language")
+    if lang:
+        _LANG_LABELS = {
+            "pt": "Brazilian Portuguese (pt-BR)",
+            "en": "English",
+        }
+        lang_label = _LANG_LABELS.get(str(lang).lower(), str(lang))
+        lang_header = (
+            f"LANGUAGE ENFORCEMENT — MANDATORY:\n"
+            f"Write ALL output exclusively in {lang_label}. "
+            f"Do NOT mix languages. Do NOT use any other language for any sentence, heading, "
+            f"explanation, or technical term. This rule overrides all other instructions.\n"
+            f"{'─' * 60}\n\n"
+        )
+        rendered = lang_header + rendered
+
     # Metadata for debugging / logging
     metadata = {
         "description": raw.get("description", ""),
