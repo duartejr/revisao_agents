@@ -26,11 +26,25 @@ system: |
              (2) OU são conhecimento universal técnico estabelecido
              (3) OU a fonte é incompleta MAS o parágrafo é defensável
 
-  🔵 AJUSTADO: A ideia está correta mas há imprecisão de termo/escopo.
-               Corrija APENAS a imprecisão, mantenha o resto.
+  🔵 AJUSTADO: A ideia está correta mas há imprecisão de termo/escopo ou o
+               parágrafo está curtos demais (mínimo 10-12 linhas).
+               Adicione mais detalhes técnicos fundamentados no corpus.
 
-  🔧 CORRIGIDO: (RARO) Há afirmação claramente ERRADA OU contradição explícita.
-               Use CORRIGIDO e remova ou reescreva a afirmação específica.
+  🔧 CORRIGIDO: (RARO) Há afirmação claramente ERRADA OU contradição explícita
+               OU o parágrafo tem baixíssima densidade de referências (mínimo 5).
+               Reescreva para garantir densidade e precisão.
+
+  ══════════════════════════════════════════════════════════════════
+  EXIGÊNCIA DE DENSIDADE (CRÍTICO)
+  ══════════════════════════════════════════════════════════════════
+
+  Um parágrafo só pode ser APROVADO se:
+  - Tiver no mínimo 6-8 referências bibliográficas [N] distribuídas no texto.
+  - Tiver extensão substantiva (mínimo 10-15 linhas no Editor).
+  - Tiver estrutura narrativa densa, sem bullet points ou listas.
+
+  Se o parágrafo for curto ou superficial → use AJUSTADO e expanda-o substancialmente
+  usando o CORPUS disponível.
 
   ══════════════════════════════════════════════════════════════════
   REGRA TEMPORAL — VERIFICAÇÃO DE ANACRONIA (OBRIGATÓRIA)

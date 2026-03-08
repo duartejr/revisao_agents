@@ -14,7 +14,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-CROSSREF_API_BASE = "https://api.crossref.org/works"
+CROSSREF_API_BASE = "https://api.crossref.org/v1/works"
 ARXIV_API_BASE = "http://export.arxiv.org/api/query"
 
 
@@ -35,23 +35,65 @@ def get_bibtex_from_doi(doi: str, timeout: int = 10) -> Optional[str]:
     # Clean DOI: remove "https://doi.org/" prefix if present
     doi_clean = doi.replace("https://doi.org/", "").replace("http://doi.org/", "")
     
-    url = f"{CROSSREF_API_BASE}/{doi_clean}/transform?accept=application/x-bibtex"
+    # Validate DOI format
+    if not re.match(r'^10\.\d+/.+', doi_clean):
+        logger.warning(f"⚠️ Invalid DOI format: {doi_clean}")
+        return None
+    
+    # URL encode the DOI to handle special characters
+    doi_encoded = urllib.parse.quote(doi_clean, safe='/')
+    
+    url = f"{CROSSREF_API_BASE}/{doi_encoded}/transform"
+    logger.debug(f"🌐 Requesting BibTeX from: {url}")
     
     try:
         req = urllib.request.Request(
             url,
-            headers={"User-Agent": "ReviewAgent/1.0 (mailto:support@example.com)"}
+            headers={
+                "User-Agent": "ReviewAgent/1.0 (mailto:support@example.com)",
+                "Accept": "application/x-bibtex"
+            }
         )
         with urllib.request.urlopen(req, timeout=timeout) as response:
-            bibtex = response.read().decode('utf-8')
+            bibtex = response.read().decode('utf-8').strip()
             if bibtex and bibtex.startswith("@"):
+                logger.debug(f"✅ Successfully retrieved BibTeX for DOI {doi_clean}")
                 return bibtex
-            return None
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
-        logger.warning(f"Failed to fetch BibTeX for DOI {doi}: {e}")
+            else:
+                logger.warning(f"❌ Invalid BibTeX response for DOI {doi_clean}: {bibtex[:100] if bibtex else 'Empty response'}")
+                return None
+    except urllib.error.HTTPError as e:
+        logger.warning(f"❌ Failed to fetch BibTeX for DOI {doi_clean}: HTTP Error {e.code} - {e.reason}")
+        logger.debug(f"   URL attempted: {url}")
+        
+        # Try alternative approach: use content negotiation directly
+        if e.code == 400:
+            logger.debug("   Trying alternative Crossref endpoint...")
+            alt_url = f"https://dx.doi.org/{doi_encoded}"
+            try:
+                alt_req = urllib.request.Request(
+                    alt_url,
+                    headers={
+                        "User-Agent": "ReviewAgent/1.0 (mailto:support@example.com)",
+                        "Accept": "application/x-bibtex"
+                    }
+                )
+                with urllib.request.urlopen(alt_req, timeout=timeout) as alt_response:
+                    bibtex = alt_response.read().decode('utf-8')
+                    if bibtex and bibtex.startswith("@"):
+                        logger.info(f"✅ Successfully retrieved BibTeX via dx.doi.org for DOI {doi_clean}")
+                        return bibtex
+                    else:
+                        logger.debug(f"   Alternative endpoint returned invalid BibTeX")
+            except Exception as alt_e:
+                logger.debug(f"   Alternative endpoint also failed: {alt_e}")
+        
+        return None
+    except (urllib.error.URLError, TimeoutError) as e:
+        logger.warning(f"❌ Network error fetching BibTeX for DOI {doi}: {e}")
         return None
     except Exception as e:
-        logger.error(f"Unexpected error fetching BibTeX for DOI {doi}: {e}")
+        logger.error(f"❌ Unexpected error fetching BibTeX for DOI {doi}: {e}")
         return None
 
 
@@ -272,7 +314,7 @@ def search_paper_with_tavily(file_path: str, tavily_client: Any = None) -> Optio
     if not tavily_client:
         # Try to import and use tavily_client if available
         try:
-            from ..utils.tavily_client import search_web
+            from ..search_utils.tavily_client import search_web
             tavily_client = search_web
         except ImportError:
             return None
@@ -343,20 +385,22 @@ def get_reference_data_react(
         'url': file_path
     }
     
-    logger.info(f"REACT: Starting bibliography search for: {file_path[:80]}")
+    logger.info(f"🔍 REACT: Starting bibliography search for: {Path(file_path).name}")
     
     # Strategy 1: Extract DOI from URL
     doi = extract_doi_from_url(file_path)
     if doi:
-        logger.info(f"REACT: Found DOI in URL: {doi}")
+        logger.info(f"📍 REACT: Found DOI in URL: {doi}")
         bibtex = get_bibtex_from_doi(doi, timeout=timeout)
         if bibtex:
+            logger.info(f"✅ Successfully retrieved BibTeX for DOI: {doi}")
             result['doi'] = doi
             result['bibtex'] = bibtex
             result['abnt'] = bibtex_to_abnt(bibtex, url=file_path)
             result['source'] = 'url_doi'
             return result
         else:
+            logger.warning(f"⚠️ DOI found but BibTeX fetch failed: {doi}")
             result['doi'] = doi  # Keep DOI even if BibTeX fetch failed
     
     # Strategy 2: Extract ArXiv ID from URL
@@ -423,7 +467,7 @@ def get_reference_data_react(
                 result['doi'] = doi
     
     # Fallback: Generate simple ABNT citation from path
-    logger.warning(f"REACT: No bibliographic data found, using fallback")
+    logger.warning(f"📝 REACT: No bibliographic data found for {Path(file_path).name}, using fallback citation")
     result['abnt'] = _generate_fallback_abnt(file_path)
     result['source'] = 'fallback'
     

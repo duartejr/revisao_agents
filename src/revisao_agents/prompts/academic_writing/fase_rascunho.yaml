@@ -38,10 +38,11 @@ system: |
   - Flag limitations mentioned in source papers.
 
   PARAGRAPH STRUCTURE:
-  - Minimum {secao_min_paragrafos} substantive paragraphs per section.
-  - Each paragraph: topic sentence → synthesis of evidence with anchors → interpretive sentence.
+  - Minimum {secao_min_paragrafos} substantive, dense paragraphs per section (each 300-450 words or 12-15 lines).
+  - Use at least 5 and up to 10 distinct bibliographic references [N] PER PARAGRAPH.
+  - Each paragraph: strong topic sentence → complex synthesis of evidence with multiple anchors → interpretive critical synthesis.
   - Transition sentences connecting themes across paragraphs are required.
-  - No bullet lists of findings — incorporate all evidence into flowing prose.
+  - No bullet lists of findings — incorporate all evidence into flowing, dense prose.
 
   PROHIBITED:
   - Author-by-author narrative: "Author X found... Author Y found..."

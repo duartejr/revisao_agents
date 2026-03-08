@@ -4,7 +4,7 @@ logging.py - Structured logging configuration for revisao_agents.
 Uses Python's standard logging with rich formatting for the terminal.
 Import `get_logger` wherever you need a logger:
 
-    from ..utils.logging import get_logger
+    from ..utils.core.logging import get_logger
     log = get_logger(__name__)
 """
 

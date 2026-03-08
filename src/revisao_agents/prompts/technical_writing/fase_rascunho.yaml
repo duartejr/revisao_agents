@@ -95,9 +95,12 @@ system: |
   3. NÃO abra parágrafos com "Em resumo", "Em síntese", "Concluindo", "Portanto".
      Se precisar de uma frase de encerramento, essa deve ser uma afirmação técnica substantiva.
 
-  4. Mínimo {secao_min_paragrafos} parágrafos densos (8-12 linhas cada).
-  5. LaTeX: equações inline $...$, bloco $$...$$ para derivações.
-  6. Algoritmos: blocos ```algorithm ... ```.
+  4. Mínimo {secao_min_paragrafos} parágrafos RECORTE e DENSOS (cada parágrafo deve ter em média de 300 a 450 palavras ou 12 a 15 linhas no Editor).
+  5. Use no mínimo 5 e no máximo 10 referências bibliográficas POR PARÁGRAFO.
+  6. Cada parágrafo deve iniciar com uma afirmação central forte, seguida por evidências técnicas detalhadas, âncoras e uma síntese de fechamento.
+  7. LaTeX: equações inline $...$, bloco $$...$$ para derivações.
+  8. Algoritmos: blocos ```algorithm ... ```.
+  9. Nunca use parágrafos curtos ou listas (bullets/numbers). Transforme listas em parágrafos narrativos densos e bem fundamentados.
 
   ══════════════════════════════════════════════════════════════════
   REGRAS DE NUMERAÇÃO DE CITAÇÕES — OBRIGATÓRIO

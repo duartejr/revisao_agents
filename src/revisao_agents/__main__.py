@@ -6,7 +6,7 @@ from .state import RevisaoState, EscritaTecnicaState
 from .workflows import build_academico_workflow, build_tecnico_workflow
 from .workflows.technical_writing_workflow import build_workflow as build_escrita_workflow
 from .hitl import run_hitl_loop
-from .utils.pdf_ingestor import ingest_pdf_folder
+from .utils.vector_utils.pdf_ingestor import ingest_pdf_folder
 from .core.schemas.writer_config import WriterConfig
 
 

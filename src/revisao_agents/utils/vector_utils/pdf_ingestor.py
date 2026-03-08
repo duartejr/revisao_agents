@@ -15,7 +15,7 @@ from typing import List
 
 import pdfplumber
 
-from ..config import EXTRACT_MIN_CHARS
+from ...config import EXTRACT_MIN_CHARS
 from .mongodb_corpus import CorpusMongoDB
 
 

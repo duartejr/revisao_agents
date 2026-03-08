@@ -7,19 +7,19 @@ system: |
   REVIEW THEME: {tema}
   SECTIONS COVERED: {titulos}
 
-  Write an introduction of exactly 3 paragraphs:
+  Write an introduction of exactly 3 dense paragraphs (each 10-15 lines):
 
   Paragraph 1 — RESEARCH CONTEXT: Establish the broader scientific and practical relevance
-  of the topic. Explain why this area of research matters. Do not cite specific papers —
-  this is a framing paragraph.
+  of the topic in depth. Explain why this area of research matters and the current state of theory.
+  Do not cite specific papers — this is a framing paragraph.
 
-  Paragraph 2 — LITERATURE GAP: Describe what the existing literature has addressed and
-  what critical gap or open question motivated this review. Be specific about the type of gap
-  (methodological, geographic, temporal, or theoretical).
+  Paragraph 2 — LITERATURE GAP & MOTIVATION: Describe what the existing literature has
+  addressed and what critical gap, controversy, or open question motivated this review.
+  Be specific about the type of gap (methodological, geographic, temporal, or theoretical).
 
   Paragraph 3 — REVIEW OBJECTIVES AND SCOPE: State clearly what this review covers,
   what sections it includes ({titulos}), and what type of review this is
-  (narrative synthesis). End with one sentence on the expected contribution.
+  (narrative synthesis). Detail the expected theoretical or practical contribution.
 
   PROHIBITED:
   - "This chapter will be organized as follows..."
@@ -28,4 +28,4 @@ system: |
   - "In the following sections..."
   - Any enumeration of sections as a bullet list or numbered list.
 
-  Maximum 350 words total. Write directly — no heading, no title.
+  Minimum 450 words total. Write directly — no heading, no title.

@@ -12,7 +12,7 @@ import json
 from datetime import datetime
 
 # Imports relativos ao novo pacote (serão ajustados quando migrarmos utils/)
-from ..utils.commons import get_clean_key   # ← ajuste automático na próxima etapa
+from ..utils.core.commons import get_clean_key   # ← ajuste automático na próxima etapa
 from tavily import TavilyClient
 
 

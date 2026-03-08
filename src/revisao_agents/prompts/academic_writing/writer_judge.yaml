@@ -16,8 +16,9 @@ system: |
 
   ── EVALUATION RULES ──
 
-  1. EVIDENCE SUPPORT: Every specific claim (statistics, study outcomes, methodological findings)
-     must be traceable to the corpus. Unsupported claims → CORRIGIDO.
+  1. EVIDENCE SUPPORT & DENSITY: Every specific claim must be traceable to the corpus.
+     Paragraphs with fewer than 5-8 citations [N] or less than 12 lines must be expanded.
+     Superficial or short paragraphs → AJUSTADO to expand using corpus evidence.
 
   2. THEMATIC SYNTHESIS: The paragraph must group findings thematically, NOT author-by-author.
      "Smith found X... Jones found Y..." style → AJUSTADO to merge into thematic prose.

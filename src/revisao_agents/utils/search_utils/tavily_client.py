@@ -1,6 +1,6 @@
 import time
 from typing import List, Dict
-from ..config import TECNICO_MAX_RESULTS, DOMINIOS_PRIORITARIOS, DOMINIOS_BLOQUEADOS_EXTRACT
+from ...config import TECNICO_MAX_RESULTS, DOMINIOS_PRIORITARIOS, DOMINIOS_BLOQUEADOS_EXTRACT
 
 def buscar_conteudo_tecnico(query: str, urls_anteriores: List[str]) -> Dict:
     """
@@ -8,7 +8,7 @@ def buscar_conteudo_tecnico(query: str, urls_anteriores: List[str]) -> Dict:
     Retorna dicionário com 'urls_novos', 'total_acumulado', 'resultados'.
     """
     try:
-        from ..tools.tavily_web_search import search_tavily_tecnico_incremental
+        from ...tools.tavily_web_search import search_tavily_tecnico_incremental
         return search_tavily_tecnico_incremental(
             query, urls_anteriores, max_results=TECNICO_MAX_RESULTS
         )
@@ -43,7 +43,7 @@ def score_url(url: str, snippet: str = "", score_tavily: float = 0.0) -> float:
 def search_web(query: str, max_results: int = TECNICO_MAX_RESULTS) -> List[dict]:
     """Busca técnica no Tavily e retorna lista de resultados."""
     try:
-        from ..tools.tavily_web_search import search_tavily_tecnico_incremental
+        from ...tools.tavily_web_search import search_tavily_tecnico_incremental
         res = search_tavily_tecnico_incremental(query, [], max_results=max_results)
         return res.get("resultados", [])
     except Exception as e:
@@ -53,7 +53,7 @@ def search_web(query: str, max_results: int = TECNICO_MAX_RESULTS) -> List[dict]
 def search_images(queries: List[str], max_results: int = 8) -> List[dict]:
     """Busca imagens via tool dedicada."""
     try:
-        from ..tools.tavily_web_search import search_tavily_images
+        from ...tools.tavily_web_search import search_tavily_images
         res = search_tavily_images.invoke({"queries": queries, "max_results": max_results})
         return res.get("imagens", [])[:max_results]  # MAX_IMAGENS_SECAO deve estar em config
     except Exception as e:
@@ -65,7 +65,7 @@ def extract_urls(urls: List[str]) -> List[dict]:
     if not urls:
         return []
     try:
-        from ..tools.tavily_web_search import extract_tavily
+        from ...tools.tavily_web_search import extract_tavily
         res = extract_tavily.invoke({"urls": urls, "incluir_imagens": True})
         return res.get("extraidos", [])
     except Exception as e:

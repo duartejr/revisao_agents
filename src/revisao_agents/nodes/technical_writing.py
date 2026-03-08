@@ -12,6 +12,7 @@ import os
 import time
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
@@ -24,12 +25,12 @@ from ..config import (
     DELAY_ENTRE_SECOES, MAX_REACT_ITERATIONS, TOP_K_OBSERVACAO,
 )
 from ..core.schemas.techinical_writing import RespostaSecao, Fonte
-from ..utils.mongodb_corpus import CorpusMongoDB
-from ..utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
+from ..utils.vector_utils.mongodb_corpus import CorpusMongoDB
+from ..utils.file_utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
 from ..core.schemas.writer_config import WriterConfig
-from ..utils.tavily_client import search_web, search_images, extract_urls, score_url
-from ..utils.prompt_loader import load_prompt
-from ..utils.crossref_bibtex import get_reference_data_react, bibtex_to_abnt
+from ..utils.search_utils.tavily_client import search_web, search_images, extract_urls, score_url
+from ..utils.llm_utils.prompt_loader import load_prompt
+from ..utils.bib_utils.crossref_bibtex import get_reference_data_react, bibtex_to_abnt
 
 # Anchor pattern (kept local — not a simple scalar constant)
 _ANCORA_PATTERN = re.compile(r'\[ÂNCORA:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
@@ -1390,13 +1391,21 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
     try:
         mongo_corpus = CorpusMongoDB()
         mongo_corpus.connect()
+        logger.info("📊 MongoDB connection established for bibliography")
     except Exception as e:
-        logger.warning(f"MongoDB connection failed for bibliography: {e}")
+        logger.warning(f"📊 MongoDB connection failed for bibliography: {e}")
         mongo_corpus = None
     
     abnt_references = []
-    for idx in sorted(global_fonte_map_sync.keys()):
+    total_refs = len(global_fonte_map_sync)
+    successful_refs = 0
+    
+    logger.info(f"📚 Processing {total_refs} references for ABNT formatting...")
+    
+    for i, idx in enumerate(sorted(global_fonte_map_sync.keys())):
         url = global_fonte_map_sync[idx]
+        
+        logger.info(f"📖 Processing reference {i+1}/{total_refs}: {Path(url).name if Path(url).exists() else url[:50]+'...'}")
         
         # Use REACT agent to intelligently find bibliographic data
         ref_data = get_reference_data_react(
@@ -1407,6 +1416,13 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
             timeout=10
         )
         
+        # Track success/failure
+        if ref_data.get('source') != 'fallback':
+            successful_refs += 1
+            logger.info(f"✅ Reference {i+1} processed successfully via {ref_data.get('source', 'unknown')}")
+        else:
+            logger.info(f"⚠️ Reference {i+1} using fallback formatting")
+        
         # Format as "[N] ABNT_citation"
         if ref_data.get('abnt'):
             abnt_citation = f"[{idx}] {ref_data['abnt']}"
@@ -1416,9 +1432,9 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
             abnt_citation = f"[{idx}] {file_name}. Disponível em: {url}"
         
         abnt_references.append(abnt_citation)
-        
-        # Log the source strategy used
-        logger.info(f"Ref [{idx}]: {ref_data.get('source', 'unknown')} for {url[:60]}")
+    
+    # Log final summary
+    logger.info(f"📊 Bibliography processing complete: {successful_refs}/{total_refs} references successfully formatted")
     
     # Close MongoDB connection if opened
     if mongo_corpus:
