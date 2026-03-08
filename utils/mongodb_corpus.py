@@ -2,7 +2,7 @@ import os
 import hashlib
 import json
 from pathlib import Path
-from typing import List, Dict, Any, Optional, NamedTuple
+from typing import List, Dict, Any, Optional, NamedTuple, Tuple
 import pymongo
 from pymongo.collection import Collection
 from openai import OpenAI
@@ -422,7 +422,7 @@ class CorpusMongoDB:
             return "", self._urls_usadas, self._fonte_map
 
         partes = []
-        urls_render = {}
+        urls_render = []
         chars = 0
         fontes_vistas = set()
 
@@ -439,10 +439,163 @@ class CorpusMongoDB:
                 break
 
             partes.append(bloco)
-            if chunk.chunk_idx not in urls_render.keys():
-                urls_render[chunk.chunk_idx] = chunk.url
+            if chunk.url not in urls_render:
+                urls_render.append(chunk.url)
             chars += len(bloco)
 
         contexto = "".join(partes)
         print(f"      📨 {len(chunks)} chunks | {len(fontes_vistas)} fontes | {chars:,} chars")
         return contexto, urls_render, self._fonte_map
+    
+    def render_prompt_url(
+        self,
+        texto_ancora: str,
+        url_citada: str,
+        max_chars: int = 3000,
+        top_k: int = 5,
+    ) -> Tuple[str, List[str], int]:
+        """
+        Renderiza prompt para verificação baseado em âncora + URL específica.
+        
+        Busca chunks que:
+        1. Contenham o texto da âncora (busca vetorial)
+        2. Sejam da URL citada
+        
+        Args:
+            texto_ancora: texto literal da âncora (copiado do corpus)
+            url_citada: URL da fonte citada
+            max_chars: máximo de caracteres no prompt
+            top_k: número de chunks a buscar
+        
+        Returns:
+            (prompt_texto, [urls_usadas], total_chunks_usados)
+        
+        Exemplo:
+            >>> corpus.render_prompt_url(
+            ...     texto_ancora="convergiu após 100 épocas de treinamento",
+            ...     url_citada="https://arxiv.org/pdf/2024.12345.pdf",
+            ...     max_chars=2000
+            ... )
+        """
+        
+        # Busca vetorial pelo texto da âncora
+        chunks = self.query(texto_ancora, top_k=top_k * 2)  # Busca mais para filtrar
+        
+        # Filtra apenas chunks da URL citada
+        chunks_da_url = [
+            chunk for chunk in chunks
+            if chunk.url.strip() == url_citada.strip()
+        ]
+        
+        # Se não encontrou chunks da URL, tenta busca mais ampla
+        if not chunks_da_url:
+            print(f"   ⚠️  Nenhum chunk encontrado para URL: {url_citada[:60]}")
+            # Fallback: retorna chunks da busca geral
+            chunks_da_url = chunks[:top_k]
+        
+        # Limita ao top_k
+        chunks_da_url = chunks_da_url[:top_k]
+        
+        # Monta o prompt
+        partes = []
+        chars_acumulados = 0
+        urls_usadas = []
+        
+        for chunk in chunks_da_url:
+            # Formato: [FONTE N | URL] texto
+            bloco = (
+                f"[FONTE {chunk.fonte_idx} | {chunk.url[:70]}]\n"
+                f"{chunk.texto}\n\n"
+            )
+            
+            # Verifica se ainda cabe
+            if chars_acumulados + len(bloco) > max_chars:
+                break
+            
+            partes.append(bloco)
+            chars_acumulados += len(bloco)
+            
+            if chunk.url not in urls_usadas:
+                urls_usadas.append(chunk.url)
+        
+        if not partes:
+            return "", [], 0
+        
+        prompt_final = "".join(partes)
+        
+        return prompt_final, urls_usadas, len(chunks_da_url)
+
+
+    # ============================================================================
+    # VERSÃO ALTERNATIVA: Busca por múltiplas âncoras
+    # ============================================================================
+
+    def render_prompt_ancoras(
+        self,
+        ancoras_com_urls: List[Tuple[str, str]],
+        max_chars: int = 3000,
+    ) -> Tuple[str, List[str], int]:
+        """
+        Renderiza prompt baseado em múltiplas âncoras com suas URLs.
+        
+        Útil quando um parágrafo tem várias citações.
+        
+        Args:
+            ancoras_com_urls: lista de (texto_ancora, url_citada)
+            max_chars: máximo de caracteres no prompt
+        
+        Returns:
+            (prompt_texto, [urls_usadas], total_chunks_usados)
+        
+        Exemplo:
+            >>> corpus.render_prompt_ancoras([
+            ...     ("100 épocas de treinamento", "https://arxiv.org/..."),
+            ...     ("MSE is used as loss", "https://papers.nips.cc/..."),
+            ... ])
+        """
+        if not self._collection or not ancoras_com_urls:
+            return "", [], 0
+        
+        partes = []
+        chars_acumulados = 0
+        urls_usadas = []
+        chunks_usados = 0
+        
+        for texto_ancora, url_citada in ancoras_com_urls:
+            # Busca chunks para cada âncora
+            chunks = self.query(texto_ancora, top_k=3)
+            
+            # Filtra por URL
+            chunks_da_url = [
+                chunk for chunk in chunks
+                if chunk.url.strip() == url_citada.strip()
+            ]
+            
+            # Se não encontrou da URL específica, usa os melhores matches
+            if not chunks_da_url:
+                chunks_da_url = chunks[:2]
+            
+            # Adiciona ao prompt
+            for chunk in chunks_da_url[:2]:  # Máx 2 chunks por âncora
+                bloco = (
+                    f"[FONTE {chunk.fonte_idx} | {chunk.url[:70]}]\n"
+                    f"[ÂNCORA: {texto_ancora[:50]}...]\n"
+                    f"{chunk.texto}\n\n"
+                )
+                
+                if chars_acumulados + len(bloco) > max_chars:
+                    break
+                
+                partes.append(bloco)
+                chars_acumulados += len(bloco)
+                chunks_usados += 1
+                
+                if chunk.url not in urls_usadas:
+                    urls_usadas.append(chunk.url)
+        
+        if not partes:
+            return "", [], 0
+        
+        prompt_final = "".join(partes)
+        
+        return prompt_final, urls_usadas, chunks_usados
