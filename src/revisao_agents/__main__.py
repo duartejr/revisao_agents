@@ -57,13 +57,25 @@ def main():
         print("  [b] Acadêmica — revisão narrativa da literatura (corpus-first)")
         escolha_modo = input("\nEscolha [a/b, padrão=a]: ").strip().lower() or "a"
         if escolha_modo == "b":
-            writer_config = WriterConfig.academic()
             glob_pattern_primary = "plans/plano_revisao_*.md"
             mode_label = "ACADÊMICA"
         else:
-            writer_config = WriterConfig.technical()
             glob_pattern_primary = "plans/plano_revisao_tecnica_*.md"
             mode_label = "TÉCNICA"
+
+        # --- Language selection ---
+        print("\n" + "-" * 70)
+        print("IDIOMA DA REVISÃO:")
+        print("  [pt] Português (padrão)")
+        print("  [en] English")
+        lang_opt = input("\nEscolha [pt/en, padrão=pt]: ").strip().lower() or "pt"
+        if lang_opt not in ("pt", "en"):
+            lang_opt = "pt"
+        if escolha_modo == "b":
+            writer_config = WriterConfig.academic(language=lang_opt)
+        else:
+            writer_config = WriterConfig.technical(language=lang_opt)
+        print(f"   ✔  Idioma: {'Português (pt-BR)' if lang_opt == 'pt' else 'English'}")
 
         # --- Tavily search option ---
         print("\n" + "-" * 70)
