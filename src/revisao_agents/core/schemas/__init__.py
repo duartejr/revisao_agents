@@ -10,10 +10,15 @@ from .techinical_writing import Fonte, RespostaSecao
 # NamedTuple schemas — corpus / retrieval
 from .corpus import Chunk
 
+# Writer strategy configuration
+from .writer_config import WriterConfig
+
 __all__ = [
     # technical_writing
     "Fonte",
     "RespostaSecao",
     # corpus
     "Chunk",
+    # writer config
+    "WriterConfig",
 ]

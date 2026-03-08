@@ -208,7 +208,7 @@ BLOCKED_DOMAINS = [
            "chatpaper.com",                "flusshidro.com.br",                         "otca.org",       "ler.letras.up.pt",
              "oreilly.com",                       "neurips.cc",          "conference.ifas.ufl.edu", "atrium.lib.uoguelph.ca",
            "datadoghq.com",                          "kumo.ai",                      "hydroai.net",         "geoawesome.com",
-            "blogs.egu.eu",
+            "blogs.egu.eu",                      "i.imgur.com",
 ]
 
 

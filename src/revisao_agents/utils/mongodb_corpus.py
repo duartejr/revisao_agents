@@ -387,6 +387,55 @@ class CorpusMongoDB:
 
         return results
 
+    def get_url_chunks(self, url: str, max_chunks: int = 12) -> List[Chunk]:
+        """
+        Retrieve all stored chunks for a URL, sorted by their chunk index.
+
+        Used to provide surrounding document context during verification.
+        Chunks are sorted by the integer suffix in their chunk_id (e.g. 'url_3').
+
+        Args:
+            url:        URL to fetch all chunks for.
+            max_chunks: Maximum number of chunks to return.
+
+        Returns:
+            List of Chunk objects sorted by chunk position within the document.
+        """
+        collection = self._get_collection()
+        try:
+            cursor = collection.find(
+                {"url": url},
+                {"file_path": 1, "url": 1, "titulo": 1, "fonte_idx": 1, "chunk_id": 1},
+            )
+            docs = list(cursor)
+        except Exception as e:
+            print(f"   ❌ Erro ao buscar chunks por URL: {e}")
+            return []
+
+        def _sort_key(doc: dict) -> int:
+            chunk_id = doc.get("chunk_id", "")
+            try:
+                return int(str(chunk_id).rsplit("_", 1)[-1])
+            except (ValueError, IndexError):
+                return 0
+
+        docs.sort(key=_sort_key)
+        docs = docs[:max_chunks]
+
+        results = []
+        for doc in docs:
+            fp = doc.get("file_path", "")
+            texto = self._read_chunk_from_file(fp) if fp and os.path.exists(fp) else ""
+            results.append(Chunk(
+                chunk_idx=str(doc.get("_id", "")),
+                texto=texto,
+                url=doc.get("url", ""),
+                titulo=doc.get("titulo", ""),
+                fonte_idx=doc.get("fonte_idx", 0),
+                file_path=fp,
+            ))
+        return results
+
     def anchor_exists(self, ancora: str) -> tuple:
         if not ancora or len(ancora.strip()) < 15:
             return False, 0.0, ""
@@ -446,77 +495,77 @@ class CorpusMongoDB:
         url_citada: str,
         max_chars: int = 3000,
         top_k: int = 5,
+        include_neighbors: bool = False,
+        neighbor_window: int = 2,
     ) -> Tuple[str, List[str], int]:
         """
         Renderiza prompt para verificação baseado em âncora + URL específica.
-        
-        Busca chunks que:
-        1. Contenham o texto da âncora (busca vetorial)
-        2. Sejam da URL citada
-        
+
         Args:
-            texto_ancora: texto literal da âncora (copiado do corpus)
-            url_citada: URL da fonte citada
-            max_chars: máximo de caracteres no prompt
-            top_k: número de chunks a buscar
-        
+            texto_ancora:      texto literal da âncora (copiado do corpus)
+            url_citada:        URL da fonte citada
+            max_chars:         máximo de caracteres no prompt
+            top_k:             número de chunks primários a buscar
+            include_neighbors: se True, adiciona chunks vizinhos do mesmo documento
+                               como [CONTEXTO VIZINHO] para detecção de anacronias
+            neighbor_window:   número de chunks extras do documento a incluir
+
         Returns:
             (prompt_texto, [urls_usadas], total_chunks_usados)
-        
-        Exemplo:
-            >>> corpus.render_prompt_url(
-            ...     texto_ancora="convergiu após 100 épocas de treinamento",
-            ...     url_citada="https://arxiv.org/pdf/2024.12345.pdf",
-            ...     max_chars=2000
-            ... )
         """
-        
         # Busca vetorial pelo texto da âncora
-        chunks = self.query(texto_ancora, top_k=top_k * 2)  # Busca mais para filtrar
-        
+        chunks = self.query(texto_ancora, top_k=top_k * 2)
+
         # Filtra apenas chunks da URL citada
         chunks_da_url = [
             chunk for chunk in chunks
             if chunk.url.strip() == url_citada.strip()
         ]
-        
-        # Se não encontrou chunks da URL, tenta busca mais ampla
+
+        # Fallback: retorna chunks da busca geral se URL não encontrada
         if not chunks_da_url:
             print(f"   ⚠️  Nenhum chunk encontrado para URL: {url_citada[:60]}")
-            # Fallback: retorna chunks da busca geral
             chunks_da_url = chunks[:top_k]
-        
-        # Limita ao top_k
+
         chunks_da_url = chunks_da_url[:top_k]
-        
-        # Monta o prompt
-        partes = []
+
+        partes: List[str] = []
         chars_acumulados = 0
-        urls_usadas = []
-        
+        urls_usadas: List[str] = []
+
         for chunk in chunks_da_url:
-            # Formato: [FONTE N | URL] texto
             bloco = (
                 f"[FONTE {chunk.fonte_idx} | {chunk.url[:70]}]\n"
                 f"{chunk.texto}\n\n"
             )
-            
-            # Verifica se ainda cabe
             if chars_acumulados + len(bloco) > max_chars:
                 break
-            
             partes.append(bloco)
             chars_acumulados += len(bloco)
-            
             if chunk.url not in urls_usadas:
                 urls_usadas.append(chunk.url)
-        
+
+        # Adiciona contexto vizinho do mesmo documento para verificação temporal
+        if include_neighbors and chunks_da_url:
+            primary_texts = {c.texto for c in chunks_da_url}
+            all_url_chunks = self.get_url_chunks(url_citada, max_chunks=20)
+            neighbor_chunks = [
+                c for c in all_url_chunks if c.texto not in primary_texts
+            ][:neighbor_window]
+            for nc in neighbor_chunks:
+                bloco = (
+                    f"[CONTEXTO VIZINHO — {nc.url[:70]}]\n"
+                    f"{nc.texto}\n\n"
+                )
+                if chars_acumulados + len(bloco) > max_chars:
+                    break
+                partes.append(bloco)
+                chars_acumulados += len(bloco)
+
         if not partes:
             return "", [], 0
-        
-        prompt_final = "".join(partes)
-        
-        return prompt_final, urls_usadas, len(chunks_da_url)
+
+        return "".join(partes), urls_usadas, len(chunks_da_url)
 
 
     # ============================================================================

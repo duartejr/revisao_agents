@@ -131,3 +131,88 @@ def parse_plano_tecnico(texto: str) -> tuple:
     if not secoes:
         raise ValueError("❌ Nenhuma seção encontrada no plano.")
     return tema, resumo, secoes
+
+def parse_plano_academico(texto: str) -> tuple:
+    """
+    Extract theme, summary, and section list from an academic plan Markdown file.
+
+    Academic plans use a 3-column table:
+      | N. Título | Objetivo | Tópicos |
+
+    Returns (tema, resumo, secoes) in the same shape as parse_plano_tecnico so the
+    entire downstream writer pipeline is unaffected.
+    """
+    tema = "Revisão Acadêmica"
+    m = re.search(r"\*\*Tema:\*\*\s*(.+)", texto)
+    if m:
+        tema = m.group(1).replace("*", "").strip()
+
+    # Strip a fenced code block wrapper added by the planner (``` markdown ... ```)
+    inner = re.search(r"```(?:markdown)?\n([\s\S]+?)\n```", texto)
+    conteudo = inner.group(1) if inner else texto
+
+    resumo = conteudo[:1200].strip()
+    secoes = []
+
+    # Primary: 3-column table  | N. Title | Objetivo | Tópicos |
+    pattern = r"\|\s*\*?\*?(\d[\d\.]*\.?\s+[^|*]+?)\*?\*?\s*\|\s*([^|]+)\s*\|\s*([^|]*)\s*\|"
+    for titulo_raw, objetivo, topicos in re.findall(pattern, conteudo):
+        titulo_clean = titulo_raw.strip().replace("**", "")
+        if not titulo_clean or "Título" in titulo_clean or "---" in titulo_clean:
+            continue
+        secoes.append({
+            "indice": len(secoes),
+            "titulo": titulo_clean,
+            "conteudo_esperado": objetivo.strip(),
+            "recursos": topicos.strip(),
+        })
+
+    # Fallback: H2 / H3 numbered headings  (## 1. Title)
+    if not secoes:
+        for i, t in enumerate(re.findall(r"^#{2,3}\s+(\d[\d\.]*\s+.+)$", conteudo, re.MULTILINE)):
+            secoes.append({
+                "indice": i,
+                "titulo": t.strip(),
+                "conteudo_esperado": t.strip(),
+                "recursos": "",
+            })
+
+    if not secoes:
+        raise ValueError("❌ Nenhuma seção encontrada no plano acadêmico.")
+
+    return tema, resumo, secoes
+
+
+def extrair_ancoras(texto: str) -> list:
+    """Extracts anchor texts [ÂNCORA: "..."] from a text block."""
+    pattern = re.compile(r'\[ÂNCORA:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
+    return [m.strip() for m in pattern.findall(texto)]
+
+
+def eh_paragrafo_verificavel(paragrafo: str) -> bool:
+    """
+    Returns True if the paragraph contains verifiable claims
+    that require anchor/source support.
+    """
+    p = paragrafo.strip()
+    if len(p) < 60:
+        return False
+    if p.startswith("#"):
+        return False
+    if re.match(r"^\s*[-*]\s", p):
+        return False
+    if p.startswith("```"):
+        return False
+    if p.startswith("$$") or re.match(r"^\s*\$[^$]+\$", p):
+        return False
+    if p.startswith("*Figura") or p.startswith("!["):
+        return False
+    # Has numbers, citations, or strong verbs → likely verifiable
+    has_numbers = bool(re.search(r'\b\d+[\d.,]*\b', p))
+    has_citations = bool(re.search(r'\[\d+\]', p))
+    has_anchors = bool(re.search(r'\[ÂNCORA:', p))
+    has_verbs = bool(re.search(
+        r'\b(foi|é|são|demonstra|prova|mostra|evidencia|encontrou|'
+        r'observou|descobriu|propôs|definiu)\b', p, re.IGNORECASE
+    ))
+    return has_numbers or has_citations or has_anchors or has_verbs

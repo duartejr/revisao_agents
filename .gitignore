@@ -44,3 +44,6 @@ Thumbs.db
 chunks_cache/
 vector_db*/
 *.md.bak
+plans/
+reviews/
+tavily_searchs/

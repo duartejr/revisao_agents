@@ -19,7 +19,7 @@ class RevisaoState(TypedDict):
 
 
 class EscritaTecnicaState(TypedDict):
-    """Estado específico para o workflow de escrita técnica."""
+    """Estado específico para o workflow de escrita técnica e acadêmica."""
     tema: str
     resumo_plano: str
     secoes: List[dict]
@@ -31,6 +31,8 @@ class EscritaTecnicaState(TypedDict):
     react_log: List[str]
     stats_verificacao: List[dict]
     status: str
+    writer_config: dict  # WriterConfig.to_dict() — empty dict means technical defaults
+    tavily_enabled: bool  # If False, disables all Tavily web/image search and extraction
 
 
 # Alias para compatibilidade com código legado

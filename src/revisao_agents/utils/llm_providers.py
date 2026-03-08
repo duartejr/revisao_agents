@@ -1,21 +1,22 @@
 # llm_providers.py
 """
-Sistema modular para alternar entre provedores de LLM (Gemini, Groq, OpenAI).
+Sistema modular para alternar entre provedores de LLM (Gemini, Groq, OpenAI, OpenRouter).
 
 Uso via variável de ambiente (recomendado):
-    export LLM_PROVIDER=openai        # ou gemini / groq
-    export LLM_MODEL=gpt-4.1         # opcional — sobrescreve o modelo padrão
-    export LLM_TEMPERATURE=0.3        # opcional — padrão: 0.2
+    export LLM_PROVIDER=openai        # ou gemini / groq / openrouter
+    export LLM_MODEL=gpt-4.1         # opcional -- sobrescreve o modelo padrão
+    export LLM_TEMPERATURE=0.3        # opcional -- padrão: 0.2
 
 Uso via código:
     from llm_providers import get_llm, LLMProvider
     llm = get_llm(provider=LLMProvider.OPENAI, temperature=0.4)
-    llm = get_llm(provider=LLMProvider.OPENAI, model_name="gpt-4o-mini")
+    llm = get_llm(provider=LLMProvider.OPENROUTER, model_name="google/gemini-2.0-flash-001")
 
 Chaves de API necessárias no .env:
-    GOOGLE_API_KEY   → Gemini
-    GROQ_API_KEY     → Groq
-    OPENAI_API_KEY   → OpenAI
+    GOOGLE_API_KEY      -> Gemini
+    GROQ_API_KEY        -> Groq
+    OPENAI_API_KEY      -> OpenAI
+    OPENROUTER_API_KEY  -> OpenRouter
 """
 
 from abc import ABC, abstractmethod
@@ -40,9 +41,10 @@ load_dotenv()
 
 class LLMProvider(Enum):
     """Identificadores dos provedores suportados."""
-    GEMINI = "gemini"
-    GROQ   = "groq"
-    OPENAI = "openai"
+    GEMINI    = "gemini"
+    GROQ      = "groq"
+    OPENAI    = "openai"
+    OPENROUTER = "openrouter"
 
 
 # ============================================================================
@@ -166,6 +168,46 @@ class OpenAIProvider(BaseLLMProvider):
         )
 
 
+class OpenRouterProvider(BaseLLMProvider):
+    """
+    OpenRouter via langchain-openai (OpenAI-compatible API).
+
+    OpenRouter agrega múltiplos modelos. Modelos populares:
+        google/gemini-2.0-flash-001      → rápido, versátil
+        google/gemini-2.0-pro-001        → mais capaz
+        anthropic/claude-3.5-sonnet      → excelente para escrita
+        anthropic/claude-3-opus          → mais poderoso
+        openai/gpt-4-turbo               → OpenAI via OpenRouter
+        meta-llama/llama-3.3-70b-instruct → open-source potente
+
+    Defina o modelo via variável de ambiente LLM_MODEL ou model_name=...
+    Obtenha sua chave em: https://openrouter.ai/
+    """
+
+    def get_default_model(self) -> str:
+        model = os.getenv("LLM_MODEL", "google/gemini-2.0-flash-001")
+        print(f'default model: {model}')
+        return model
+
+    def get_api_key(self) -> str:
+        key = os.getenv("OPENROUTER_API_KEY")
+        if not key:
+            raise ValueError("OPENROUTER_API_KEY não encontrada no .env")
+        return key
+
+    def create_llm(self) -> ChatOpenAI:
+        return ChatOpenAI(
+            model=self.model_name,
+            temperature=self.temperature,
+            openai_api_key=self.get_api_key(),
+            base_url="https://openrouter.ai/api/v1",
+            default_headers={
+                "HTTP-Referer": "https://github.com/duartejr/paper_reviwer",
+                "X-Title": "Paper Reviewer"
+            }
+        )
+
+
 # ============================================================================
 # FACTORY
 # ============================================================================
@@ -174,9 +216,10 @@ class LLMFactory:
     """Cria provedores de LLM por enum ou variável de ambiente."""
 
     _providers = {
-        LLMProvider.GEMINI: GeminiProvider,
-        LLMProvider.GROQ:   GroqProvider,
-        LLMProvider.OPENAI: OpenAIProvider,
+        LLMProvider.GEMINI:     GeminiProvider,
+        LLMProvider.GROQ:       GroqProvider,
+        LLMProvider.OPENAI:     OpenAIProvider,
+        LLMProvider.OPENROUTER: OpenRouterProvider,
     }
 
     @classmethod
@@ -190,7 +233,7 @@ class LLMFactory:
         Instancia o provedor escolhido.
 
         Args:
-            provider    : LLMProvider.GEMINI | .GROQ | .OPENAI
+            provider    : LLMProvider.GEMINI | .GROQ | .OPENAI | .OPENROUTER
             temperature : 0.0 – 1.0 (padrão 0.2)
             model_name  : sobrescreve o modelo padrão do provedor (opcional)
         """
@@ -208,7 +251,7 @@ class LLMFactory:
         Lê as variáveis de ambiente e instancia o provedor correspondente.
 
         Variáveis:
-            LLM_PROVIDER    : "gemini" | "groq" | "openai"  (padrão: gemini)
+            LLM_PROVIDER    : "gemini" | "groq" | "openai" | "openrouter"  (padrão: gemini)
             LLM_MODEL       : nome do modelo (opcional)
             LLM_TEMPERATURE : float 0.0–1.0 (opcional, padrão: 0.2)
         """
@@ -294,11 +337,12 @@ if __name__ == "__main__":
     print("=" * 60)
 
     testes = [
-        ("1️⃣  Via variável de ambiente (LLM_PROVIDER)", None,               None,         None),
-        ("2️⃣  Gemini (padrão)",                         LLMProvider.GEMINI,  None,         None),
-        ("3️⃣  Groq (padrão)",                           LLMProvider.GROQ,    None,         None),
-        ("4️⃣  OpenAI — gpt-4.1 (padrão)",               LLMProvider.OPENAI,  None,         None),
-        ("5️⃣  OpenAI — gpt-4o-mini (explícito)",        LLMProvider.OPENAI,  "gpt-4o-mini", 0.5),
+        ("1️⃣  Via variável de ambiente (LLM_PROVIDER)", None,                  None,         None),
+        ("2️⃣  Gemini (padrão)",                         LLMProvider.GEMINI,   None,         None),
+        ("3️⃣  Groq (padrão)",                           LLMProvider.GROQ,     None,         None),
+        ("4️⃣  OpenAI — gpt-4.1 (padrão)",               LLMProvider.OPENAI,   None,         None),
+        ("5️⃣  OpenAI — gpt-4o-mini (explícito)",        LLMProvider.OPENAI,   "gpt-4o-mini", 0.5),
+        ("6️⃣  OpenRouter — google/gemini-2.0 (padrão)", LLMProvider.OPENROUTER, None,       None),
     ]
 
     for descricao, prov, model, temp in testes:
@@ -321,4 +365,8 @@ if __name__ == "__main__":
     print("   export LLM_PROVIDER=openai")
     print("   export OPENAI_API_KEY=sk-...")
     print("   export LLM_MODEL=gpt-4.1-mini   # opcional")
+    print("\n💡 Para usar OpenRouter em qualquer agente:")
+    print("   export LLM_PROVIDER=openrouter")
+    print("   export OPENROUTER_API_KEY=sk-or-...")
+    print("   export LLM_MODEL=anthropic/claude-3.5-sonnet   # opcional")
     print("=" * 60)

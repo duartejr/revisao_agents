@@ -6,6 +6,8 @@ from .state import RevisaoState, EscritaTecnicaState
 from .workflows import build_academico_workflow, build_tecnico_workflow
 from .workflows.technical_writing_workflow import build_workflow as build_escrita_workflow
 from .hitl import run_hitl_loop
+from .utils.pdf_ingestor import ingest_pdf_folder
+from .core.schemas.writer_config import WriterConfig
 
 
 def main():
@@ -19,14 +21,68 @@ def main():
     print("\nOpções:")
     print("  [1] Planejar Revisão Acadêmica (narrativa)")
     print("  [2] Planejar Revisão Técnica (capítulo)")
-    print("  [3] Executar Escrita Técnica a partir de plano existente")
-    escolha = input("\nEscolha [1/2/3]: ").strip()
+    print("  [3] Executar Escrita a partir de plano existente (Técnica ou Acadêmica)")
+    print("  [4] Indexar PDFs locais → vetorizar e salvar no MongoDB")
+    escolha = input("\nEscolha [1/2/3/4]: ").strip()
+
+    if escolha == "4":
+        print("\n" + "=" * 70)
+        print("INDEXAR PDFs LOCAIS")
+        print("=" * 70)
+        pasta = input("\nCaminho da pasta com PDFs: ").strip()
+        if not pasta:
+            print("❌ Caminho vazio.")
+            return
+        pasta = os.path.expanduser(pasta)
+        if not os.path.isdir(pasta):
+            print(f"❌ Pasta não encontrada: {pasta}")
+            return
+        resultado = ingest_pdf_folder(pasta)
+        print("\n" + "=" * 70)
+        print("RESULTADO DA INDEXAÇÃO")
+        print("=" * 70)
+        print(f"  ✅ Novos PDFs indexados : {resultado['indexed']}")
+        print(f"  ⏭️  Já no banco          : {resultado['already']}")
+        print(f"  ⚠️  Texto insuficiente  : {resultado['skipped']}")
+        print(f"  ❌ Erros de leitura     : {resultado['errors']}")
+        print(f"  📦 Chunks inseridos     : {resultado['total_chunks']}")
+        print("=" * 70)
+        return
 
     if escolha == "3":
-        # --- Modo escrita técnica ---
-        planos = sorted(glob.glob("plans/plano_revisao_tecnica_*.md"))
+        # --- Writing mode sub-menu ---
+        print("\n" + "-" * 70)
+        print("ESTILO DE ESCRITA:")
+        print("  [a] Técnica   — capítulo didático (busca web + MongoDB)")
+        print("  [b] Acadêmica — revisão narrativa da literatura (corpus-first)")
+        escolha_modo = input("\nEscolha [a/b, padrão=a]: ").strip().lower() or "a"
+        if escolha_modo == "b":
+            writer_config = WriterConfig.academic()
+            glob_pattern_primary = "plans/plano_revisao_*.md"
+            mode_label = "ACADÊMICA"
+        else:
+            writer_config = WriterConfig.technical()
+            glob_pattern_primary = "plans/plano_revisao_tecnica_*.md"
+            mode_label = "TÉCNICA"
+
+        # --- Tavily search option ---
+        print("\n" + "-" * 70)
+        print("Deseja permitir busca web/imagens via Tavily?")
+        print("  [y] Sim (busca web e imagens)")
+        print("  [n] Não (apenas corpus local)")
+        tavily_opt = input("\nPermitir Tavily? [y/N]: ").strip().lower() or "n"
+        tavily_enabled = tavily_opt == "y"
+
+        print(f"\n" + "=" * 70)
+        print(f"EXECUÇÃO DE ESCRITA {mode_label}")
+        print("=" * 70)
+
+        # --- Find plan files ---
+        planos = sorted(glob.glob(glob_pattern_primary))
         if not planos:
-            planos = sorted(glob.glob("plano_revisao_tecnica_*.md"))  # fallback dir raiz
+            planos = sorted(glob.glob("plans/plano_revisao_*.md"))  # broader fallback
+        if not planos:
+            planos = sorted(glob.glob("plano_revisao_*.md"))  # root fallback
         if planos:
             print("\nPlanos encontrados:")
             for i, p in enumerate(planos, 1):
@@ -55,6 +111,8 @@ def main():
             "react_log": [],
             "stats_verificacao": [],
             "status": "iniciando",
+            "writer_config": writer_config.to_dict(),
+            "tavily_enabled": tavily_enabled,
         }
         app = build_escrita_workflow()
         try:

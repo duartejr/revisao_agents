@@ -83,6 +83,7 @@ def get_llm(temperature=0.3):
             "GEMINI": LLMProvider.GEMINI,
             "GROQ":   LLMProvider.GROQ,
             "OPENAI": LLMProvider.OPENAI,
+            "OPENROUTER": LLMProvider.OPENROUTER,
         }
         provider = provider_map.get(
             os.getenv("LLM_PROVIDER", "GEMINI").upper().strip(),
@@ -114,8 +115,8 @@ def llm_call(
     Wrapper para chamadas ao LLM com suporte a múltiplos providers e saída estruturada.
 
     Env vars:
-        LLM_PROVIDER: 'openai' | 'gemini' | 'groq'  (default: 'openai')
-        LLM_MODEL:    nome do modelo (ex: 'gpt-4o', 'gemini-2.0-flash', 'llama-3.3-70b-versatile')
+        LLM_PROVIDER: 'openai' | 'gemini' | 'groq' | 'openrouter'  (default: 'groq')
+        LLM_MODEL:    nome do modelo (ex: 'gpt-4o', 'gemini-2.0-flash', 'llama-3.3-70b-versatile', 'anthropic/claude-3.5-sonnet')
     """
     provider = os.getenv("LLM_PROVIDER", "groq").lower().strip()
     model    = os.getenv("LLM_MODEL", _default_model(provider))
@@ -140,6 +141,7 @@ def _default_model(provider: str) -> str:
         "openai": "gpt-4o-mini",
         "gemini": "gemini-2.5-flash",
         "groq":   "llama-3.3-70b-versatile",
+        "openrouter": "google/gemini-2.0-flash-001",
     }
     return defaults.get(provider, "llama-3.3-70b-versatile")
 
@@ -154,8 +156,20 @@ def _build_llm(provider: str, model: str, temperature: float):
     if provider == "groq":
         from langchain_groq import ChatGroq
         return ChatGroq(model=model, temperature=temperature)
+    if provider == "openrouter":
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            model=model,
+            temperature=temperature,
+            openai_api_key=os.getenv("OPENROUTER_API_KEY", ""),
+            base_url="https://openrouter.ai/api/v1",
+            default_headers={
+                "HTTP-Referer": "https://github.com/duartejr/paper_reviwer",
+                "X-Title": "Paper Reviewer"
+            }
+        )
     raise ValueError(
-        f"Provider '{provider}' não suportado. Use: openai | gemini | groq"
+        f"Provider '{provider}' não suportado. Use: openai | gemini | groq | openrouter"
     )
 
 
