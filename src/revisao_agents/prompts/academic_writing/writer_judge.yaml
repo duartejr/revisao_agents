@@ -35,6 +35,14 @@ system: |
   6. CORPUS CONTEXT: If [CONTEXTO VIZINHO] blocks are present, use them to verify temporal
      consistency and detect contradictions between the cited claim and surrounding content.
 
+  7. CITATION PRESERVATION (CRITICAL): You MUST preserve all citation numbers [N] exactly as they
+     appear in the input paragraph. Do NOT remove, change, omit, or add citation numbers.
+     Example:
+       Input:  "The study found X [1] and Y [2]."
+       Output: "The study showed X [1] and Y [2]." ← citations must remain
+     If a citation appears to be incorrect (not supported), MARK IT but keep the [N] in place.
+     The global citation sync will handle renumbering; your job is preservation.
+
   ── RESPONSE FORMAT ──
   DECISÃO: [APROVADO | AJUSTADO | CORRIGIDO]
   TEXTO: <the final paragraph — unchanged if APROVADO, improved if AJUSTADO/CORRIGIDO>

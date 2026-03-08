@@ -26,6 +26,7 @@ from ..utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_acad
 from ..core.schemas.writer_config import WriterConfig
 from ..utils.tavily_client import search_web, search_images, extract_urls, score_url
 from ..utils.prompt_loader import load_prompt
+from ..utils.crossref_bibtex import get_bibtex_from_doi, extract_doi_from_url, bibtex_to_abnt
 
 # Anchor pattern (kept local — not a simple scalar constant)
 _ANCORA_PATTERN = re.compile(r'\[ÂNCORA:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
@@ -1375,6 +1376,39 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
     )
 
     print(f"\n  ℹ️  Referências reconstruídas por seção ({n_global_sources} fontes globais)")
+
+    # ══════════════════════════════════════════════════════════════════
+    # BUILD UNIFIED ABNT REFERENCES SECTION
+    # ══════════════════════════════════════════════════════════════════
+    print(f"\n  📚 Construindo seção de Referências em ABNT...")
+    
+    abnt_references = []
+    for idx in sorted(global_fonte_map_sync.keys()):
+        url = global_fonte_map_sync[idx]
+        
+        # Try to fetch BibTeX from Crossref
+        bibtex = None
+        doi = extract_doi_from_url(url)
+        if doi:
+            bibtex = get_bibtex_from_doi(doi)
+        
+        # If no BibTeX, use the URL as fallback
+        if bibtex:
+            abnt_citation = bibtex_to_abnt(bibtex, url=url)
+        else:
+            # Fallback: simple ABNT-like format with URL
+            file_name = url.split('/')[-1]
+            abnt_citation = f"[{idx}] {file_name}. Disponível em: {url}"
+        
+        abnt_references.append(abnt_citation)
+    
+    # Append unified references section to document
+    if abnt_references:
+        documento += "\n\n---\n\n## Referências\n\n"
+        documento += "\n\n".join(abnt_references)
+        print(f"     ✅ {len(abnt_references)} referências em ABNT adicionadas")
+    else:
+        print(f"     ⚠️  Nenhuma referência para construir")
 
     slug = re.sub(r"[^\w\s-]", "", tema[:40]).strip().replace(" ", "_").lower()
     output_path = f"reviews/{config.output_prefix}_{slug}.md"

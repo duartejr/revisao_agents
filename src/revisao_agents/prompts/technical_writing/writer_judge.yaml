@@ -47,6 +47,21 @@ system: |
   não associar o resultado àquela fonte específica.
 
   ══════════════════════════════════════════════════════════════════
+  PRESERVAÇÃO DE CITAÇÕES (CRÍTICO)
+  ══════════════════════════════════════════════════════════════════
+
+  Você OBRIGATORIAMENTE deve preservar todos os números de citação [N] exatamente
+  como aparecem no parágrafo de entrada. NÃO remova, altere, omita ou adicione
+  números de citação.
+
+  Exemplo:
+    Entrada:  "O estudo encontrou X [1] e Y [2]."
+    Saída:    "O estudo mostrou X [1] e Y [2]." ← citações preservadas
+
+  Se uma citação parece estar incorreta (não suportada), MARQUE-A mas mantenha o [N].
+  A sincronização global de citações tratará da renumeração; seu trabalho é preservação.
+
+  ══════════════════════════════════════════════════════════════════
   REGRA OURO
   ══════════════════════════════════════════════════════════════════
 
