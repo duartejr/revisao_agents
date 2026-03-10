@@ -23,9 +23,7 @@ from ...core.schemas.techinical_writing import RespostaSecao, Fonte
 from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
 from ...utils.file_utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
 from ...core.schemas.writer_config import WriterConfig
-from ...utils.search_utils.tavily_client import search_web, search_images, extract_urls, score_url
 from ...utils.llm_utils.prompt_loader import load_prompt
-from ...utils.bib_utils.crossref_bibtex import get_reference_data_react, bibtex_to_abnt
 from .text_filters import _strip_justification_blocks, _strip_meta_sentences, _strip_figure_table_refs
 from .anchor_helpers import _ANCORA_PATTERN, _extrair_ancora_principal, _extrair_citacao_ancora, _extrair_todas_ancoras_com_citacoes
 from .phase_runners import _fase_pensamento, _fase_observacao, _fase_rascunho, _extrair_com_fallback
@@ -245,88 +243,12 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
     )
 
     print(f"\n  ℹ️  Referências reconstruídas por seção ({n_global_sources} fontes globais)")
-
-    # ══════════════════════════════════════════════════════════════════
-    # BUILD UNIFIED ABNT REFERENCES SECTION using REACT agent
-    # ══════════════════════════════════════════════════════════════════
-    print(f"\n  📚 Construindo seção de Referências em ABNT...")
-    
-    # Prepare MongoDB corpus and tavily_enabled flag
-    tavily_enabled = state.get("tavily_enabled", False)
-    try:
-        mongo_corpus = CorpusMongoDB()
-        mongo_corpus.connect()
-        logger.info("📊 MongoDB connection established for bibliography")
-    except Exception as e:
-        logger.warning(f"📊 MongoDB connection failed for bibliography: {e}")
-        mongo_corpus = None
-    
-    abnt_references = []
-    total_refs = len(global_fonte_map_sync)
-    successful_refs = 0
-    seen_urls = set()  # Track URLs already added to avoid duplicates
-    
-    logger.info(f"📚 Processing {total_refs} references for ABNT formatting...")
-    
-    for i, idx in enumerate(sorted(global_fonte_map_sync.keys())):
-        url = global_fonte_map_sync[idx]
-        
-        # Skip if this URL was already processed
-        if url in seen_urls:
-            logger.info(f"⏭️  Skipping duplicate reference {i+1}/{total_refs}: {Path(url).name if Path(url).exists() else url[:50]+'...'}")
-            continue
-        
-        seen_urls.add(url)
-        
-        logger.info(f"📖 Processing reference {i+1}/{total_refs}: {Path(url).name if Path(url).exists() else url[:50]+'...'}")
-        
-        # Use REACT agent to intelligently find bibliographic data
-        ref_data = get_reference_data_react(
-            file_path=url,
-            mongo_corpus=mongo_corpus,
-            tavily_enabled=tavily_enabled,
-            max_iterations=5,
-            timeout=10
-        )
-        
-        # Track success/failure
-        if ref_data.get('source') != 'fallback':
-            successful_refs += 1
-            logger.info(f"✅ Reference {i+1} processed successfully via {ref_data.get('source', 'unknown')}")
-        else:
-            logger.info(f"⚠️ Reference {i+1} using fallback formatting")
-        
-        # Format as "[N] ABNT_citation"
-        if ref_data.get('abnt'):
-            abnt_citation = f"[{idx}] {ref_data['abnt']}"
-        else:
-            # Final fallback if REACT failed completely
-            file_name = url.split('/')[-1]
-            abnt_citation = f"[{idx}] {file_name}. Disponível em: {url}"
-        
-        abnt_references.append(abnt_citation)
-    
-    # Log final summary
-    logger.info(f"📊 Bibliography processing complete: {successful_refs}/{len(abnt_references)} unique references successfully formatted (skipped {total_refs - len(abnt_references)} duplicates)")
-    
-    # Close MongoDB connection if opened
-    if mongo_corpus:
-        try:
-            mongo_corpus.close()
-        except:
-            pass
-    
-    # Append unified references section to document
-    if abnt_references:
-        documento += "\n\n---\n\n## Referências\n\n"
-        documento += "\n\n".join(abnt_references)
-        duplicates_removed = total_refs - len(abnt_references)
-        if duplicates_removed > 0:
-            print(f"     ✅ {len(abnt_references)} referências únicas em ABNT adicionadas ({duplicates_removed} duplicatas removidas)")
-        else:
-            print(f"     ✅ {len(abnt_references)} referências em ABNT adicionadas")
-    else:
-        print(f"     ⚠️  Nenhuma referência para construir")
+    print(
+        "\n  ℹ️  A seção final '## Referências' não é mais gerada automaticamente.\n"
+        "      Use a opção [5] do menu principal para formatar suas referências\n"
+        "      no padrão desejado (ABNT, APA, IEEE, etc.) a partir de um arquivo\n"
+        "      YAML/JSON. Consulte references/README.md para detalhes."
+    )
 
     slug = re.sub(r"[^\w\s-]", "", tema[:40]).strip().replace(" ", "_").lower()
     output_path = f"reviews/{config.output_prefix}_{slug}.md"

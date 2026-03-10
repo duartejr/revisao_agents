@@ -8,6 +8,7 @@ from .workflows.technical_writing_workflow import build_workflow as build_escrit
 from .hitl import run_hitl_loop
 from .utils.vector_utils.pdf_ingestor import ingest_pdf_folder
 from .core.schemas.writer_config import WriterConfig
+from .tools.reference_formatter import run_reference_formatter
 
 
 def main():
@@ -23,7 +24,8 @@ def main():
     print("  [2] Planejar Revisão Técnica (capítulo)")
     print("  [3] Executar Escrita a partir de plano existente (Técnica ou Acadêmica)")
     print("  [4] Indexar PDFs locais → vetorizar e salvar no MongoDB")
-    escolha = input("\nEscolha [1/2/3/4]: ").strip()
+    print("  [5] Formatar Referências (ABNT, APA, IEEE, etc.) a partir de arquivo YAML/JSON")
+    escolha = input("\nEscolha [1/2/3/4/5]: ").strip()
 
     if escolha == "4":
         print("\n" + "=" * 70)
@@ -47,6 +49,10 @@ def main():
         print(f"  ❌ Erros de leitura     : {resultado['errors']}")
         print(f"  📦 Chunks inseridos     : {resultado['total_chunks']}")
         print("=" * 70)
+        return
+
+    if escolha == "5":
+        run_reference_formatter()
         return
 
     if escolha == "3":
@@ -171,7 +177,6 @@ def main():
             break
         escolha = ""  # limpa para pedir novamente
         print("Digite 1, 2 ou 3.")
-
     tipos = {"1": ["academico"], "2": ["tecnico"], "3": ["academico", "tecnico"]}[e]
 
     max_p = 3
