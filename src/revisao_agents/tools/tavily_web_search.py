@@ -208,7 +208,15 @@ BLOCKED_DOMAINS = [
            "chatpaper.com",                "flusshidro.com.br",                         "otca.org",       "ler.letras.up.pt",
              "oreilly.com",                       "neurips.cc",          "conference.ifas.ufl.edu", "atrium.lib.uoguelph.ca",
            "datadoghq.com",                          "kumo.ai",                      "hydroai.net",         "geoawesome.com",
-            "blogs.egu.eu",                      "i.imgur.com",
+            "blogs.egu.eu",                      "i.imgur.com",                     "g1.globo.com",             "uol.com.br",
+               "globo.com",                     "terra.com.br",                        "ig.com.br",       "folha.uol.com.br",
+            "istoe.com.br",                "veja.abril.com.br",                        "exame.com",  "revistapegn.globo.com",
+             "pixabay.com",                       "pexels.com",                     "unsplash.com",        "stock.adobe.com",
+        "shutterstock.com",                  "gettyimages.com",                "depositphotos.com",        "istockphoto.com",
+               "canva.com",                      "freepik.com",                     "vecteezy.com",              "pixlr.com",
+              "flickr.com",                        "500px.com",                      "smugmug.com",        "photobucket.com",
+               "imgur.com",                       "tinypic.com",                  "postimages.org",              "imgbb.com",
+             "imagebb.com",       "muralsonoro.squarespace.com",                   "brapci.inf.br", 
 ]
 
 
