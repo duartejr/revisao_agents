@@ -2,268 +2,51 @@
 REACT agent for bibliographic data retrieval.
 Uses multiple strategies (Crossref, ArXiv, Tavily, MongoDB chunks, PDF metadata)
 to find DOI and generate ABNT citations.
+
+Helper implementations live in:
+    utils/bib_utils/doi_utils.py    -- DOI extraction + Crossref API
+    utils/bib_utils/arxiv_utils.py  -- ArXiv ID extraction + API
+    utils/bib_utils/abnt_utils.py   -- BibTeX -> ABNT formatting
 """
 
+import logging
 import re
-import urllib.request
-import urllib.error
-import json
 from typing import Optional, Dict, List, Any
 from pathlib import Path
-import logging
+
+from .doi_utils import (
+    CROSSREF_API_BASE,
+    extract_doi_from_url,
+    search_doi_in_text,
+    get_bibtex_from_doi,
+    search_crossref_by_title,
+)
+from .arxiv_utils import (
+    ARXIV_API_BASE,
+    extract_arxiv_id,
+    get_bibtex_from_arxiv,
+)
+from .abnt_utils import (
+    bibtex_to_abnt,
+    generate_fallback_abnt as _generate_fallback_abnt,
+)
 
 logger = logging.getLogger(__name__)
 
-CROSSREF_API_BASE = "https://api.crossref.org/v1/works"
-ARXIV_API_BASE = "http://export.arxiv.org/api/query"
-
-
-def get_bibtex_from_doi(doi: str, timeout: int = 10) -> Optional[str]:
-    """
-    Retrieve BibTeX citation from Crossref API using DOI.
-    
-    Args:
-        doi: Digital Object Identifier (e.g., "10.1234/example")
-        timeout: HTTP request timeout in seconds
-        
-    Returns:
-        BibTeX string if successful, None if DOI not found or API error
-    """
-    if not doi:
-        return None
-    
-    # Clean DOI: remove "https://doi.org/" prefix if present
-    doi_clean = doi.replace("https://doi.org/", "").replace("http://doi.org/", "")
-    
-    # Validate DOI format
-    if not re.match(r'^10\.\d+/.+', doi_clean):
-        logger.warning(f"⚠️ Invalid DOI format: {doi_clean}")
-        return None
-    
-    # URL encode the DOI to handle special characters
-    doi_encoded = urllib.parse.quote(doi_clean, safe='/')
-    
-    url = f"{CROSSREF_API_BASE}/{doi_encoded}/transform"
-    logger.debug(f"🌐 Requesting BibTeX from: {url}")
-    
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": "ReviewAgent/1.0 (mailto:support@example.com)",
-                "Accept": "application/x-bibtex"
-            }
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            bibtex = response.read().decode('utf-8').strip()
-            if bibtex and bibtex.startswith("@"):
-                logger.debug(f"✅ Successfully retrieved BibTeX for DOI {doi_clean}")
-                return bibtex
-            else:
-                logger.warning(f"❌ Invalid BibTeX response for DOI {doi_clean}: {bibtex[:100] if bibtex else 'Empty response'}")
-                return None
-    except urllib.error.HTTPError as e:
-        logger.warning(f"❌ Failed to fetch BibTeX for DOI {doi_clean}: HTTP Error {e.code} - {e.reason}")
-        logger.debug(f"   URL attempted: {url}")
-        
-        # Try alternative approach: use content negotiation directly
-        if e.code == 400:
-            logger.debug("   Trying alternative Crossref endpoint...")
-            alt_url = f"https://dx.doi.org/{doi_encoded}"
-            try:
-                alt_req = urllib.request.Request(
-                    alt_url,
-                    headers={
-                        "User-Agent": "ReviewAgent/1.0 (mailto:support@example.com)",
-                        "Accept": "application/x-bibtex"
-                    }
-                )
-                with urllib.request.urlopen(alt_req, timeout=timeout) as alt_response:
-                    bibtex = alt_response.read().decode('utf-8')
-                    if bibtex and bibtex.startswith("@"):
-                        logger.info(f"✅ Successfully retrieved BibTeX via dx.doi.org for DOI {doi_clean}")
-                        return bibtex
-                    else:
-                        logger.debug(f"   Alternative endpoint returned invalid BibTeX")
-            except Exception as alt_e:
-                logger.debug(f"   Alternative endpoint also failed: {alt_e}")
-        
-        return None
-    except (urllib.error.URLError, TimeoutError) as e:
-        logger.warning(f"❌ Network error fetching BibTeX for DOI {doi}: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"❌ Unexpected error fetching BibTeX for DOI {doi}: {e}")
-        return None
-
-
-def search_crossref_by_title(title: str, timeout: int = 10) -> Optional[str]:
-    """
-    Search Crossref API by title to find DOI.
-    
-    Args:
-        title: Paper title or keywords
-        timeout: HTTP request timeout in seconds
-        
-    Returns:
-        DOI string if found, None otherwise
-    """
-    if not title or len(title) < 5:
-        return None
-    
-    # Encode the query
-    encoded_title = urllib.parse.quote(title[:100])
-    url = f"{CROSSREF_API_BASE}?query.title={encoded_title}&rows=1&select=DOI"
-    
-    try:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "ReviewAgent/1.0"}
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            data = json.loads(response.read().decode('utf-8'))
-            if data.get("message", {}).get("items"):
-                doi = data["message"]["items"][0].get("DOI")
-                return doi
-            return None
-    except Exception as e:
-        logger.debug(f"Crossref search by title failed: {e}")
-        return None
-
-
-def extract_doi_from_url(file_path: str) -> Optional[str]:
-    """
-    Extract DOI from URL or file path.
-    Handles common DOI URL patterns and embedded DOIs.
-    
-    Args:
-        file_path: URL or path that might contain a DOI
-        
-    Returns:
-        DOI string if found, None otherwise
-    """
-    if not file_path:
-        return None
-    
-    # Pattern 1: doi.org URLs
-    doi_url_match = re.search(r'doi\.org/([10]\.\S+)', file_path)
-    if doi_url_match:
-        return doi_url_match.group(1).rstrip('/')
-    
-    # Pattern 2: DOI embedded in URL or path (10.XXXX/...)
-    doi_match = re.search(r'(10\.\d{4,9}/[^\s\]]+)', file_path)
-    if doi_match:
-        return doi_match.group(1).rstrip('/')
-    
-    return None
-
-
-def extract_arxiv_id(file_path: str) -> Optional[str]:
-    """
-    Extract ArXiv ID from URL or file path.
-    
-    Args:
-        file_path: URL or path that might contain an ArXiv ID
-        
-    Returns:
-        ArXiv ID if found, None otherwise
-    """
-    if not file_path:
-        return None
-    
-    # Pattern: arxiv.org/abs/XXXX.XXXXX or arxiv.org/pdf/XXXX.XXXXX
-    arxiv_match = re.search(r'arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})', file_path, re.IGNORECASE)
-    if arxiv_match:
-        return arxiv_match.group(1)
-    
-    # Pattern: just the ID in the path
-    arxiv_id_match = re.search(r'(\d{4}\.\d{4,5})', file_path)
-    if arxiv_id_match:
-        return arxiv_id_match.group(1)
-    
-    return None
-
-
-def search_doi_in_text(text: str) -> Optional[str]:
-    """
-    Search for DOI pattern in text (useful for PDF first pages).
-    
-    Args:
-        text: Text content to search
-        
-    Returns:
-        DOI if found, None otherwise
-    """
-    if not text:
-        return None
-    
-    # Common DOI patterns in academic papers
-    # Pattern 1: explicit "DOI: 10.XXXX/..."
-    doi_explicit = re.search(r'DOI\s*:?\s*(10\.\d{4,9}/[^\s\]]+)', text, re.IGNORECASE)
-    if doi_explicit:
-        return doi_explicit.group(1).rstrip('.,;')
-    
-    # Pattern 2: doi.org URL
-    doi_url = re.search(r'doi\.org/(10\.\d{4,9}/[^\s\]]+)', text, re.IGNORECASE)
-    if doi_url:
-        return doi_url.group(1).rstrip('.,;')
-    
-    # Pattern 3: standalone DOI
-    doi_standalone = re.search(r'\b(10\.\d{4,9}/[^\s\]]+)\b', text)
-    if doi_standalone:
-        candidate = doi_standalone.group(1).rstrip('.,;')
-        # Validate it looks like a real DOI (has at least one / and reasonable length)
-        if '/' in candidate and len(candidate) > 8:
-            return candidate
-    
-    return None
-
-
-def get_bibtex_from_arxiv(arxiv_id: str, timeout: int = 10) -> Optional[str]:
-    """
-    Retrieve BibTeX from ArXiv API.
-    
-    Args:
-        arxiv_id: ArXiv identifier (e.g., "2301.12345")
-        timeout: HTTP request timeout
-        
-    Returns:
-        BibTeX string if successful, None otherwise
-    """
-    if not arxiv_id:
-        return None
-    
-    url = f"{ARXIV_API_BASE}?id_list={arxiv_id}"
-    
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "ReviewAgent/1.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            xml_data = response.read().decode('utf-8')
-            
-            # Parse ArXiv XML to extract basic info
-            title_match = re.search(r'<title>([^<]+)</title>', xml_data)
-            author_match = re.findall(r'<name>([^<]+)</name>', xml_data)
-            published_match = re.search(r'<published>(\d{4})-', xml_data)
-            
-            if title_match and author_match and published_match:
-                title = title_match.group(1).strip()
-                authors = ' and '.join(author_match[:3])  # First 3 authors
-                year = published_match.group(1)
-                
-                # Generate simple BibTeX
-                bibtex = f"""@article{{arxiv{arxiv_id.replace('.', '')},
-  author = {{{authors}}},
-  title = {{{title}}},
-  year = {{{year}}},
-  eprint = {{{arxiv_id}}},
-  archivePrefix = {{arXiv}}
-}}"""
-                return bibtex
-    except Exception as e:
-        logger.debug(f"ArXiv API failed for {arxiv_id}: {e}")
-    
-    return None
-
+__all__ = [
+    "CROSSREF_API_BASE",
+    "ARXIV_API_BASE",
+    "extract_doi_from_url",
+    "search_doi_in_text",
+    "get_bibtex_from_doi",
+    "search_crossref_by_title",
+    "extract_arxiv_id",
+    "get_bibtex_from_arxiv",
+    "bibtex_to_abnt",
+    "search_doi_in_mongo_chunks",
+    "search_paper_with_tavily",
+    "get_reference_data_react",
+]
 
 def search_doi_in_mongo_chunks(file_path: str, mongo_corpus: Any) -> Optional[str]:
     """
@@ -474,71 +257,3 @@ def get_reference_data_react(
     return result
 
 
-def _generate_fallback_abnt(file_path: str) -> str:
-    """
-    Generate a fallback ABNT citation when no bibliographic data is found.
-    
-    Args:
-        file_path: Path or URL to document
-        
-    Returns:
-        Simple ABNT-like citation string
-    """
-    file_name = Path(file_path).stem
-    file_name_clean = " ".join(file_name.split("_")[:5])  # First 5 words
-    
-    return f"{file_name_clean}. Disponível em: {file_path}"
-
-
-def bibtex_to_abnt(bibtex: str, url: Optional[str] = None) -> str:
-    """
-    Convert BibTeX to ABNT format (simplified).
-    ABNT standard: Author(s), Year, Title, Publication, DOI/URL
-    
-    Args:
-        bibtex: BibTeX string
-        url: Optional URL to include in reference
-        
-    Returns:
-        ABNT formatted citation string
-    """
-    # Simple pattern extraction from BibTeX
-    # Full ABNT conversion is complex; this is a simplified version
-    
-    patterns = {
-        'author': r'author\s*=\s*["{]([^"}]+)["}]',
-        'title': r'title\s*=\s*["{]([^"}]+)["}]',
-        'year': r'year\s*=\s*["{]?(\d{4})',
-        'journal': r'journal\s*=\s*["{]([^"}]+)["}]',
-        'doi': r'doi\s*=\s*["{]([^"}]+)["}]',
-    }
-    
-    extracted = {}
-    for key, pattern in patterns.items():
-        match = re.search(pattern, bibtex, re.IGNORECASE)
-        if match:
-            extracted[key] = match.group(1).strip()
-    
-    # Format as simplified ABNT
-    author = extracted.get('author', 'Unknown Author')
-    year = extracted.get('year', 'n.d.')
-    title = extracted.get('title', 'Unknown Title')
-    journal = extracted.get('journal', '')
-    doi = extracted.get('doi', '')
-    
-    # ABNT: AUTHOR(S). Title. Journal (if available), Year. DOI or URL.
-    if journal:
-        abnt = f"{author}. {title}. {journal}, {year}."
-    else:
-        abnt = f"{author}. {title}, {year}."
-    
-    if doi:
-        abnt += f" DOI: {doi}"
-    elif url:
-        abnt += f" Disponível em: {url}"
-    
-    return abnt
-
-
-# Import urllib.parse for URL encoding
-import urllib.parse
