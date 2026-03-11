@@ -41,7 +41,7 @@ def plano_inicial_tecnico_node(state: RevisaoState) -> dict:
     tema     = state["tema"]
     snippets = fmt_snippets(state.get("snippets_tecnicos", []), 1200)
     prompt = load_prompt("technical/plano_inicial", tema=tema, snippets=snippets)
-    resp  = get_llm(prompt.temperature).invoke(prompt.text)
+    resp  = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     plano = resp.content if hasattr(resp, "content") else str(resp)
     print("\nPlano tecnico inicial elaborado.")
     return {"plano_atual": plano, "status": "plano_tecnico_inicial_pronto"}
@@ -88,7 +88,7 @@ def refinar_plano_tecnico_node(state: RevisaoState) -> dict:
         ultima=ultima,
         snips=snips,
     )
-    resp  = get_llm(prompt.temperature).invoke(prompt.text)
+    resp  = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     plano = resp.content if hasattr(resp, "content") else str(resp)
     print("   Plano tecnico atualizado.")
     return {"plano_atual": plano, "status": "plano_tecnico_refinado"}
@@ -101,7 +101,7 @@ def finalizar_plano_tecnico_node(state: RevisaoState) -> dict:
     snips      = fmt_snippets(state.get("snippets_tecnicos", [])[:8], 800)
     urls       = state.get("urls_tecnicos", [])
     prompt = load_prompt("technical/finalizar_plano", snips=snips)
-    resp        = get_llm(prompt.temperature).invoke(prompt.text)
+    resp        = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     plano_final = resp.content if hasattr(resp, "content") else str(resp)
     print("\n" + "=" * 70)
     print("PLANO FINAL — REVISAO TECNICA")

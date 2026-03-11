@@ -8,7 +8,7 @@ Usage:
     from ..utils.llm_utils.prompt_loader import load_prompt
 
     prompt = load_prompt("academic/plano_inicial", tema=tema, ctx=ctx)
-    resp = get_llm(prompt.temperature).invoke(prompt.text)
+    resp = get_llm(temperature=prompt.temperature).invoke(prompt.text)
 """
 
 from __future__ import annotations

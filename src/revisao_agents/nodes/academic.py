@@ -34,7 +34,7 @@ def plano_inicial_academico_node(state: RevisaoState) -> dict:
     tema = state["tema"]
     ctx  = fmt_chunks(state["chunks_relevantes"], 900)
     prompt = load_prompt("academic/plano_inicial", tema=repr(tema), ctx=ctx)
-    resp  = get_llm(prompt.temperature).invoke(prompt.text)
+    resp  = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     plano = resp.content if hasattr(resp, "content") else str(resp)
     print("\nPlano academico inicial elaborado.")
     return {"plano_atual": plano, "status": "plano_inicial_pronto"}
@@ -71,7 +71,7 @@ def refinar_plano_academico_node(state: RevisaoState) -> dict:
         ultima=ultima,
         ctx_novo=ctx_novo,
     )
-    resp  = get_llm(prompt.temperature).invoke(prompt.text)
+    resp  = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     plano = resp.content if hasattr(resp, "content") else str(resp)
     print("   Plano academico atualizado.")
     return {"plano_atual": plano, "status": "plano_refinado"}
@@ -88,7 +88,7 @@ def finalizar_plano_academico_node(state: RevisaoState) -> dict:
         plano_curr=plano_curr,
         ctx=ctx,
     )
-    resp        = get_llm(prompt.temperature).invoke(prompt.text)
+    resp        = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     plano_final = resp.content if hasattr(resp, "content") else str(resp)
     print("\n" + "=" * 70)
     print("PLANO FINAL — REVISAO ACADEMICA")

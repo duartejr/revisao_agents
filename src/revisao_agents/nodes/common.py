@@ -54,7 +54,7 @@ def entrevista_node(state: RevisaoState) -> dict:
         restantes=restantes,
         instrucoes=instrucoes,
     )
-    resp     = get_llm(prompt.temperature).invoke(prompt.text)
+    resp     = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     pergunta = resp.content if hasattr(resp, "content") else str(resp)
     return {
         "historico_entrevista": [("assistant", pergunta)],

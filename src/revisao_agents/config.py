@@ -76,9 +76,11 @@ ENCERRAMENTO = {
 # ── LLM helpers ──────────────────────────────────────────────────────────────
 
 def get_llm(temperature=0.3):
-    """Retorna um modelo de linguagem configurado."""
+    """Retorna um modelo de linguagem configurado com ferramentas disponíveis."""
     try:
         from .utils.llm_utils.llm_providers import get_llm as _get_llm, LLMProvider
+        from .tools import get_all_tools
+        
         provider_map = {
             "GEMINI": LLMProvider.GEMINI,
             "GROQ":   LLMProvider.GROQ,
@@ -90,14 +92,26 @@ def get_llm(temperature=0.3):
             LLMProvider.GEMINI,
         )
         print(f"   🤖 Usando LLM: {provider.name} (temp={temperature})")
-        return _get_llm(provider=provider, temperature=temperature)
+        llm = _get_llm(provider=provider, temperature=temperature)
+        
+        # Bind all available tools to the LLM
+        tools = get_all_tools()
+        llm_with_tools = llm.bind_tools(tools)
+        return llm_with_tools
     except ImportError:
         from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(
+        llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
             temperature=temperature,
             google_api_key=os.getenv("GOOGLE_API_KEY", ""),
         )
+        # Also bind tools even in fallback
+        try:
+            from .tools import get_all_tools
+            tools = get_all_tools()
+            return llm.bind_tools(tools)
+        except:
+            return llm
 
 
 from typing import Type, TypeVar, Union, Optional
@@ -118,17 +132,22 @@ def llm_call(
         LLM_PROVIDER: 'openai' | 'gemini' | 'groq' | 'openrouter'  (default: 'groq')
         LLM_MODEL:    nome do modelo (ex: 'gpt-4o', 'gemini-2.0-flash', 'llama-3.3-70b-versatile', 'anthropic/claude-3.5-sonnet')
     """
+    from .utils.llm_utils.date_context import add_date_context_to_prompt
+    
     provider = os.getenv("LLM_PROVIDER", "groq").lower().strip()
     model    = os.getenv("LLM_MODEL", _default_model(provider))
+    
+    # Add current date context to ensure agents know today's date
+    prompt_with_date = add_date_context_to_prompt(prompt)
 
     try:
         llm = _build_llm(provider, model, temperature)
 
         if response_schema is not None:
             structured_llm = llm.with_structured_output(response_schema)
-            return structured_llm.invoke(prompt)
+            return structured_llm.invoke(prompt_with_date)
 
-        resp = llm.invoke(prompt)
+        resp = llm.invoke(prompt_with_date)
         return resp.content if hasattr(resp, "content") else str(resp)
 
     except Exception as e:
