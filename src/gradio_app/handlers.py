@@ -206,6 +206,19 @@ def list_plan_files(mode: str) -> list[str]:
     return files if files else ["(nenhum plano encontrado)"]
 
 
+def _find_newest_md(folder: str) -> str | None:
+    """Return the path of the most recently modified .md in folder, or None."""
+    import glob as _glob
+    files = _glob.glob(os.path.join(folder, "*.md"))
+    return max(files, key=os.path.getmtime) if files else None
+
+
+def _list_md(folder: str) -> list[str]:
+    """Return all .md files in folder."""
+    import glob as _glob
+    return _glob.glob(os.path.join(folder, "*.md"))
+
+
 def start_writing(
     plan_path: str,
     mode: str,         # "Técnica" | "Acadêmica"
@@ -213,16 +226,17 @@ def start_writing(
     min_src: int,
     tavily_enabled: bool,
     history: list,
-) -> Generator[tuple[list, str], None, None]:
+) -> Generator[tuple[list, str, str], None, None]:
     """
     Stream writing progress to the Gradio chatbot.
 
-    Yields (updated_history, status_msg) at each workflow step.
+    Yields (updated_history, status_msg, rendered_content) at each workflow step.
+    rendered_content is empty during streaming and contains the final file when done.
     """
     os.makedirs("reviews", exist_ok=True)
 
     if not plan_path or not os.path.exists(plan_path):
-        yield history + [[None, f"❌ Arquivo de plano não encontrado: {plan_path}"]], "❌ Erro"
+        yield history + [{"role": "assistant", "content": f"❌ Arquivo de plano não encontrado: {plan_path}"}], "❌ Erro", ""
         return
 
     if mode == "Acadêmica":
@@ -248,8 +262,10 @@ def start_writing(
     }
 
     app = build_escrita_workflow()
+    snapshot_before = set(_list_md("reviews"))
+
     history = history + [{"role": "assistant", "content": f"▶ Iniciando escrita {mode} — `{os.path.basename(plan_path)}`"}]
-    yield history, "🔄 Iniciando…"
+    yield history, "🔄 Iniciando…", ""
 
     try:
         for event in app.stream(state_init):
@@ -258,18 +274,23 @@ def start_writing(
                 st = event.get(node, {}).get("status", "")
                 if st:
                     history = history + [{"role": "assistant", "content": f"**[{node}]** → {st}"}]
-                    yield history, f"🔄 {node}: {st}"
+                    yield history, f"🔄 {node}: {st}", ""
     except KeyboardInterrupt:
         history = history + [{"role": "assistant", "content": "⚠️ Cancelado pelo usuário."}]
-        yield history, "⚠️ Cancelado"
+        yield history, "⚠️ Cancelado", ""
         return
     except Exception as exc:
         history = history + [{"role": "assistant", "content": f"❌ Erro: {exc}"}]
-        yield history, f"❌ Erro: {exc}"
+        yield history, f"❌ Erro: {exc}", ""
         return
 
-    history = history + [{"role": "assistant", "content": "✅ Escrita concluída! Arquivo salvo em reviews/"}]
-    yield history, "✅ Concluído"
+    # Find the newly created file
+    new_files = set(_list_md("reviews")) - snapshot_before
+    output_file = max(new_files, key=os.path.getmtime) if new_files else _find_newest_md("reviews")
+    rendered = open(output_file, encoding="utf-8").read() if output_file and os.path.exists(output_file) else ""
+    link_msg = f"✅ Escrita concluída! Arquivo salvo: `{output_file}`" if output_file else "✅ Escrita concluída! Arquivo salvo em reviews/"
+    history = history + [{"role": "assistant", "content": link_msg}]
+    yield history, "✅ Concluído", rendered
 
 
 # ═══════════════════════════════════════════════════════════════════════════

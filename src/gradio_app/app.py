@@ -1,12 +1,13 @@
 """
 app.py — Gradio-based chatbot UI for the revisao_agents project.
 
-Provides a clean, ChatGPT-style web interface for all five workflow options:
+Provides a clean, ChatGPT-style web interface for all workflow options:
 
-  Tab 1  📋 Planejar   — Plan a literature review (Academic / Technical)
-  Tab 2  ✍️  Escrever   — Execute writing from an existing plan file
-  Tab 3  📁 Indexar    — Index local PDFs into the MongoDB vector store
+  Tab 1  📋 Planejar    — Plan a literature review (Academic / Technical)
+  Tab 2  ✍️  Escrever    — Execute writing from an existing plan file
+  Tab 3  📁 Indexar     — Index local PDFs into the MongoDB vector store
   Tab 4  📚 Referências — Format a reference list from a YAML/JSON file
+  Tab 5  📄 Visualizar  — Browse and render any generated plan or review file
 
 Run via:  python run_ui.py
 """
@@ -75,6 +76,32 @@ body, .gradio-container {
 def refresh_plan_list(mode: str) -> gr.update:
     files = list_plan_files(mode)
     return gr.update(choices=files, value=files[0] if files else None)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Helpers: list and load output files for the Visualizar tab
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _list_output_files(folder: str) -> list[str]:
+    """Return sorted .md files from plans/ or reviews/."""
+    os.makedirs(folder, exist_ok=True)
+    files = sorted(f for f in os.listdir(folder) if f.endswith(".md"))
+    return [os.path.join(folder, f) for f in files] if files else []
+
+
+def _load_file(path: str) -> str:
+    """Read and return the markdown content of a file."""
+    if not path or not os.path.exists(path):
+        return "*(arquivo não encontrado)*"
+    try:
+        return open(path, encoding="utf-8").read()
+    except Exception as exc:
+        return f"❌ Erro ao ler arquivo: {exc}"
+
+
+def _refresh_file_list(folder: str) -> gr.update:
+    files = _list_output_files(folder)
+    return gr.update(choices=files, value=files[-1] if files else None)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -231,7 +258,7 @@ def build_app() -> gr.Blocks:
                 with gr.Column(scale=2):
                     write_chatbot = gr.Chatbot(
                         label="Progresso da Escrita",
-                        height=480,
+                        height=360,
                         layout="bubble",
                         buttons=["copy", "copy_all"],
                     )
@@ -239,6 +266,11 @@ def build_app() -> gr.Blocks:
                         label="Status",
                         interactive=False,
                         elem_classes="status-bar",
+                    )
+                    write_rendered = gr.Markdown(
+                        label="Documento Gerado",
+                        value="*(o documento aparecerá aqui quando a escrita for concluída)*",
+                        height=360,
                     )
 
             # Refresh plan list when mode changes
@@ -249,13 +281,70 @@ def build_app() -> gr.Blocks:
             )
 
             def _on_write(plan, mode, lang, min_src, tavily, history):
-                for h, s in start_writing(plan, mode, lang, min_src, tavily, history):
-                    yield h, s
+                for h, s, rendered in start_writing(plan, mode, lang, min_src, tavily, history):
+                    yield h, s, rendered
 
             write_start_btn.click(
                 fn=_on_write,
                 inputs=[write_plan, write_mode, write_lang, write_min_src, write_tavily, write_chatbot],
-                outputs=[write_chatbot, write_status],
+                outputs=[write_chatbot, write_status, write_rendered],
+            )
+
+        # ══════════════════════════════════════════════════════════════════
+        # TAB 5 — Visualizar (rendered output viewer)
+        # ══════════════════════════════════════════════════════════════════
+        with gr.Tab("📄 Visualizar"):
+            gr.Markdown(
+                "### Visualizar Arquivos Gerados\n"
+                "Selecione a pasta e o arquivo para renderizar seu conteúdo em Markdown."
+            )
+            with gr.Row():
+                with gr.Column(scale=1):
+                    view_folder = gr.Radio(
+                        label="Pasta",
+                        choices=[("📋 Planos", "plans"), ("📝 Revisões", "reviews")],
+                        value="reviews",
+                    )
+                    initial_review_files = _list_output_files("reviews")
+                    view_file = gr.Dropdown(
+                        label="Arquivo",
+                        choices=initial_review_files,
+                        value=initial_review_files[-1] if initial_review_files else None,
+                        allow_custom_value=True,
+                    )
+                    view_refresh_btn = gr.Button("🔄 Atualizar lista", size="sm")
+                    view_load_btn = gr.Button("👁️ Visualizar", variant="primary")
+
+                with gr.Column(scale=3):
+                    view_output = gr.Markdown(
+                        value="*(selecione um arquivo e clique em Visualizar)*",
+                        label="Conteúdo",
+                        height=620,
+                    )
+
+            # Wire up folder change → refresh file list
+            view_folder.change(
+                fn=_refresh_file_list,
+                inputs=[view_folder],
+                outputs=[view_file],
+            )
+            # Refresh button → re-scan folder
+            view_refresh_btn.click(
+                fn=_refresh_file_list,
+                inputs=[view_folder],
+                outputs=[view_file],
+            )
+            # Load button → render file
+            view_load_btn.click(
+                fn=_load_file,
+                inputs=[view_file],
+                outputs=[view_output],
+            )
+            # Also auto-load on dropdown selection change
+            view_file.change(
+                fn=_load_file,
+                inputs=[view_file],
+                outputs=[view_output],
             )
 
         # ══════════════════════════════════════════════════════════════════
