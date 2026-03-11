@@ -3,19 +3,24 @@ handlers.py — Business logic bridges between Gradio UI and revisao_agents.
 
 Each function wraps one of the five main workflow options and adapts
 CLI-style interactions to Gradio's generator / state model.
+
+Live-log streaming
+------------------
+`start_writing` runs the LangGraph workflow in a background thread and
+captures every print() call via `_StdoutCapture`, funnelling the lines
+through a thread-safe queue that the Gradio generator drains between
+yields.  This produces true, line-by-line live output in the UI.
 """
 
 from __future__ import annotations
 
 import glob
 import os
+import queue
 import sys
+import threading
 from typing import Any, Generator
 
-# ---------------------------------------------------------------------------
-# Ensure the src/ directory is on sys.path when this module is imported
-# directly (e.g. from run_ui.py).
-# ---------------------------------------------------------------------------
 _SRC = os.path.join(os.path.dirname(__file__), "..")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
@@ -31,30 +36,89 @@ from revisao_agents.tools.reference_formatter import format_references_from_file
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Option 1 & 2 — Planning (Acadêmica / Técnica)          Human-in-the-Loop
+# Live stdout capture
+# ═══════════════════════════════════════════════════════════════════════════
+
+class _StdoutCapture:
+    """
+    Context manager that redirects sys.stdout to a queue so the caller
+    can read lines as they are produced by any print() inside the block.
+    """
+
+    def __init__(self, q: "queue.Queue[str]"):
+        self._q = q
+        self._buf = ""
+        self._original: Any = None
+
+    def __enter__(self) -> "_StdoutCapture":
+        self._original = sys.stdout
+        sys.stdout = self  # type: ignore[assignment]
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        if self._buf.strip():
+            self._q.put(self._buf.rstrip())
+            self._buf = ""
+        sys.stdout = self._original
+
+    def write(self, text: str) -> int:
+        self._original.write(text)
+        self._buf += text
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            stripped = line.rstrip()
+            if stripped:
+                self._q.put(stripped)
+        return len(text)
+
+    def flush(self) -> None:
+        self._original.flush()
+
+    @property
+    def encoding(self) -> str:
+        return getattr(self._original, "encoding", "utf-8")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Shared helpers
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _list_md(folder: str) -> list[str]:
+    return glob.glob(os.path.join(folder, "*.md"))
+
+
+def _find_newest_md(folder: str) -> str | None:
+    files = _list_md(folder)
+    return max(files, key=os.path.getmtime) if files else None
+
+
+def _read_md(path: str | None) -> str:
+    if not path or not os.path.exists(path):
+        return ""
+    try:
+        return open(path, encoding="utf-8").read()
+    except Exception:
+        return ""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Option 1 & 2 — Planning                                Human-in-the-Loop
 # ═══════════════════════════════════════════════════════════════════════════
 
 def start_planning(
     tema: str,
-    tipo: str,         # "academico" | "tecnico" | "ambos"
+    tipo: str,
     rodadas: int,
-) -> tuple[list, dict, str]:
-    """
-    Launch the planning workflow and run until the first HITL pause.
+) -> tuple[list, dict, str, str]:
+    """Launch planning workflow until the first HITL pause.
 
-    Returns
-    -------
-    history      : Gradio chatbot history (list of [user, bot] pairs)
-    session_state: Serialisable dict keeping the LangGraph app + config alive
-    status_msg   : Short status string for display
+    Returns (history, session_state, status_msg, rendered_plan).
+    rendered_plan is empty until the workflow fully completes.
     """
     if not tema.strip():
-        return [], {}, "❌ Por favor, informe o tema antes de iniciar."
+        return [], {}, "❌ Por favor, informe o tema antes de iniciar.", ""
 
     tipos_list = ["academico", "tecnico"] if tipo == "ambos" else [tipo]
-
-    # For simplicity handle one tipo at a time — we process the first only here.
-    # If "ambos", the UI will cycle through automatically after the first finishes.
     tipo_atual = tipos_list[0]
     label = "ACADÊMICA" if tipo_atual == "academico" else "TÉCNICA"
 
@@ -75,26 +139,31 @@ def start_planning(
 
     thread_id = f"revisao_{tipo_atual}_{tema[:20]}"
     config = {"configurable": {"thread_id": thread_id}}
-
     app = build_academico_workflow() if tipo_atual == "academico" else build_tecnico_workflow()
 
-    # Stream until the first HITL pause
-    try:
-        for _ in app.stream(state_init, config):
-            pass
-    except Exception as exc:
-        return [], {}, f"❌ Erro ao iniciar: {exc}"
+    log_q: queue.Queue[str] = queue.Queue()
+    with _StdoutCapture(log_q):
+        try:
+            for _ in app.stream(state_init, config):
+                pass
+        except Exception as exc:
+            return [], {}, f"❌ Erro ao iniciar: {exc}", ""
+
+    history: list[dict] = []
+    lines = []
+    while not log_q.empty():
+        lines.append(log_q.get_nowait())
+    if lines:
+        history.append({"role": "assistant", "content": "```\n" + "\n".join(lines) + "\n```"})
 
     graph_state = app.get_state(config)
 
     if not graph_state.next:
-        return (
-            [{"role": "assistant", "content": f"✅ Planejamento {label} concluído! Plano salvo em plans/"}],
-            {},
-            "✅ Concluído",
-        )
+        plan_path = graph_state.values.get("plano_final_path", "")
+        rendered = _read_md(plan_path)
+        history.append({"role": "assistant", "content": f"✅ Planejamento {label} concluído! Plano salvo em `{plan_path}`"})
+        return history, {}, "✅ Concluído", rendered
 
-    # Extract first agent question
     agent_question = ""
     for role, content in reversed(graph_state.values.get("historico_entrevista", [])):
         if role == "assistant":
@@ -103,10 +172,8 @@ def start_planning(
 
     p  = graph_state.values.get("perguntas_feitas", 0)
     mp = graph_state.values.get("max_perguntas", rodadas)
-    header = f"[Rodada {p}/{mp} — {tipo_atual}]"
-    bot_msg = f"{header}\n\n{agent_question}"
+    history.append({"role": "assistant", "content": f"[Rodada {p}/{mp} — {tipo_atual}]\n\n{agent_question}"})
 
-    history = [{"role": "assistant", "content": bot_msg}]
     session_state = {
         "app": app,
         "config": config,
@@ -116,30 +183,28 @@ def start_planning(
         "rodadas": rodadas,
     }
 
-    return history, session_state, f"🔄 {label} em andamento — aguardando resposta…"
+    return history, session_state, f"🔄 {label} em andamento — aguardando resposta…", ""
 
 
 def continue_planning(
     user_msg: str,
     history: list,
     session_state: dict,
-) -> tuple[list, dict, str]:
-    """
-    Feed a user response back into the HITL loop and advance the workflow.
+) -> tuple[list, dict, str, str]:
+    """Feed user response back into the HITL loop.
 
-    Returns updated (history, session_state, status_msg).
+    Returns (history, session_state, status_msg, rendered_plan).
     """
     if not session_state or "app" not in session_state:
-        return history, session_state, "❌ Nenhuma sessão ativa. Inicie o planejamento primeiro."
+        return history, session_state, "❌ Nenhuma sessão ativa.", ""
 
     app    = session_state["app"]
     config = session_state["config"]
     tipo   = session_state["tipo"]
     label  = "ACADÊMICA" if tipo == "academico" else "TÉCNICA"
 
-    history = history + [{"role": "user", "content": user_msg}, {"role": "assistant", "content": None}]
+    history = history + [{"role": "user", "content": user_msg}]
 
-    # Update state with user response
     hist = app.get_state(config).values.get("historico_entrevista", [])
     app.update_state(
         config,
@@ -147,35 +212,44 @@ def continue_planning(
         as_node="pausa_humana",
     )
 
-    # Resume streaming
-    try:
-        for _ in app.stream(None, config):
-            pass
-    except Exception as exc:
-        history[-1]["content"] = f"❌ Erro: {exc}"
-        return history, session_state, f"❌ Erro: {exc}"
+    log_q: queue.Queue[str] = queue.Queue()
+    with _StdoutCapture(log_q):
+        try:
+            for _ in app.stream(None, config):
+                pass
+        except Exception as exc:
+            history = history + [{"role": "assistant", "content": f"❌ Erro: {exc}"}]
+            return history, session_state, f"❌ Erro: {exc}", ""
+
+    lines = []
+    while not log_q.empty():
+        lines.append(log_q.get_nowait())
+    if lines:
+        history = history + [{"role": "assistant", "content": "```\n" + "\n".join(lines) + "\n```"}]
 
     graph_state = app.get_state(config)
 
     if not graph_state.next:
-        # This tipo is finished — check if there are more
-        finished_msg = f"✅ Planejamento {label} concluído! Plano salvo em plans/"
-        history[-1]["content"] = finished_msg
+        plan_path = graph_state.values.get("plano_final_path", "")
+        rendered = _read_md(plan_path)
+        finished_msg = (
+            f"✅ Planejamento {label} concluído! Plano salvo em `{plan_path}`"
+            if plan_path else f"✅ Planejamento {label} concluído!"
+        )
+        history = history + [{"role": "assistant", "content": finished_msg}]
 
         tipos_pendentes = session_state.get("tipos_pendentes", [])
         if tipos_pendentes:
-            # Kick off the next tipo automatically
-            next_history, next_state, next_status = start_planning(
+            next_history, next_state, next_status, _ = start_planning(
                 tema=session_state["tema"],
                 tipo=tipos_pendentes[0],
                 rodadas=session_state["rodadas"],
             )
             next_state["tipos_pendentes"] = tipos_pendentes[1:]
-            return history + next_history, next_state, next_status
+            return history + next_history, next_state, next_status, rendered
 
-        return history, {}, "✅ Todos os planejamentos concluídos!"
+        return history, {}, "✅ Todos os planejamentos concluídos!", rendered
 
-    # Extract next agent question
     agent_question = ""
     for role, content in reversed(graph_state.values.get("historico_entrevista", [])):
         if role == "assistant":
@@ -184,10 +258,9 @@ def continue_planning(
 
     p  = graph_state.values.get("perguntas_feitas", 0)
     mp = graph_state.values.get("max_perguntas", session_state.get("rodadas", 3))
-    header = f"[Rodada {p}/{mp} — {tipo}]"
-    history[-1]["content"] = f"{header}\n\n{agent_question}"
+    history = history + [{"role": "assistant", "content": f"[Rodada {p}/{mp} — {tipo}]\n\n{agent_question}"}]
 
-    return history, session_state, f"🔄 {label} em andamento — rodada {p}/{mp}"
+    return history, session_state, f"🔄 {label} em andamento — rodada {p}/{mp}", ""
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -195,7 +268,6 @@ def continue_planning(
 # ═══════════════════════════════════════════════════════════════════════════
 
 def list_plan_files(mode: str) -> list[str]:
-    """Return a list of plan .md files matching the given mode."""
     os.makedirs("plans", exist_ok=True)
     pattern = "plans/plano_revisao_tecnica_*.md" if mode == "Técnica" else "plans/plano_revisao_*.md"
     files = sorted(glob.glob(pattern))
@@ -206,37 +278,34 @@ def list_plan_files(mode: str) -> list[str]:
     return files if files else ["(nenhum plano encontrado)"]
 
 
-def _find_newest_md(folder: str) -> str | None:
-    """Return the path of the most recently modified .md in folder, or None."""
-    import glob as _glob
-    files = _glob.glob(os.path.join(folder, "*.md"))
-    return max(files, key=os.path.getmtime) if files else None
-
-
-def _list_md(folder: str) -> list[str]:
-    """Return all .md files in folder."""
-    import glob as _glob
-    return _glob.glob(os.path.join(folder, "*.md"))
-
-
 def start_writing(
     plan_path: str,
-    mode: str,         # "Técnica" | "Acadêmica"
-    language: str,     # "pt" | "en"
+    mode: str,
+    language: str,
     min_src: int,
     tavily_enabled: bool,
     history: list,
 ) -> Generator[tuple[list, str, str], None, None]:
     """
-    Stream writing progress to the Gradio chatbot.
+    Stream writing progress with live logs to the Gradio chatbot.
 
-    Yields (updated_history, status_msg, rendered_content) at each workflow step.
-    rendered_content is empty during streaming and contains the final file when done.
+    Runs the LangGraph workflow in a background thread and captures every
+    print() call via _StdoutCapture, funnelling lines through a queue so
+    the UI updates line-by-line as the agent works.
+
+    Yields
+    ------
+    (updated_history, status_msg, rendered_content)
+    rendered_content is empty during streaming; it contains the final .md
+    document when the workflow finishes.
     """
     os.makedirs("reviews", exist_ok=True)
 
     if not plan_path or not os.path.exists(plan_path):
-        yield history + [{"role": "assistant", "content": f"❌ Arquivo de plano não encontrado: {plan_path}"}], "❌ Erro", ""
+        yield (
+            history + [{"role": "assistant", "content": f"❌ Plano não encontrado: `{plan_path}`"}],
+            "❌ Erro", "",
+        )
         return
 
     if mode == "Acadêmica":
@@ -264,31 +333,75 @@ def start_writing(
     app = build_escrita_workflow()
     snapshot_before = set(_list_md("reviews"))
 
-    history = history + [{"role": "assistant", "content": f"▶ Iniciando escrita {mode} — `{os.path.basename(plan_path)}`"}]
+    result_q: queue.Queue[tuple[str, Any]] = queue.Queue()
+    _DONE = object()
+
+    def _worker() -> None:
+        log_q: queue.Queue[str] = queue.Queue()
+
+        def _drain() -> None:
+            while not log_q.empty():
+                result_q.put(("log", log_q.get_nowait()))
+
+        with _StdoutCapture(log_q):
+            try:
+                for event in app.stream(state_init):
+                    _drain()
+                    result_q.put(("event", event))
+            except Exception as exc:
+                _drain()
+                result_q.put(("error", exc))
+            finally:
+                _drain()
+
+        result_q.put(("done", _DONE))
+
+    thread = threading.Thread(target=_worker, daemon=True)
+    thread.start()
+
+    history = history + [
+        {"role": "assistant", "content": f"▶ Iniciando escrita **{mode}** — `{os.path.basename(plan_path)}`"}
+    ]
     yield history, "🔄 Iniciando…", ""
 
-    try:
-        for event in app.stream(state_init):
-            node = list(event.keys())[0] if event else "?"
+    while True:
+        try:
+            kind, data = result_q.get(timeout=120)
+        except queue.Empty:
+            history = history + [{"role": "assistant", "content": "⏳ Aguardando agente…"}]
+            yield history, "⏳ Aguardando…", ""
+            continue
+
+        if data is _DONE:
+            break
+
+        if kind == "log":
+            history = history + [{"role": "assistant", "content": f"`{data}`"}]
+            yield history, "🔄 …", ""
+
+        elif kind == "event":
+            node = list(data.keys())[0] if data else "?"
             if node != "__end__":
-                st = event.get(node, {}).get("status", "")
+                st = data.get(node, {}).get("status", "")
                 if st:
                     history = history + [{"role": "assistant", "content": f"**[{node}]** → {st}"}]
-                    yield history, f"🔄 {node}: {st}", ""
-    except KeyboardInterrupt:
-        history = history + [{"role": "assistant", "content": "⚠️ Cancelado pelo usuário."}]
-        yield history, "⚠️ Cancelado", ""
-        return
-    except Exception as exc:
-        history = history + [{"role": "assistant", "content": f"❌ Erro: {exc}"}]
-        yield history, f"❌ Erro: {exc}", ""
-        return
+                    yield history, f"🔄 {node}", ""
 
-    # Find the newly created file
+        elif kind == "error":
+            history = history + [{"role": "assistant", "content": f"❌ Erro: {data}"}]
+            yield history, "❌ Erro", ""
+            return
+
+    thread.join(timeout=5)
+
     new_files = set(_list_md("reviews")) - snapshot_before
     output_file = max(new_files, key=os.path.getmtime) if new_files else _find_newest_md("reviews")
-    rendered = open(output_file, encoding="utf-8").read() if output_file and os.path.exists(output_file) else ""
-    link_msg = f"✅ Escrita concluída! Arquivo salvo: `{output_file}`" if output_file else "✅ Escrita concluída! Arquivo salvo em reviews/"
+    rendered = _read_md(output_file)
+
+    link_msg = (
+        f"✅ Escrita concluída!  📄 `{output_file}`"
+        if output_file else "✅ Escrita concluída!"
+    )
     history = history + [{"role": "assistant", "content": link_msg}]
     yield history, "✅ Concluído", rendered
 
@@ -298,21 +411,17 @@ def start_writing(
 # ═══════════════════════════════════════════════════════════════════════════
 
 def index_pdfs(folder_path: str) -> str:
-    """Index all PDFs in the given folder to MongoDB."""
     if not folder_path.strip():
         return "❌ Informe o caminho da pasta."
-
     folder_path = os.path.expanduser(folder_path.strip())
     if not os.path.isdir(folder_path):
         return f"❌ Pasta não encontrada: {folder_path}"
-
     try:
         result = ingest_pdf_folder(folder_path)
     except Exception as exc:
         return f"❌ Erro durante indexação: {exc}"
-
     return (
-        f"✅ Indexação concluída!\n\n"
+        "✅ Indexação concluída!\n\n"
         f"- Novos PDFs indexados : **{result['indexed']}**\n"
         f"- Já no banco          : **{result['already']}**\n"
         f"- Texto insuficiente   : **{result['skipped']}**\n"
@@ -326,19 +435,13 @@ def index_pdfs(folder_path: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def format_references(
-    yaml_file_obj: Any,   # Gradio file upload object (has .name attribute)
+    yaml_file_obj: Any,
     tavily_enabled: bool,
     output_dir: str,
 ) -> tuple[str, str]:
-    """
-    Format references from a YAML/JSON file uploaded via Gradio.
-
-    Returns (formatted_markdown, status_message).
-    """
     if yaml_file_obj is None:
         return "", "❌ Nenhum arquivo selecionado."
 
-    # Gradio provides a temp path via the .name attribute
     input_path = yaml_file_obj if isinstance(yaml_file_obj, str) else yaml_file_obj.name
 
     output_path = None

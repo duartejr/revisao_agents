@@ -156,7 +156,7 @@ def build_app() -> gr.Blocks:
                 with gr.Column(scale=2):
                     plan_chatbot = gr.Chatbot(
                         label="Conversa com o Agente",
-                        height=420,
+                        height=350,
                         layout="bubble",
                         buttons=["copy"],
                     )
@@ -172,6 +172,12 @@ def build_app() -> gr.Blocks:
                         visible=False,
                     )
                     plan_reply_btn = gr.Button("💬 Responder", variant="secondary", visible=False)
+                    plan_rendered = gr.Markdown(
+                        label="Plano Gerado",
+                        value="*(o plano aparecerá aqui quando o planejamento for concluído)*",
+                        height=300,
+                        visible=False,
+                    )
 
             # Persistent state for the LangGraph session
             plan_session = gr.State({})
@@ -179,26 +185,9 @@ def build_app() -> gr.Blocks:
             # ── Wire up ──────────────────────────────────────────────────
 
             def _on_start(tema, tipo, rodadas):
-                history, state, status = start_planning(tema, tipo, int(rodadas))
+                history, state, status, rendered = start_planning(tema, tipo, int(rodadas))
                 has_session = bool(state)
-                return (
-                    history,
-                    state,
-                    status,
-                    gr.update(visible=has_session),  # user input textbox
-                    gr.update(visible=has_session),  # reply button
-                    gr.update(value=""),             # clear user input
-                )
-
-            plan_start_btn.click(
-                fn=_on_start,
-                inputs=[plan_tema, plan_tipo, plan_rodadas],
-                outputs=[plan_chatbot, plan_session, plan_status, plan_user_input, plan_reply_btn, plan_user_input],
-            )
-
-            def _on_reply(user_msg, history, state):
-                history, state, status = continue_planning(user_msg, history, state)
-                has_session = bool(state)
+                has_rendered = bool(rendered)
                 return (
                     history,
                     state,
@@ -206,17 +195,38 @@ def build_app() -> gr.Blocks:
                     gr.update(visible=has_session),
                     gr.update(visible=has_session),
                     gr.update(value=""),
+                    gr.update(value=rendered, visible=has_rendered),
+                )
+
+            plan_start_btn.click(
+                fn=_on_start,
+                inputs=[plan_tema, plan_tipo, plan_rodadas],
+                outputs=[plan_chatbot, plan_session, plan_status, plan_user_input, plan_reply_btn, plan_user_input, plan_rendered],
+            )
+
+            def _on_reply(user_msg, history, state):
+                history, state, status, rendered = continue_planning(user_msg, history, state)
+                has_session = bool(state)
+                has_rendered = bool(rendered)
+                return (
+                    history,
+                    state,
+                    status,
+                    gr.update(visible=has_session),
+                    gr.update(visible=has_session),
+                    gr.update(value=""),
+                    gr.update(value=rendered, visible=has_rendered),
                 )
 
             plan_reply_btn.click(
                 fn=_on_reply,
                 inputs=[plan_user_input, plan_chatbot, plan_session],
-                outputs=[plan_chatbot, plan_session, plan_status, plan_user_input, plan_reply_btn, plan_user_input],
+                outputs=[plan_chatbot, plan_session, plan_status, plan_user_input, plan_reply_btn, plan_user_input, plan_rendered],
             )
             plan_user_input.submit(
                 fn=_on_reply,
                 inputs=[plan_user_input, plan_chatbot, plan_session],
-                outputs=[plan_chatbot, plan_session, plan_status, plan_user_input, plan_reply_btn, plan_user_input],
+                outputs=[plan_chatbot, plan_session, plan_status, plan_user_input, plan_reply_btn, plan_user_input, plan_rendered],
             )
 
         # ══════════════════════════════════════════════════════════════════
