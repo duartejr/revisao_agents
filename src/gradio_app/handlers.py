@@ -89,7 +89,7 @@ def start_planning(
 
     if not graph_state.next:
         return (
-            [[None, f"✅ Planejamento {label} concluído! Plano salvo em plans/"]],
+            [{"role": "assistant", "content": f"✅ Planejamento {label} concluído! Plano salvo em plans/"}],
             {},
             "✅ Concluído",
         )
@@ -106,7 +106,7 @@ def start_planning(
     header = f"[Rodada {p}/{mp} — {tipo_atual}]"
     bot_msg = f"{header}\n\n{agent_question}"
 
-    history = [[None, bot_msg]]
+    history = [{"role": "assistant", "content": bot_msg}]
     session_state = {
         "app": app,
         "config": config,
@@ -137,7 +137,7 @@ def continue_planning(
     tipo   = session_state["tipo"]
     label  = "ACADÊMICA" if tipo == "academico" else "TÉCNICA"
 
-    history = history + [[user_msg, None]]
+    history = history + [{"role": "user", "content": user_msg}, {"role": "assistant", "content": None}]
 
     # Update state with user response
     hist = app.get_state(config).values.get("historico_entrevista", [])
@@ -152,7 +152,7 @@ def continue_planning(
         for _ in app.stream(None, config):
             pass
     except Exception as exc:
-        history[-1][1] = f"❌ Erro: {exc}"
+        history[-1]["content"] = f"❌ Erro: {exc}"
         return history, session_state, f"❌ Erro: {exc}"
 
     graph_state = app.get_state(config)
@@ -160,7 +160,7 @@ def continue_planning(
     if not graph_state.next:
         # This tipo is finished — check if there are more
         finished_msg = f"✅ Planejamento {label} concluído! Plano salvo em plans/"
-        history[-1][1] = finished_msg
+        history[-1]["content"] = finished_msg
 
         tipos_pendentes = session_state.get("tipos_pendentes", [])
         if tipos_pendentes:
@@ -185,7 +185,7 @@ def continue_planning(
     p  = graph_state.values.get("perguntas_feitas", 0)
     mp = graph_state.values.get("max_perguntas", session_state.get("rodadas", 3))
     header = f"[Rodada {p}/{mp} — {tipo}]"
-    history[-1][1] = f"{header}\n\n{agent_question}"
+    history[-1]["content"] = f"{header}\n\n{agent_question}"
 
     return history, session_state, f"🔄 {label} em andamento — rodada {p}/{mp}"
 
@@ -248,7 +248,7 @@ def start_writing(
     }
 
     app = build_escrita_workflow()
-    history = history + [[None, f"▶ Iniciando escrita {mode} — `{os.path.basename(plan_path)}`"]]
+    history = history + [{"role": "assistant", "content": f"▶ Iniciando escrita {mode} — `{os.path.basename(plan_path)}`"}]
     yield history, "🔄 Iniciando…"
 
     try:
@@ -257,18 +257,18 @@ def start_writing(
             if node != "__end__":
                 st = event.get(node, {}).get("status", "")
                 if st:
-                    history = history + [[None, f"**[{node}]** → {st}"]]
+                    history = history + [{"role": "assistant", "content": f"**[{node}]** → {st}"}]
                     yield history, f"🔄 {node}: {st}"
     except KeyboardInterrupt:
-        history = history + [[None, "⚠️ Cancelado pelo usuário."]]
+        history = history + [{"role": "assistant", "content": "⚠️ Cancelado pelo usuário."}]
         yield history, "⚠️ Cancelado"
         return
     except Exception as exc:
-        history = history + [[None, f"❌ Erro: {exc}"]]
+        history = history + [{"role": "assistant", "content": f"❌ Erro: {exc}"}]
         yield history, f"❌ Erro: {exc}"
         return
 
-    history = history + [[None, "✅ Escrita concluída! Arquivo salvo em reviews/"]]
+    history = history + [{"role": "assistant", "content": "✅ Escrita concluída! Arquivo salvo em reviews/"}]
     yield history, "✅ Concluído"
 
 

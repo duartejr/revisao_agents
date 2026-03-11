@@ -82,11 +82,7 @@ def refresh_plan_list(mode: str) -> gr.update:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def build_app() -> gr.Blocks:
-    with gr.Blocks(
-        title="Agente de Revisão da Literatura",
-        css=_CSS,
-        theme=gr.themes.Soft(primary_hue="blue", neutral_hue="slate"),
-    ) as demo:
+    with gr.Blocks(title="Agente de Revisão da Literatura") as demo:
 
         # ── Header ─────────────────────────────────────────────────────────
         gr.HTML(
@@ -134,8 +130,8 @@ def build_app() -> gr.Blocks:
                     plan_chatbot = gr.Chatbot(
                         label="Conversa com o Agente",
                         height=420,
-                        show_copy_button=True,
-                        bubble_full_width=False,
+                        layout="bubble",
+                        buttons=["copy"],
                     )
                     plan_status = gr.Textbox(
                         label="Status",
@@ -236,8 +232,8 @@ def build_app() -> gr.Blocks:
                     write_chatbot = gr.Chatbot(
                         label="Progresso da Escrita",
                         height=480,
-                        show_copy_button=True,
-                        bubble_full_width=False,
+                        layout="bubble",
+                        buttons=["copy", "copy_all"],
                     )
                     write_status = gr.Textbox(
                         label="Status",
@@ -355,6 +351,8 @@ def main(share: bool = False, port: int = 7860):
         server_port=port,
         share=share,
         show_error=True,
+        css=_CSS,
+        theme=gr.themes.Soft(primary_hue="blue", neutral_hue="slate"),
     )
 
 
