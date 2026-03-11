@@ -18,7 +18,11 @@ from .tavily_web_search import (
     extract_tavily,
 )
 
+# === Tool para obter data atual ===
+from .get_current_date import get_current_date
+
 TOOLS: List[BaseTool] = [
+    get_current_date,
     search_academic_corpus,
     search_tavily,
     search_tavily_incremental,
