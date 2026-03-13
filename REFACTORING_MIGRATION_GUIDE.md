@@ -1,281 +1,101 @@
-# Refactoring Summary: revisao_agent Project Restructuring
+# Architecture & Migration Guide (Current)
 
 **Date:** March 7, 2026  
-**Status:** In Progress
+**Status:** Updated after hardening phases 1–7
 
 ## Overview
 
-This document summarizes the comprehensive refactoring of the `revisao_agent` project to improve scalability, maintainability, and debuggability by following a more structured folder organization consistent with the `src/revisao_agents/` pattern.
+This document reflects the current runtime architecture of `revisao_agent`.
+The canonical path is based on `src/revisao_agents/workflows` + `src/revisao_agents/nodes`.
+`src/revisao_agents/graphs/review_graph.py` is a compatibility wrapper that delegates to workflow builders.
 
-## Old Structure vs New Structure
+## Canonical Runtime Structure
 
-### Before (Distributed)
-```
-revisao_agent/
-├── helpers/
-│   └── ancora_helpers.py          # Anchor utilities
-├── nodes/                          # ← Mixed node implementations
-│   ├── academic.py                 # Academic review nodes
-│   ├── technical.py                # Technical review nodes
-│   ├── technical_writing.py        # Technical writing nodes  
-│   ├── common.py                   # Shared nodes
-│   └── __init__.py
-├── workflows/                      # Workflow definitions
-│   ├── academic_workflow.py
-│   ├── technical_workflow.py
-│   └── technical_writing_workflow.py
-├── src/revisao_agents/            # Already structured
-│   ├── agents/                     # ← Empty (to be populated)
-│   ├── core/
-│   ├── helpers/                    # ← Empty (to be populated)
-│   ├── prompts/
-│   ├── tools/
-│   ├── utils/
-│   └── workflows/
-└── (other root files...)
-```
-
-### After (Unified)
 ```
 revisao_agent/
 ├── src/revisao_agents/
-│   ├── agents/                     # ← All node implementations moved here
-│   │   ├── __init__.py
-│   │   ├── academic.py             # Academic review nodes
-│   │   ├── technical.py            # Technical review nodes
-│   │   ├── technical_writing.py    # Technical writing nodes
-│   │   └── common.py               # Shared nodes (interview, pausing, etc)
+│   ├── nodes/
+│   │   ├── academic.py
+│   │   ├── technical.py
+│   │   ├── common.py
+│   │   ├── technical_writing.py
+│   │   └── writing/
 │   │
-│   ├── helpers/                    # ← Utility helpers (anchor management, etc)
-│   │   ├── __init__.py
-│   │   └── ancora_helpers.py       # Anchor extraction and manipulation
+│   ├── workflows/
+│   │   ├── academic_workflow.py
+│   │   ├── technical_workflow.py
+│   │   └── technical_writing_workflow.py
 │   │
-│   ├── core/
-│   │   └── schemas/               # Data models (RespostaSecao, Fonte, etc)
+│   ├── graphs/
+│   │   └── review_graph.py   # compatibility delegation layer
 │   │
-│   ├── prompts/                   # Prompt templates
-│   ├── tools/                     # Tool integrations
-│   ├── utils/                     # Core utilities
-│   │   ├── llm_providers.py       # get_llm and LLM logic
-│   │   ├── vector_store.py        # FAISS vector search
-│   │   ├── helpers.py             # Text formatting, file saving
-│   │   ├── tavily_client.py       # Web search integration
-│   │   ├── mongodb_corpus.py      # MongoDB corpus management
-│   │   └── ...
-│   │
-│   ├── workflows/                # Workflow definitions
-│   ├── state.py                  # State definitions
-│   ├── config.py                 # Configuration
-│   └── ...
-│
-├── workflows/                     # ← Wrapper workflows (updated imports)
-│   ├── academic_workflow.py       # Now imports from src.revisao_agents
-│   ├── technical_workflow.py      # Now imports from src.revisao_agents
-│   └── technical_writing_workflow.py
-│
-├── helpers/                       # ← OLD LOCATION (deprecate or keep for compatibility)
-└── nodes/                         # ← OLD LOCATION (deprecate or keep for compatibility)
+│   ├── tools/
+│   ├── utils/
+│   ├── prompts/
+│   ├── config.py
+│   └── state.py
+└── run_ui.py
 ```
 
-## Changes Made
+## Key Stabilization Changes
 
-### 1. **Agents Migration** ✅
-Created `/src/revisao_agents/agents/` with all node implementations:
+### 1. Runtime path unification ✅
+- Removed divergence between graph and workflow implementations.
+- Kept graph API surface for backward compatibility.
 
-- **academic.py** - Literature review planning nodes
-  - `consulta_vetorial_node()` - Vector search for papers
-  - `plano_inicial_academico_node()` - Initial plan generation
-  - `refinar_consulta_academico_node()` - Query refinement
-  - `refinar_plano_academico_node()` - Plan refinement
-  - `finalizar_plano_academico_node()` - Final plan generation
+### 2. CLI contract alignment ✅
+- Planning output keys aligned to real state (`plano_final`, `plano_final_path`).
+- HITL progression is handled in the execution loop.
 
-- **technical.py** - Technical chapter planning nodes
-  - `busca_tecnica_inicial_node()` - Initial technical search
-  - `plano_inicial_tecnico_node()` - Initial technical plan
-  - `refinar_busca_tecnica_node()` - Search refinement
-  - `refinar_plano_tecnico_node()` - Plan refinement
-  - `finalizar_plano_tecnico_node()` - Final technical plan
+### 3. Retrieval and bibliography hardening ✅
+- Bibliography corpus lookup corrected to use supported API path.
+- Tavily handling made resilient for empty/degraded scenarios.
 
-- **common.py** - Shared nodes across workflows
-  - `pausa_humana_node()` - Human interaction pause
-  - `entrevista_node()` - Interview / Q&A generation
-  - `roteador_entrevista()` - Flow control router
+### 4. LLM and config reliability ✅
+- `llm_call` invocation path unified.
+- Explicit typed failure (`LLMInvocationError`) for invocation issues.
+- Startup and UI preflight checks provide clear configuration diagnostics.
 
-- **technical_writing.py** - Advanced technical authoring nodes
-  - `parsear_plano_node()` - Plan parsing
-  - `escrever_secoes_node()` - Section writing with search & verification
-  - `consolidar_node()` - Document consolidation
+## Migration Notes
 
-- **__init__.py** - Package exports for easy imports
+### Import guidance
 
-### 2. **Helpers Reorganization** ✅
-Moved `/helpers/ancora_helpers.py` → `/src/revisao_agents/helpers/__init__.py`
+Prefer imports that reference canonical modules:
 
-Core helper functions:
-- `extrair_ancoras_com_citacoes()` - Extract anchors with citations
-- `extrair_ancora_principal()` - Get main anchor
-- `extrair_citacao_ancora()` - Find citation number for anchor
-- `limpar_ancoras()` - Remove anchors from text
-
-### 3. **Import Updates** ✅
-Updated all imports to use relative imports within the package:
-
-**Before:**
 ```python
-from state import RevisaoState
-from config import get_llm
-from utils.vector_store import buscar_chunks
-from utils.helpers import fmt_chunks
+from src.revisao_agents.nodes.academic import consulta_vetorial_node
+from src.revisao_agents.workflows.academic_workflow import build_academico_workflow
 ```
 
-**After:**
+When inside package modules, use relative imports:
+
 ```python
 from ..state import RevisaoState
-from ..utils.llm_providers import get_llm
-from ..utils.vector_store import buscar_chunks
-from ..utils.helpers import fmt_chunks
 ```
 
-### 4. **Workflow Updates** ✅
-Updated all workflow files (`workflows/*.py`) to import from new location:
+### Compatibility guidance
 
-**Before:**
-```python
-from state import RevisaoState
-from nodes import consulta_vetorial_node, ...
-```
+- Treat `graphs/review_graph.py` as compatibility API.
+- Implement new runtime behavior in `nodes`/`workflows` first.
 
-**After:**
-```python
-from src.revisao_agents.state import RevisaoState
-from src.revisao_agents.agents import consulta_vetorial_node, ...
-```
+## Verification Commands
 
-## Benefits of This Refactoring
+Run from `revisao_agent/`:
 
-### 1. **Improved Structure**
-- ✅ Clear separation of concerns (agents, helpers, utils, tools, prompts)
-- ✅ Consistent with `src/` package layout
-- ✅ Easier to navigate and understand codebase
+```bash
+# basic workflow import sanity
+PYTHONPATH=src python -c "from revisao_agents.workflows.academic_workflow import build_academico_workflow; print('ok')"
 
-### 2. **Better Scalability**
-- ✅ Easy to add new agent types (`src/revisao_agents/agents/new_agent.py`)
-- ✅ Easy to add new helpers and utilities
-- ✅ Single source of truth for shared components
-
-### 3. **Enhanced Maintainability**
-- ✅ All related functionality grouped together
-- ✅ Clear import paths (no circular dependencies)
-- ✅ Easier to refactor and update
-
-### 4. **Easier Debugging**
-- ✅ Clearer module hierarchy reduces confusion
-- ✅ Consistent naming conventions
-- ✅ Better organized imports make tracing easier
-
-### 5. **Package-Ready Structure**
-- ✅ Proper `__init__.py` files for package exports
-- ✅ Ready for distribution/pip installation
-- ✅ Proper namespace organization
-
-## Migration Path
-
-### For Existing Code
-If you have other files importing from the old structure:
-
-**Old imports:**
-```python
-from nodes import consulta_vetorial_node
-from helpers import extrair_ancoras_com_citacoes
-```
-
-**Update to:**
-```python
-from src.revisao_agents.agents import consulta_vetorial_node
-from src.revisao_agents.helpers import extrair_ancoras_com_citacoes
-```
-
-Or if using relative imports (from within `src/revisao_agents/`):
-```python
-from .agents import consulta_vetorial_node
-from .helpers import extrair_ancoras_com_citacoes
+# unit/integration tests
+PYTHONPATH=src python -m pytest -q
 ```
 
 ## Next Steps
 
-### 1. **Verify Imports** 
-- [ ] Test all imports work correctly
-- [ ] Check for any missing dependencies
-- [ ] Verify all function references are valid
-
-### 2. **Test Execution**
-- [ ] Run academic workflow test
-- [ ] Run technical workflow test
-- [ ] Run technical writing workflow test
-- [ ] Check for runtime import errors
-
-### 3. **Update External References**
-- [ ] Update any CLI entry points
-- [ ] Update any documentation
-- [ ] Update any test files
-
-### 4. **Deprecation of Old Structure** (Optional)
-- [ ] Keep old `nodes/` and `helpers/` for backward compatibility OR
-- [ ] Remove them after ensuring all imports updated
-- [ ] Update version number (semantic versioning)
-
-### 5. **Optional Enhancements**
-- [ ] Move constants to `config.py`
-- [ ] Create `state.py` type definitions for `RevisaoState` and `EscritaTecnicaState`
-- [ ] Add type hints to agent functions
-- [ ] Add docstrings to all agents
-
-## Files Modified
-
-### Created
-- ✅ `/src/revisao_agents/agents/__init__.py` - Package exports
-- ✅ `/src/revisao_agents/agents/academic.py` - Academic nodes
-- ✅ `/src/revisao_agents/agents/technical.py` - Technical nodes
-- ✅ `/src/revisao_agents/agents/common.py` - Common nodes
-- ✅ `/src/revisao_agents/agents/technical_writing.py` - Technical writing nodes
-- ✅ `/src/revisao_agents/helpers/__init__.py` - Helper functions
-
-### Modified
-- ✅ `/workflows/academic_workflow.py` - Updated imports
-- ✅ `/workflows/technical_workflow.py` - Updated imports
-- ✅ `/workflows/technical_writing_workflow.py` - Updated imports
-
-### Deprecated (Consider Removing)
-- `/nodes/` - Original node implementations
-- `/helpers/` - Original helper implementations
-
-## Testing Checklist
-
-- [ ] All imports resolve without errors
-- [ ] Agents module exports correct symbols
-- [ ] Helper functions work correctly
-- [ ] Workflows can instantiate graph
-- [ ] Graph execution completes successfully
-- [ ] No circular imports
-- [ ] Type hints are correct (if added)
-
-## Configuration Notes
-
-### Constants That May Need Moving to Config
-These constants are currently hardcoded in agent files:
-- `CHUNKS_PER_QUERY` - Agents/academic.py
-- `ENCERRAMENTO` - Agents/common.py
-- `TECNICO_MAX_RESULTS`, `MAX_URLS_EXTRACT`, etc. - Agents/technical_writing.py
-
-**Recommendation:** Move these to `src/revisao_agents/config.py` for centralized management.
-
-## Questions & Feedback
-
-- Should old `nodes/` and `helpers/` directories be removed?
-- Should we add strict type hints to all agent functions?
-- Should we add comprehensive docstrings?
-- Should constants be moved to config.py?
+1. Keep all docs consistent with root `README.md` and `TESTING_GUIDE.md`.
+2. Avoid reintroducing parallel orchestration paths.
+3. Extend tests around changed contracts before broad feature work.
 
 ---
 
-**Refactoring Complete (Core Setup)** - See next steps for validation and testing.
+**Status:** Current architecture documented and aligned with hardening phases 1–7.
