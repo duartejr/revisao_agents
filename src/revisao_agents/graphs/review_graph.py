@@ -1,36 +1,15 @@
 """
-review_graph.py - Main LangGraph StateGraph definitions.
+Compatibility wrapper for planning graph entry points.
 
-Contains the academic and technical review graphs, and the
-technical-writing graph, all wired from agents/. 
+Canonical planning execution lives in `workflows/academic_workflow.py`
+and `workflows/technical_workflow.py`. This module keeps backward-compatible
+function names (`build_academic_graph`, `build_technical_graph`, etc.) and
+delegates directly to those workflow builders.
 """
 
 from __future__ import annotations
 
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
-
-from ..state import RevisaoState, EscritaTecnicaState
-from ..agents.academic import (
-    consulta_vetorial_node,
-    plano_inicial_academico_node,
-    refinar_consulta_academico_node,
-    refinar_plano_academico_node,
-    finalizar_plano_academico_node,
-)
-from ..agents.technical import (
-    busca_tecnica_inicial_node,
-    plano_inicial_tecnico_node,
-    refinar_busca_tecnica_node,
-    refinar_plano_tecnico_node,
-    finalizar_plano_tecnico_node,
-)
-from ..agents.common import (
-    pausa_humana_node,
-    entrevista_node,
-    roteador_entrevista,
-)
-from .checkpoints import make_checkpointer
+from ..workflows import build_academico_workflow, build_tecnico_workflow
 
 
 # ---------------------------------------------------------------------------
@@ -38,35 +17,8 @@ from .checkpoints import make_checkpointer
 # ---------------------------------------------------------------------------
 
 def build_academic_graph(checkpointer=None):
-    """Build and compile the academic literature-review graph."""
-    g = StateGraph(RevisaoState)
-
-    g.add_node("consulta_vetorial",        consulta_vetorial_node)
-    g.add_node("plano_inicial_academico",   plano_inicial_academico_node)
-    g.add_node("pausa_humana",              pausa_humana_node)
-    g.add_node("entrevista",                entrevista_node)
-    g.add_node("refinar_consulta_academico",refinar_consulta_academico_node)
-    g.add_node("refinar_plano_academico",   refinar_plano_academico_node)
-    g.add_node("finalizar_plano_academico", finalizar_plano_academico_node)
-
-    g.set_entry_point("consulta_vetorial")
-    g.add_edge("consulta_vetorial",        "plano_inicial_academico")
-    g.add_edge("plano_inicial_academico",  "pausa_humana")
-    g.add_edge("pausa_humana",             "entrevista")
-    g.add_conditional_edges(
-        "entrevista",
-        roteador_entrevista,
-        {
-            "refinar": "refinar_consulta_academico",
-            "finalizar": "finalizar_plano_academico",
-        },
-    )
-    g.add_edge("refinar_consulta_academico", "refinar_plano_academico")
-    g.add_edge("refinar_plano_academico",    "pausa_humana")
-    g.add_edge("finalizar_plano_academico",  END)
-
-    cp = checkpointer or make_checkpointer()
-    return g.compile(checkpointer=cp, interrupt_before=["pausa_humana"])
+    """Build academic planning graph using canonical workflow implementation."""
+    return build_academico_workflow()
 
 
 # ---------------------------------------------------------------------------
@@ -74,35 +26,8 @@ def build_academic_graph(checkpointer=None):
 # ---------------------------------------------------------------------------
 
 def build_technical_graph(checkpointer=None):
-    """Build and compile the technical chapter-planning graph."""
-    g = StateGraph(RevisaoState)
-
-    g.add_node("busca_tecnica_inicial",   busca_tecnica_inicial_node)
-    g.add_node("plano_inicial_tecnico",   plano_inicial_tecnico_node)
-    g.add_node("pausa_humana",            pausa_humana_node)
-    g.add_node("entrevista",              entrevista_node)
-    g.add_node("refinar_busca_tecnica",   refinar_busca_tecnica_node)
-    g.add_node("refinar_plano_tecnico",   refinar_plano_tecnico_node)
-    g.add_node("finalizar_plano_tecnico", finalizar_plano_tecnico_node)
-
-    g.set_entry_point("busca_tecnica_inicial")
-    g.add_edge("busca_tecnica_inicial",  "plano_inicial_tecnico")
-    g.add_edge("plano_inicial_tecnico",  "pausa_humana")
-    g.add_edge("pausa_humana",           "entrevista")
-    g.add_conditional_edges(
-        "entrevista",
-        roteador_entrevista,
-        {
-            "refinar": "refinar_busca_tecnica",
-            "finalizar": "finalizar_plano_tecnico",
-        },
-    )
-    g.add_edge("refinar_busca_tecnica",   "refinar_plano_tecnico")
-    g.add_edge("refinar_plano_tecnico",   "pausa_humana")
-    g.add_edge("finalizar_plano_tecnico", END)
-
-    cp = checkpointer or make_checkpointer()
-    return g.compile(checkpointer=cp, interrupt_before=["pausa_humana"])
+    """Build technical planning graph using canonical workflow implementation."""
+    return build_tecnico_workflow()
 
 
 # ---------------------------------------------------------------------------
@@ -135,12 +60,27 @@ def run_review_graph(graph, input_text: str, debug: bool = False) -> dict:
         final state dict
     """
     config = {"configurable": {"thread_id": "cli-run"}}
-    state = {"tema": input_text}
+    state = {
+        "tema": input_text,
+        "tipo_revisao": "academico",
+        "chunks_relevantes": [],
+        "snippets_tecnicos": [],
+        "urls_tecnicos": [],
+        "plano_atual": "",
+        "historico_entrevista": [],
+        "perguntas_feitas": 0,
+        "max_perguntas": 1,
+        "plano_final": "",
+        "plano_final_path": "",
+        "status": "iniciando",
+    }
 
-    result = {}
+    result = state
     for step in graph.stream(state, config=config):
         if debug:
             print(step)
-        result = step
+        for node_data in step.values():
+            if isinstance(node_data, dict):
+                result.update(node_data)
 
     return result
