@@ -64,15 +64,16 @@ def search_doi_in_mongo_chunks(file_path: str, mongo_corpus: Any) -> Optional[st
         return None
     
     try:
-        # Query MongoDB for chunks from this document (first 3 chunks likely contain DOI)
-        chunks = mongo_corpus.query_similar(
-            "DOI digital object identifier publication",
-            top_k=10,
-            url_filter=file_path
-        )
-        
-        for chunk in chunks[:5]:  # Check first 5 chunks
-            text = chunk.get('text', '')
+        file_name = Path(file_path).stem
+        query_text = f"DOI digital object identifier publication {file_name}"
+        chunks = mongo_corpus.query(query_text, top_k=10)
+
+        for chunk in chunks[:5]:
+            if isinstance(chunk, dict):
+                text = chunk.get("text") or chunk.get("texto") or ""
+            else:
+                text = getattr(chunk, "texto", "") or getattr(chunk, "text", "") or ""
+
             doi = search_doi_in_text(text)
             if doi:
                 logger.info(f"Found DOI in MongoDB chunk: {doi}")

@@ -1,39 +1,125 @@
-# src/revisao_agents/cli.py
+import os
+import re
+from pathlib import Path
+
 import typer
 from rich.console import Console
-from pathlib import Path
-from .graphs.review_graph import build_review_graph, run_review_graph
-from .config import get_settings
+
+from .graphs.review_graph import build_review_graph
 
 console = Console()
 
 
+def _resolve_tema(input_value: str) -> str:
+    """Resolve input as either raw theme text or a file containing a theme/plan."""
+    path = Path(input_value)
+    if not path.exists() or not path.is_file():
+        return input_value.strip()
+
+    raw = path.read_text(encoding="utf-8")
+    match = re.search(r"\*\*Tema:\*\*\s*(.+)", raw)
+    if match:
+        return match.group(1).strip()
+
+    first_non_empty = next((line.strip() for line in raw.splitlines() if line.strip()), "")
+    return first_non_empty or input_value.strip()
+
+
+def _run_planning_until_complete(
+    graph,
+    tema: str,
+    tipo: str,
+    rodadas: int,
+    auto_response: str,
+    debug: bool,
+) -> dict:
+    """Execute planning graph with automatic HITL responses until completion."""
+    state_init = {
+        "tema": tema,
+        "tipo_revisao": tipo,
+        "chunks_relevantes": [],
+        "snippets_tecnicos": [],
+        "urls_tecnicos": [],
+        "plano_atual": "",
+        "historico_entrevista": [],
+        "perguntas_feitas": 0,
+        "max_perguntas": max(1, int(rodadas)),
+        "plano_final": "",
+        "plano_final_path": "",
+        "status": "iniciando",
+    }
+    config = {"configurable": {"thread_id": f"cli_{tipo}_{tema[:20]}"}}
+
+    for event in graph.stream(state_init, config=config):
+        if debug:
+            console.print(event)
+
+    while True:
+        current = graph.get_state(config)
+        if not current.next:
+            return current.values
+
+        if "pausa_humana" not in current.next:
+            raise RuntimeError(f"Fluxo inesperado: aguardando nós {current.next}")
+
+        history = current.values.get("historico_entrevista", [])
+        graph.update_state(
+            config,
+            {"historico_entrevista": history + [("user", auto_response)]},
+            as_node="pausa_humana",
+        )
+        for event in graph.stream(None, config=config):
+            if debug:
+                console.print(event)
+
+
 def main(
-    input_file: Path = typer.Argument(..., help="Arquivo .md ou .txt com o texto a revisar"),
-    output_file: Path = typer.Option(None, "--output", "-o", help="Salvar saída revisada (opcional)"),
-    model: str = typer.Option("gpt-4o-mini", "--model", help="Modelo LLM a usar"),
+    input_value: str = typer.Argument(..., help="Tema da revisão ou caminho para arquivo com tema/plano"),
+    tipo: str = typer.Option("academico", "--tipo", "-t", help="Tipo: academico ou tecnico"),
+    rodadas: int = typer.Option(3, "--rodadas", "-r", help="Rodadas de refinamento"),
+    output_file: Path = typer.Option(None, "--output", "-o", help="Salvar plano final em arquivo (opcional)"),
+    model: str = typer.Option("", "--model", help="Modelo LLM a usar (opcional)"),
+    auto_response: str = typer.Option("Manter o plano atual.", "--auto-response", help="Resposta automática para etapas HITL"),
     debug: bool = typer.Option(False, "--debug", help="Modo verbose"),
 ):
-    """Executa o fluxo completo de revisão acadêmica no texto fornecido."""
-    settings = get_settings()
+    """Executa planejamento acadêmico/técnico até gerar plano final."""
     if model:
-        settings.llm_model = model  # override via CLI
+        os.environ["LLM_MODEL"] = model
 
-    console.print(f"[bold green]Iniciando revisão de:[/bold green] {input_file}")
+    tipo_norm = tipo.strip().lower()
+    if tipo_norm not in {"academico", "tecnico"}:
+        console.print("[bold red]Erro:[/bold red] --tipo deve ser 'academico' ou 'tecnico'.")
+        raise typer.Exit(2)
+
+    tema = _resolve_tema(input_value)
+    if not tema:
+        console.print("[bold red]Erro:[/bold red] tema vazio após leitura do argumento/arquivo.")
+        raise typer.Exit(2)
+
+    console.print(f"[bold green]Iniciando planejamento:[/bold green] {tipo_norm} | tema={tema!r}")
 
     try:
-        graph = build_review_graph()
-        result = run_review_graph(
+        graph = build_review_graph(tipo=tipo_norm)
+        result = _run_planning_until_complete(
             graph=graph,
-            input_text=input_file.read_text(encoding="utf-8"),
+            tema=tema,
+            tipo=tipo_norm,
+            rodadas=rodadas,
+            auto_response=auto_response,
             debug=debug,
         )
 
-        console.print("\n[bold]Resultado final da revisão:[/bold]")
-        console.print(result.get("final_text", "Sem texto final gerado."))
+        plano_final = result.get("plano_final", "")
+        plano_path = result.get("plano_final_path", "")
+
+        console.print("\n[bold]Resultado final do planejamento:[/bold]")
+        console.print(plano_final or result.get("plano_atual", "Sem plano final gerado."))
+        if plano_path:
+            console.print(f"\n[green]Plano salvo automaticamente em:[/green] {plano_path}")
 
         if output_file:
-            output_file.write_text(result["final_text"], encoding="utf-8")
+            payload = plano_final or result.get("plano_atual", "")
+            output_file.write_text(payload, encoding="utf-8")
             console.print(f"[green]Salvo em:[/green] {output_file}")
 
     except Exception as e:

@@ -189,6 +189,21 @@ def _priorizar_por_idioma(resultados: List[dict], boost_en: float = 0.3) -> List
     return resultados_ordenados
 
 
+def _print_language_totals(resultados: List[dict]) -> None:
+    """Print aggregate language stats safely for a result list."""
+    total = len(resultados)
+    if total == 0:
+        print("   📊 TOTAL: 0 resultados")
+        return
+
+    total_en = sum(1 for r in resultados if r.get("language") == "en")
+    total_pt = sum(1 for r in resultados if r.get("language") == "pt")
+    print(
+        f"   📊 TOTAL: {total_en} inglês ({total_en/total*100:.0f}%), "
+        f"{total_pt} português ({total_pt/total*100:.0f}%)"
+    )
+
+
 # ============================================================================
 # DOMÍNIOS BLOQUEADOS
 # ============================================================================
@@ -319,10 +334,7 @@ def search_tavily(queries: List[str], max_results: int = 5) -> dict:
     urls_unicos = list(dict.fromkeys(all_urls))
     
     # Estatísticas finais
-    total_en = sum(1 for r in all_results if r.get('language') == 'en')
-    total_pt = sum(1 for r in all_results if r.get('language') == 'pt')
-    print(f"   📊 TOTAL: {total_en} inglês ({total_en/len(all_results)*100:.0f}%), "
-          f"{total_pt} português ({total_pt/len(all_results)*100:.0f}%)")
+    _print_language_totals(all_results)
     
     return {"urls_encontrados": urls_unicos, "resultados": all_results}
 
@@ -397,11 +409,19 @@ def search_tavily_incremental(
             },
         )
 
-        return {"urls_novos": urls_novos, "total_acumulado": total_acumulado}
+        return {
+            "urls_novos": urls_novos,
+            "total_acumulado": total_acumulado,
+            "resultados": batch_results,
+        }
 
     except Exception as e:
         print(f"   ⚠️  Erro na busca Tavily: {e}")
-        return {"urls_novos": [], "total_acumulado": urls_anteriores}
+        return {
+            "urls_novos": [],
+            "total_acumulado": urls_anteriores,
+            "resultados": [],
+        }
 
 
 # ============================================================================
@@ -474,11 +494,7 @@ def search_tavily_tecnico(queries: List[str], max_results: int = 5) -> dict:
     urls_filtrados = filtrar_urls_tecnicas(urls_unicos)
     
     # Estatísticas finais
-    total_en = sum(1 for r in all_results if r.get('language') == 'en')
-    total_pt = sum(1 for r in all_results if r.get('language') == 'pt')
-    if all_results:
-        print(f"   📊 TOTAL: {total_en} inglês ({total_en/len(all_results)*100:.0f}%), "
-              f"{total_pt} português ({total_pt/len(all_results)*100:.0f}%)")
+    _print_language_totals(all_results)
     
     return {"urls_encontrados": urls_filtrados, "resultados": all_results}
 

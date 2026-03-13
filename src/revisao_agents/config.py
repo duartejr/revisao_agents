@@ -1,20 +1,27 @@
 import os
+from typing import Optional, Type, TypeVar, Union
+
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _env_clean(name: str, default: str = "") -> str:
+    """Read env var and strip accidental wrapping quotes/whitespace."""
+    return os.getenv(name, default).strip().strip("'").strip('"')
 
 # Caminhos e modelos
 VECTOR_DB_PATH   = os.getenv("VECTOR_DB_PATH", "./vector_db_suelen/faiss_index")
 EMBEDDINGS_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 # MongoDB Atlas
-MONGODB_URI        = os.getenv("MONGODB_URI", "mongodb+srv://usuario:senha@cluster.mongodb.net/")
+MONGODB_URI        = _env_clean("MONGODB_URI", "")
 MONGODB_DB         = os.getenv("MONGODB_DB", "revisao_agent")
 MONGODB_COLLECTION = os.getenv("MONGODB_COLLECTION", "chunks")
 VECTOR_INDEX_NAME  = "vector_index"
 
 # OpenAI
-OPENAI_API_KEY         = os.getenv("OPENAI_API_KEY", "")
+OPENAI_API_KEY         = _env_clean("OPENAI_API_KEY", "")
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 
 # Parâmetros de busca técnica
@@ -73,6 +80,91 @@ ENCERRAMENTO = {
 }
 
 
+# ── Runtime config validation ───────────────────────────────────────────────
+
+_PROVIDER_ENV_KEYS = {
+    "gemini": "GOOGLE_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+}
+
+
+def get_runtime_config_summary() -> dict:
+    """Return concise runtime config status used by CLI/UI startup diagnostics."""
+    provider = _env_clean("LLM_PROVIDER", "groq").lower()
+    model = _env_clean("LLM_MODEL", "") or "<default>"
+    provider_key_name = _PROVIDER_ENV_KEYS.get(provider, "")
+    provider_key_ok = bool(_env_clean(provider_key_name, "")) if provider_key_name else False
+
+    mongodb_uri = _env_clean("MONGODB_URI", "")
+    openai_key = _env_clean("OPENAI_API_KEY", "")
+
+    return {
+        "llm_provider": provider,
+        "llm_model": model,
+        "llm_provider_key": provider_key_name or "<invalid-provider>",
+        "llm_provider_key_present": provider_key_ok,
+        "mongodb_uri_present": bool(mongodb_uri),
+        "tavily_key_present": bool(_env_clean("TAVILY_API_KEY", "")),
+        "openai_key_present": bool(openai_key),
+    }
+
+
+def print_runtime_config_summary() -> None:
+    """Print a one-block startup summary of integration readiness."""
+    summary = get_runtime_config_summary()
+    print("\n" + "-" * 70)
+    print("AMBIENTE — RESUMO DE CONFIGURAÇÃO")
+    print("-" * 70)
+    print(f"LLM_PROVIDER          : {summary['llm_provider']}")
+    print(f"LLM_MODEL             : {summary['llm_model']}")
+    print(
+        f"Chave do provider     : {summary['llm_provider_key']} "
+        f"({'OK' if summary['llm_provider_key_present'] else 'MISSING'})"
+    )
+    print(f"MongoDB URI           : {'OK' if summary['mongodb_uri_present'] else 'MISSING'}")
+    print(f"Tavily API Key        : {'OK' if summary['tavily_key_present'] else 'MISSING'}")
+    print(f"OpenAI (embeddings)   : {'OK' if summary['openai_key_present'] else 'MISSING'}")
+    print("-" * 70)
+
+
+def validate_runtime_config(
+    require_mongodb: bool = False,
+    require_tavily: bool = False,
+    require_openai_embeddings: bool = False,
+    strict: bool = False,
+) -> list[str]:
+    """Validate runtime requirements and optionally raise on missing config."""
+    issues: list[str] = []
+    provider = _env_clean("LLM_PROVIDER", "groq").lower()
+    mongodb_uri = _env_clean("MONGODB_URI", "")
+    openai_key = _env_clean("OPENAI_API_KEY", "")
+
+    if provider not in _PROVIDER_ENV_KEYS:
+        issues.append(
+            f"LLM_PROVIDER inválido: '{provider}'. Use: gemini | groq | openai | openrouter"
+        )
+    else:
+        key_name = _PROVIDER_ENV_KEYS[provider]
+        if not _env_clean(key_name, ""):
+            issues.append(f"Chave ausente para provider atual: {key_name}")
+
+    if require_mongodb and not mongodb_uri:
+        issues.append("MONGODB_URI ausente")
+
+    if require_tavily and not _env_clean("TAVILY_API_KEY", ""):
+        issues.append("TAVILY_API_KEY ausente")
+
+    if require_openai_embeddings and not openai_key:
+        issues.append("OPENAI_API_KEY ausente (necessária para embeddings)")
+
+    if strict and issues:
+        raise ValueError("; ".join(issues))
+
+    return issues
+
+
 # ── LLM helpers ──────────────────────────────────────────────────────────────
 
 def get_llm(temperature=0.3):
@@ -114,10 +206,13 @@ def get_llm(temperature=0.3):
             return llm
 
 
-from typing import Type, TypeVar, Union, Optional
 from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
+
+
+class LLMInvocationError(RuntimeError):
+    """Raised when an LLM call fails to execute or parse as requested."""
 
 
 def llm_call(
@@ -135,13 +230,14 @@ def llm_call(
     from .utils.llm_utils.date_context import add_date_context_to_prompt
     
     provider = os.getenv("LLM_PROVIDER", "groq").lower().strip()
-    model    = os.getenv("LLM_MODEL", _default_model(provider))
+    model = os.getenv("LLM_MODEL", "") or "<default>"
     
     # Add current date context to ensure agents know today's date
     prompt_with_date = add_date_context_to_prompt(prompt)
 
     try:
-        llm = _build_llm(provider, model, temperature)
+        from .utils.llm_utils.llm_providers import get_llm as _provider_get_llm
+        llm = _provider_get_llm(temperature=temperature)
 
         if response_schema is not None:
             structured_llm = llm.with_structured_output(response_schema)
@@ -151,45 +247,9 @@ def llm_call(
         return resp.content if hasattr(resp, "content") else str(resp)
 
     except Exception as e:
-        print(f"   ⚠️  LLM error [{provider}/{model}]: {e}")
-        return None if response_schema else ""
-
-
-def _default_model(provider: str) -> str:
-    defaults = {
-        "openai": "gpt-4o-mini",
-        "gemini": "gemini-2.5-flash",
-        "groq":   "llama-3.3-70b-versatile",
-        "openrouter": "google/gemini-2.0-flash-001",
-    }
-    return defaults.get(provider, "llama-3.3-70b-versatile")
-
-
-def _build_llm(provider: str, model: str, temperature: float):
-    if provider == "openai":
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(model=model, temperature=temperature)
-    if provider == "gemini":
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(model=model, temperature=temperature)
-    if provider == "groq":
-        from langchain_groq import ChatGroq
-        return ChatGroq(model=model, temperature=temperature)
-    if provider == "openrouter":
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(
-            model=model,
-            temperature=temperature,
-            openai_api_key=os.getenv("OPENROUTER_API_KEY", ""),
-            base_url="https://openrouter.ai/api/v1",
-            default_headers={
-                "HTTP-Referer": "https://github.com/duartejr/paper_reviwer",
-                "X-Title": "Paper Reviewer"
-            }
-        )
-    raise ValueError(
-        f"Provider '{provider}' não suportado. Use: openai | gemini | groq | openrouter"
-    )
+        msg = f"LLM call failed [{provider}/{model}]"
+        print(f"   ⚠️  {msg}: {e}")
+        raise LLMInvocationError(msg) from e
 
 
 def parse_json_safe(texto: str) -> dict | None:

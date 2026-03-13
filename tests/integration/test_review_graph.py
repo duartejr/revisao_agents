@@ -1,23 +1,23 @@
 """
 tests/integration/test_review_graph.py
 
-Integration tests for the full review graph.
+Integration smoke tests for graph/workflow construction.
 
-These tests require valid API keys in the environment and will be
-skipped automatically when keys are not present.
+These tests verify buildability of the canonical planning stack and
+the compatibility graph wrappers. They do not require external API keys.
 """
 
-import os
+import importlib.util
 import pytest
 
-openai_key = os.getenv("OPENAI_API_KEY", "")
-requires_api = pytest.mark.skipif(
-    not openai_key or openai_key.startswith("sk-fake"),
-    reason="OPENAI_API_KEY not set — skipping integration tests",
+has_langgraph = importlib.util.find_spec("langgraph") is not None
+requires_langgraph = pytest.mark.skipif(
+    not has_langgraph,
+    reason="langgraph not installed — skipping graph/workflow build tests",
 )
 
 
-@requires_api
+@requires_langgraph
 def test_academic_graph_builds():
     from revisao_agents.graphs.review_graph import build_academic_graph
 
@@ -25,9 +25,25 @@ def test_academic_graph_builds():
     assert graph is not None
 
 
-@requires_api
+@requires_langgraph
 def test_technical_graph_builds():
     from revisao_agents.graphs.review_graph import build_technical_graph
 
     graph = build_technical_graph()
     assert graph is not None
+
+
+@requires_langgraph
+def test_academic_workflow_builds():
+    from revisao_agents.workflows.academic_workflow import build_academico_workflow
+
+    workflow = build_academico_workflow()
+    assert workflow is not None
+
+
+@requires_langgraph
+def test_technical_workflow_builds():
+    from revisao_agents.workflows.technical_workflow import build_tecnico_workflow
+
+    workflow = build_tecnico_workflow()
+    assert workflow is not None
