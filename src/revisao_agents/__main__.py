@@ -9,12 +9,21 @@ from .hitl import run_hitl_loop
 from .utils.vector_utils.pdf_ingestor import ingest_pdf_folder
 from .core.schemas.writer_config import WriterConfig
 from .tools.reference_formatter import run_reference_formatter
+from .config import print_runtime_config_summary, validate_runtime_config
 
 
 def main():
     # Garante que os diretórios de saída existem
     os.makedirs("plans", exist_ok=True)
     os.makedirs("reviews", exist_ok=True)
+
+    print_runtime_config_summary()
+    startup_issues = validate_runtime_config(strict=False)
+    if startup_issues:
+        print("⚠️  Avisos de configuração detectados:")
+        for issue in startup_issues:
+            print(f"   - {issue}")
+        print("   (o fluxo pode falhar em opções que exigem essas integrações)\n")
 
     print("\n" + "=" * 70)
     print("AGENTE DE PLANEJAMENTO DA REVISAO DA LITERATURA")

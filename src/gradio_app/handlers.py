@@ -30,6 +30,7 @@ from revisao_agents.workflows import build_academico_workflow, build_tecnico_wor
 from revisao_agents.workflows.technical_writing_workflow import (
     build_workflow as build_escrita_workflow,
 )
+from revisao_agents.config import validate_runtime_config
 from revisao_agents.utils.vector_utils.pdf_ingestor import ingest_pdf_folder
 from revisao_agents.core.schemas.writer_config import WriterConfig
 from revisao_agents.tools.reference_formatter import format_references_from_file
@@ -117,6 +118,19 @@ def start_planning(
     """
     if not tema.strip():
         return [], {}, "❌ Por favor, informe o tema antes de iniciar.", ""
+
+    req_mongodb = tipo in ("academico", "ambos")
+    req_openai_embeddings = tipo in ("academico", "ambos")
+    req_tavily = tipo in ("tecnico", "ambos")
+    cfg_issues = validate_runtime_config(
+        require_mongodb=req_mongodb,
+        require_tavily=req_tavily,
+        require_openai_embeddings=req_openai_embeddings,
+        strict=False,
+    )
+    if cfg_issues:
+        msg = "❌ Configuração incompleta para este modo:\n- " + "\n- ".join(cfg_issues)
+        return [], {}, msg, ""
 
     tipos_list = ["academico", "tecnico"] if tipo == "ambos" else [tipo]
     tipo_atual = tipos_list[0]
@@ -301,6 +315,19 @@ def start_writing(
     """
     os.makedirs("reviews", exist_ok=True)
 
+    cfg_issues = validate_runtime_config(
+        require_mongodb=True,
+        require_tavily=bool(tavily_enabled),
+        require_openai_embeddings=True,
+        strict=False,
+    )
+    if cfg_issues:
+        yield (
+            history + [{"role": "assistant", "content": "❌ Configuração incompleta:\n- " + "\n- ".join(cfg_issues)}],
+            "❌ Erro", "",
+        )
+        return
+
     if not plan_path or not os.path.exists(plan_path):
         yield (
             history + [{"role": "assistant", "content": f"❌ Plano não encontrado: `{plan_path}`"}],
@@ -411,6 +438,14 @@ def start_writing(
 # ═══════════════════════════════════════════════════════════════════════════
 
 def index_pdfs(folder_path: str) -> str:
+    cfg_issues = validate_runtime_config(
+        require_mongodb=True,
+        require_openai_embeddings=True,
+        strict=False,
+    )
+    if cfg_issues:
+        return "❌ Configuração incompleta:\n- " + "\n- ".join(cfg_issues)
+
     if not folder_path.strip():
         return "❌ Informe o caminho da pasta."
     folder_path = os.path.expanduser(folder_path.strip())
