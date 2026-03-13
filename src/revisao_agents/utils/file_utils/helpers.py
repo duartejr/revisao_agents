@@ -3,7 +3,7 @@ import re
 import json
 import difflib
 from typing import List, Optional
-from ...config import HIST_MAX_TURNS, PLANO_MAX_CHARS
+from ...config import HIST_MAX_TURNS, PLAN_MAX_CHARS
 
 
 def fmt_chunks(chunks: List[str], max_chars: int = 1200) -> str:
@@ -38,7 +38,7 @@ def resumir_hist(historico: List[tuple], max_turns: int = HIST_MAX_TURNS) -> str
         linhas.append(f"{label}: {resumo}")
     return "\n".join(linhas)
 
-def truncar(s: str, n: int = PLANO_MAX_CHARS) -> str:
+def truncar(s: str, n: int = PLAN_MAX_CHARS) -> str:
     return s if len(s) <= n else s[:n] + "\n...[truncado]"
 
 def salvar_md(conteudo: str, prefixo: str, tema: str) -> str:

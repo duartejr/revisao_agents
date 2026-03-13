@@ -1,6 +1,6 @@
 import time
 from typing import List, Dict
-from ...config import MAX_IMAGENS_SECAO
+from ...config import MAX_IMAGES_SECTION
 
 def extract(urls: List[str]) -> List[dict]:
     """Extrai texto completo de URLs via Tavily Extract."""
@@ -19,7 +19,7 @@ def search_images(queries: List[str]) -> List[dict]:
     try:
         from ...tools.tavily_web_search import search_tavily_images
         res = search_tavily_images.invoke({"queries": queries, "max_results": 8})
-        return res.get("imagens", [])[:MAX_IMAGENS_SECAO]
+        return res.get("imagens", [])[:MAX_IMAGES_SECTION]
     except Exception as e:
         print(f"   ⚠️  search_images: {e}")
         return []

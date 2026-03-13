@@ -15,11 +15,10 @@ logger = logging.getLogger(__name__)
 from ...state import EscritaTecnicaState
 from ...config import (
     llm_call, parse_json_safe,
-    TECNICO_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
+    TECHNICAL_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
     MAX_URLS_EXTRACT, CTX_RESUMO_CHARS, SECAO_MIN_PARAGRAFOS,
     DELAY_ENTRE_SECOES, MAX_REACT_ITERATIONS, TOP_K_OBSERVACAO,
 )
-from ...core.schemas.techinical_writing import RespostaSecao, Fonte
 from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
 from ...utils.file_utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
 from ...core.schemas.writer_config import WriterConfig

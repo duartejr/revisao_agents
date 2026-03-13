@@ -15,11 +15,10 @@ logger = logging.getLogger(__name__)
 from ...state import EscritaTecnicaState
 from ...config import (
     llm_call, parse_json_safe,
-    TECNICO_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
+    TECHNICAL_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
     MAX_URLS_EXTRACT, CTX_RESUMO_CHARS, SECAO_MIN_PARAGRAFOS,
     DELAY_ENTRE_SECOES, MAX_REACT_ITERATIONS, TOP_K_OBSERVACAO,
 )
-from ...core.schemas.techinical_writing import RespostaSecao, Fonte
 from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
 from ...utils.file_utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
 from ...core.schemas.writer_config import WriterConfig
@@ -103,7 +102,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
 
         if not _corpus_suficiente and tavily_enabled:
             for q in queries[:4]:
-                res = search_web(q, TECNICO_MAX_RESULTS)
+                res = search_web(q, TECHNICAL_MAX_RESULTS)
                 # Pass tavily_enabled to corpus for fallback
                 corpus_check.tavily_enabled = tavily_enabled
                 novos, resultados, urls_vistas = _extrair_com_fallback(

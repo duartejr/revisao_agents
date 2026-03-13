@@ -29,33 +29,31 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "100"))
 CHUNK_MAX_CHARS = int(os.getenv("CHUNK_MAX_CHARS", "50000"))
 MAX_CHUNKS_TOTAL = int(os.getenv("MAX_CHUNKS_TOTAL", "500"))
 MAX_CORPUS_PROMPT = int(os.getenv("MAX_CORPUS_PROMPT", "3000"))
-PLANO_MAX_CHARS = int(os.getenv("PLANO_MAX_CHARS", "2000"))
+PLAN_MAX_CHARS = int(os.getenv("PLAN_MAX_CHARS", "2000"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Search / Retrieval
 # ─────────────────────────────────────────────────────────────────────────────
-TOP_K_ESCRITA = int(os.getenv("TOP_K_ESCRITA", "10"))
-TOP_K_VERIFICACAO = int(os.getenv("TOP_K_VERIFICACAO", "5"))
+TOP_K_WRITER = int(os.getenv("TOP_K_WRITER", "10"))
+TOP_K_VERIFICATION = int(os.getenv("TOP_K_VERIFICATION", "5"))
 SNIPPET_MIN_SCORE = float(os.getenv("SNIPPET_MIN_SCORE", "0.3"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Technical Search (Tavily)
 # ─────────────────────────────────────────────────────────────────────────────
-TECNICO_MAX_RESULTS = int(os.getenv("TECNICO_MAX_RESULTS", "5"))
-DOMINIOS_PRIORITARIOS = [
+TECHNICAL_MAX_RESULTS = int(os.getenv("TECHNICAL_MAX_RESULTS", "5"))
+PRIORITY_DOMAINS = [
     "github.com", "arxiv.org", "researchgate.net",
     "tensorflow.org", "pytorch.org", "huggingface.co"
 ]
-DOMINIOS_BLOQUEADOS_EXTRACT = [
+BLOCKED_DOMAINS_EXTRACT = [
     "paywall", "paywalled", "subscription", "pdf"
 ]
-MAX_IMAGENS_SECAO = int(os.getenv("MAX_IMAGENS_SECAO", "5"))
+MAX_IMAGES_SECTION = int(os.getenv("MAX_IMAGES_SECTION", "5"))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Anchor / Reference Matching
 # ─────────────────────────────────────────────────────────────────────────────
-ANCORA_MIN_SIM_FAISS = float(os.getenv("ANCORA_MIN_SIM_FAISS", "0.75"))
-ANCORA_MIN_SIM_FUZZY = float(os.getenv("ANCORA_MIN_SIM_FUZZY", "0.80"))
 EXTRACT_MIN_CHARS = int(os.getenv("EXTRACT_MIN_CHARS", "500"))
 
 # ─────────────────────────────────────────────────────────────────────────────

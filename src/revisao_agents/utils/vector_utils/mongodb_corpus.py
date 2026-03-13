@@ -12,8 +12,8 @@ import time
 from ...config import (
     MONGODB_URI, MONGODB_DB, MONGODB_COLLECTION, VECTOR_INDEX_NAME,
     OPENAI_API_KEY, OPENAI_EMBEDDING_MODEL,
-    CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_ESCRITA, TOP_K_VERIFICACAO,
-    MAX_CORPUS_PROMPT, ANCORA_MIN_SIM_FAISS, ANCORA_MIN_SIM_FUZZY,
+    CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_WRITER, TOP_K_VERIFICATION,
+    MAX_CORPUS_PROMPT, ANCHOR_MIN_SIM,
     EXTRACT_MIN_CHARS, CHUNKS_CACHE_DIR, SNIPPET_MIN_SCORE
 )
 from ..file_utils.helpers import normalizar, fuzzy_sim, fuzzy_search_in_text
@@ -272,7 +272,7 @@ class CorpusMongoDB:
         print(f"      {self._n_docs} documentos totais | {self._total_chunks} chunks nesta seção")
         return self
 
-    def query(self, texto_query: str, top_k: int = TOP_K_ESCRITA) -> List[Chunk]:
+    def query(self, texto_query: str, top_k: int = TOP_K_WRITER) -> List[Chunk]:
         collection = self._get_collection()
         client = self._get_openai_client()
 
@@ -457,7 +457,7 @@ class CorpusMongoDB:
             return False, 0.0, ""
 
         ancora_norm = normalizar(ancora)
-        candidatos = self.query(ancora, top_k=TOP_K_VERIFICACAO)
+        candidatos = self.query(ancora, top_k=TOP_K_VERIFICATION)
 
         for c in candidatos:
             if ancora_norm in normalizar(c.texto):
@@ -470,11 +470,11 @@ class CorpusMongoDB:
                 melhor_score = score
                 melhor_trecho = c.texto
 
-        encontrada = melhor_score >= ANCORA_MIN_SIM_FAISS
+        encontrada = melhor_score >= ANCHOR_MIN_SIM
         return encontrada, melhor_score, melhor_trecho
 
     def render_prompt(self, query: str, max_chars: int = MAX_CORPUS_PROMPT) -> tuple:
-        chunks = self.query(query, top_k=TOP_K_ESCRITA)
+        chunks = self.query(query, top_k=TOP_K_WRITER)
 
         if not chunks:
             return "", self._urls_usadas, self._fonte_map
