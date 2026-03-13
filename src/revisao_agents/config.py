@@ -120,6 +120,10 @@ from pydantic import BaseModel
 T = TypeVar("T", bound=BaseModel)
 
 
+class LLMInvocationError(RuntimeError):
+    """Raised when an LLM call fails to execute or parse as requested."""
+
+
 def llm_call(
     prompt: str,
     temperature: float = 0.2,
@@ -135,13 +139,14 @@ def llm_call(
     from .utils.llm_utils.date_context import add_date_context_to_prompt
     
     provider = os.getenv("LLM_PROVIDER", "groq").lower().strip()
-    model    = os.getenv("LLM_MODEL", _default_model(provider))
+    model = os.getenv("LLM_MODEL", "") or "<default>"
     
     # Add current date context to ensure agents know today's date
     prompt_with_date = add_date_context_to_prompt(prompt)
 
     try:
-        llm = _build_llm(provider, model, temperature)
+        from .utils.llm_utils.llm_providers import get_llm as _provider_get_llm
+        llm = _provider_get_llm(temperature=temperature)
 
         if response_schema is not None:
             structured_llm = llm.with_structured_output(response_schema)
@@ -151,45 +156,9 @@ def llm_call(
         return resp.content if hasattr(resp, "content") else str(resp)
 
     except Exception as e:
-        print(f"   ⚠️  LLM error [{provider}/{model}]: {e}")
-        return None if response_schema else ""
-
-
-def _default_model(provider: str) -> str:
-    defaults = {
-        "openai": "gpt-4o-mini",
-        "gemini": "gemini-2.5-flash",
-        "groq":   "llama-3.3-70b-versatile",
-        "openrouter": "google/gemini-2.0-flash-001",
-    }
-    return defaults.get(provider, "llama-3.3-70b-versatile")
-
-
-def _build_llm(provider: str, model: str, temperature: float):
-    if provider == "openai":
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(model=model, temperature=temperature)
-    if provider == "gemini":
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(model=model, temperature=temperature)
-    if provider == "groq":
-        from langchain_groq import ChatGroq
-        return ChatGroq(model=model, temperature=temperature)
-    if provider == "openrouter":
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(
-            model=model,
-            temperature=temperature,
-            openai_api_key=os.getenv("OPENROUTER_API_KEY", ""),
-            base_url="https://openrouter.ai/api/v1",
-            default_headers={
-                "HTTP-Referer": "https://github.com/duartejr/paper_reviwer",
-                "X-Title": "Paper Reviewer"
-            }
-        )
-    raise ValueError(
-        f"Provider '{provider}' não suportado. Use: openai | gemini | groq | openrouter"
-    )
+        msg = f"LLM call failed [{provider}/{model}]"
+        print(f"   ⚠️  {msg}: {e}")
+        raise LLMInvocationError(msg) from e
 
 
 def parse_json_safe(texto: str) -> dict | None:
