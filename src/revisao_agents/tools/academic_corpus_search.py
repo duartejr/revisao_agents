@@ -21,7 +21,7 @@ def search_academic_corpus(
     Busca no corpus MongoDB por conteúdo acadêmico relevante usando vector search.
 
     Args:
-        query: Texto ou âncora a ser pesquisada (ex: "modelo de difusão estável").
+        query: Texto ou anchor a ser pesquisada (ex: "modelo de difusão estável").
         limit: Número máximo de fontes/chunks a retornar (padrão 5).
         section_title: Título da seção atual (usado apenas para log interno).
 

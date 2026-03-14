@@ -13,8 +13,8 @@ system: |
   CORPUS — trechos mais relevantes recuperados:
   {amostra_corpus}
 
-  'suficiente' é true se o corpus permite escrever a seção ancorando todas as afirmações relevantes em trechos do corpus.
-  Se false, 'query_complementar' deve ser uma busca diferente das já feitas, sempre com versão em português e inglês.
+  'suficiente' is true if the corpus allows writing the section anchoring all relevant claims in corpus chunks.
+  If false, 'query_complementar' should be a different search query than those already made, always with both Portuguese and English versions.
 
   Responda EXCLUSIVAMENTE em JSON válido, sem markdown:
   {{

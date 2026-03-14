@@ -47,7 +47,7 @@ CHUNK_MAX_CHARS   = 600
 MAX_CHUNKS_TOTAL  = 100
 CHUNKS_CACHE_DIR  = os.getenv("CHUNKS_CACHE_DIR", "./chunks_cache")
 
-# Verificação de âncoras
+# Anchors verify similarity threshold (cosine similarity)
 ANCHOR_MIN_SIM = 0.82
 
 HIST_MAX_TURNS   = 6

@@ -246,11 +246,11 @@ if stats:
         aprov = s.get("aprovados", 0)
         ajust = s.get("ajustados", 0)
         corr = s.get("corrigidos", 0)
-        ancoras = s.get("ancoras_usadas", 0)
+        anchors = s.get("anchors_usadas", 0)
         taxa = ((aprov + ajust) / t * 100) if t > 0 else 0
         print(f"   [{s.get('secao', '?')[:50]}]")
         print(f"     {aprov+ajust}/{t} verified ({taxa:.0f}%) | "
-              f"✅{aprov} 🔵{ajust} 🔧{corr} | 🎯{ancoras} anchors used")
+              f"✅{aprov} 🔵{ajust} 🔧{corr} | 🎯{anchors} anchors used")
 
 print(f"\n{'='*70}")
 print(f"FINAL: {checks_passed}/{checks_total} checks passed | "

@@ -12,15 +12,15 @@ node_escrever   : escrever_secoes_node — writes sections with search and verif
 node_consolidar : consolidar_node — consolidates written sections into a final document.
 """
 from .text_filters import (
-    _ANCORA_PATTERN,
+    _ANCHORS_PATTERN,
     _strip_justification_blocks,
     _strip_meta_sentences,
     _strip_figure_table_refs,
 )
-from .anchor_helpers import (
-    _extrair_ancora_principal,
-    _extrair_citacao_ancora,
-    _extrair_todas_ancoras_com_citacoes,
+from ...helpers.anchor_helpers import (
+    _extract_main_anchor,
+    _extract_citation_anchor,
+    _extract_all_anchors_with_citations,
 )
 from .phase_runners import (
     _fase_pensamento,
@@ -34,20 +34,20 @@ from .verification import (
     _monitorar_taxa_verificacao,
     _buscar_conteudo_complementar,
     _verificar_e_corrigir_secao_adaptativa,
-    _verificar_paragrafo_com_ancora,
-    _verificar_e_corrigir_secao_com_ancora,
+    _verificar_paragrafo_com_anchor,
+    _verificar_e_corrigir_secao_com_anchor,
 )
 
 __all__ = [
     # text_filters
-    "_ANCORA_PATTERN",
+    "_ANCHORS_PATTERN",
     "_strip_justification_blocks",
     "_strip_meta_sentences",
     "_strip_figure_table_refs",
     # anchor_helpers
-    "_extrair_ancora_principal",
-    "_extrair_citacao_ancora",
-    "_extrair_todas_ancoras_com_citacoes",
+    "_extract_main_anchor",
+    "_extract_citation_anchor",
+    "_extract_all_anchors_with_citations",
     # phase_runners
     "_fase_pensamento",
     "_fase_observacao",
@@ -59,6 +59,6 @@ __all__ = [
     "_monitorar_taxa_verificacao",
     "_buscar_conteudo_complementar",
     "_verificar_e_corrigir_secao_adaptativa",
-    "_verificar_paragrafo_com_ancora",
-    "_verificar_e_corrigir_secao_com_ancora",
+    "_verificar_paragrafo_com_anchor",
+    "_verificar_e_corrigir_secao_com_anchor",
 ]

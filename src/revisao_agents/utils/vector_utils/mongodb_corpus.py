@@ -452,20 +452,20 @@ class CorpusMongoDB:
             ))
         return results
 
-    def anchor_exists(self, ancora: str) -> tuple:
-        if not ancora or len(ancora.strip()) < 15:
+    def anchor_exists(self, anchor: str) -> tuple:
+        if not anchor or len(anchor.strip()) < 15:
             return False, 0.0, ""
 
-        ancora_norm = normalizar(ancora)
-        candidatos = self.query(ancora, top_k=TOP_K_VERIFICATION)
+        anchor_norm = normalizar(anchor)
+        candidatos = self.query(anchor, top_k=TOP_K_VERIFICATION)
 
         for c in candidatos:
-            if ancora_norm in normalizar(c.texto):
+            if anchor_norm in normalizar(c.texto):
                 return True, 1.0, c.texto
 
         melhor_score, melhor_trecho = 0.0, ""
         for c in candidatos:
-            score = fuzzy_sim(ancora_norm, normalizar(c.texto))
+            score = fuzzy_sim(anchor_norm, normalizar(c.texto))
             if score > melhor_score:
                 melhor_score = score
                 melhor_trecho = c.texto
@@ -507,7 +507,7 @@ class CorpusMongoDB:
     
     def render_prompt_url(
         self,
-        texto_ancora: str,
+        anchor_text: str,
         url_citada: str,
         max_chars: int = 3000,
         top_k: int = 5,
@@ -515,10 +515,10 @@ class CorpusMongoDB:
         neighbor_window: int = 2,
     ) -> Tuple[str, List[str], int]:
         """
-        Renderiza prompt para verificação baseado em âncora + URL específica.
+        Renderiza prompt para verificação baseado em anchor + URL específica.
 
         Args:
-            texto_ancora:      texto literal da âncora (copiado do corpus)
+            anchor_text:      texto literal da anchor (copiado do corpus)
             url_citada:        URL da fonte citada
             max_chars:         máximo de caracteres no prompt
             top_k:             número de chunks primários a buscar
@@ -529,8 +529,8 @@ class CorpusMongoDB:
         Returns:
             (prompt_texto, [urls_usadas], total_chunks_usados)
         """
-        # Busca vetorial pelo texto da âncora
-        chunks = self.query(texto_ancora, top_k=top_k * 2)
+        # Busca vetorial pelo texto da anchor
+        chunks = self.query(anchor_text, top_k=top_k * 2)
 
         # Filtra apenas chunks da URL citada
         chunks_da_url = [
@@ -585,28 +585,28 @@ class CorpusMongoDB:
 
 
     # ============================================================================
-    # VERSÃO ALTERNATIVA: Busca por múltiplas âncoras
+    # VERSÃO ALTERNATIVA: Busca por múltiplas anchors
     # ============================================================================
 
-    def render_prompt_ancoras(
+    def render_prompt_anchors(
         self,
-        ancoras_com_urls: List[Tuple[str, str]],
+        anchors_with_urls: List[Tuple[str, str]],
         max_chars: int = 3000,
     ) -> Tuple[str, List[str], int]:
         """
-        Renderiza prompt baseado em múltiplas âncoras com suas URLs.
+        Renderiza prompt baseado em múltiplas anchors com suas URLs.
         
         Útil quando um parágrafo tem várias citações.
         
         Args:
-            ancoras_com_urls: lista de (texto_ancora, url_citada)
+            anchors_with_urls: lista de (texto_anchor, url_citada)
             max_chars: máximo de caracteres no prompt
         
         Returns:
             (prompt_texto, [urls_usadas], total_chunks_usados)
         
         Exemplo:
-            >>> corpus.render_prompt_ancoras([
+            >>> corpus.render_prompt_anchors([
             ...     ("100 épocas de treinamento", "https://arxiv.org/..."),
             ...     ("MSE is used as loss", "https://papers.nips.cc/..."),
             ... ])
@@ -616,9 +616,9 @@ class CorpusMongoDB:
         urls_usadas = []
         chunks_usados = 0
         
-        for texto_ancora, url_citada in ancoras_com_urls:
-            # Busca chunks para cada âncora
-            chunks = self.query(texto_ancora, top_k=3)
+        for anchor_text, url_citada in anchors_with_urls:
+            # Busca chunks para cada anchors
+            chunks = self.query(anchor_text, top_k=3)
             
             # Filtra por URL
             chunks_da_url = [
@@ -631,10 +631,10 @@ class CorpusMongoDB:
                 chunks_da_url = chunks[:2]
             
             # Adiciona ao prompt
-            for chunk in chunks_da_url[:2]:  # Máx 2 chunks por âncora
+            for chunk in chunks_da_url[:2]:  # Máx 2 chunks por anchor
                 bloco = (
                     f"[FONTE {chunk.fonte_idx} | {chunk.url[:70]}]\n"
-                    f"[ÂNCORA: {texto_ancora[:50]}...]\n"
+                    f"[ANCHOR: {anchor_text[:50]}...]\n"
                     f"{chunk.texto}\n\n"
                 )
                 

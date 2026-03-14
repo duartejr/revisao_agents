@@ -15,7 +15,7 @@ from .file_utils.helpers import (
     normalizar,
     fuzzy_sim,
     fuzzy_search_in_text,
-    extrair_ancoras,
+    extrair_anchors,
     eh_paragrafo_verificavel,
 )
 
@@ -31,6 +31,6 @@ __all__ = [
     "normalizar",
     "fuzzy_sim",
     "fuzzy_search_in_text",
-    "extrair_ancoras",
+    "extrair_anchors",
     "eh_paragrafo_verificavel",
 ]

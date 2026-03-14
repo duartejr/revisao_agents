@@ -26,13 +26,13 @@ from ...utils.search_utils.tavily_client import search_web, search_images, extra
 from ...utils.llm_utils.prompt_loader import load_prompt
 from ...utils.bib_utils.crossref_bibtex import get_reference_data_react, bibtex_to_abnt
 from .text_filters import _strip_justification_blocks, _strip_meta_sentences, _strip_figure_table_refs
-from .anchor_helpers import _ANCORA_PATTERN, _extrair_ancora_principal, _extrair_citacao_ancora, _extrair_todas_ancoras_com_citacoes
+from ...helpers.anchor_helpers import _ANCHORS_PATTERN, _extract_main_anchor, _extract_citation_anchor, _extract_all_anchors_with_citations
 from .phase_runners import _fase_pensamento, _fase_observacao, _fase_rascunho, _extrair_com_fallback
 from .verification import (
     _contar_claims_verificaveis, _juiz_paragrafo_melhorado,
     _monitorar_taxa_verificacao, _buscar_conteudo_complementar,
     _verificar_e_corrigir_secao_adaptativa,
-    _verificar_paragrafo_com_ancora, _verificar_e_corrigir_secao_com_ancora,
+    _verificar_paragrafo_com_anchor, _verificar_e_corrigir_secao_com_anchor,
 )
 
 def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
@@ -161,7 +161,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
             log.append("❌ Nenhuma fonte encontrada.")
             corpus_prompt = (
                 "AVISO: Nenhuma fonte encontrada. Escreva apenas conceitos "
-                "amplamente estabelecidos, sem afirmações específicas com âncoras."
+                "amplamente estabelecidos, sem afirmações específicas com anchors."
             )
 
         # FASE 5: Observação (skipped in web-first mode)
@@ -188,7 +188,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
             referencia_completa += f"\n\nIMAGENS DISPONÍVEIS:\n{img_txt}"
 
         # FASE 6: Anchored Draft
-        print(f"\n  ✍️  FASE 6 — Rascunho ancorado...")
+        print(f"\n  ✍️  FASE 6 — Rascunho anchored...")
         log.append("\n── FASE 6: RASCUNHO ──")
         rascunho, urls_usadas_fase6 = _fase_rascunho(
             tema, titulo, cont_esp, recursos, referencia_completa, urls_secao,
@@ -248,14 +248,14 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
             if n_distinct < min_src:
                 log.append(f"<!-- WARNING: apenas {n_distinct} fontes distintas usadas (mín: {min_src}) -->")
 
-        n_ancoras = len(_ANCORA_PATTERN.findall(rascunho))
-        log.append(f"Rascunho: {len(rascunho):,} chars | {n_ancoras} âncoras (hints)")
-        print(f"     {len(rascunho):,} chars | {n_ancoras} âncoras")
+        n_anchors = len(_ANCHORS_PATTERN.findall(rascunho))
+        log.append(f"Rascunho: {len(rascunho):,} chars | {n_anchors} anchors (hints)")
+        print(f"     {len(rascunho):,} chars | {n_anchors} anchors")
 
         # FASE 7: Adaptive verification with REACT loop
         print(f"\n  🔍 FASE 7 — Verificação adaptativa...")
         log.append("\n── FASE 7: VERIFICAÇÃO ADAPTATIVA (REACT) ──")
-        texto_final, relatorio_verif, stats = _verificar_e_corrigir_secao_com_ancora(
+        texto_final, relatorio_verif, stats = _verificar_e_corrigir_secao_com_anchor(
             rascunho,
             corpus,
             fonte_map_secao,
