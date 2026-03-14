@@ -11,7 +11,7 @@ Prompts are loaded from YAML files in prompts/common/.
 
 from ..state import ReviewState
 from ..utils.llm_utils.llm_providers import get_llm
-from ..utils.file_utils.helpers import fmt_chunks, fmt_snippets, resumir_hist, truncar
+from ..utils.file_utils.helpers import fmt_chunks, fmt_snippets, summarize_hist, truncate
 from ..utils.llm_utils.prompt_loader import load_prompt, get_prompt_field
 
 # Constants (may need to be moved to config)
@@ -29,8 +29,8 @@ def entrevista_node(state: ReviewState) -> dict:
     review_type        = state.get("review_type", "academic")
     questions_asked    = state["questions_asked"]
     max_questions      = state["max_questions"]
-    current_plan       = truncar(state["current_plan"], 500)
-    current_history    = resumir_hist(state["interview_history"], 1)
+    current_plan       = truncate(state["current_plan"], 500)
+    current_history    = summarize_hist(state["interview_history"], 1)
     restantes = max_questions - questions_asked
 
     if review_type in {"tecnico", "technical"}:

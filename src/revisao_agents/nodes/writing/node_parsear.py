@@ -20,7 +20,7 @@ from ...config import (
     DELAY_BETWEEN_SECTIONS, MAX_REACT_ITERATIONS, TOP_K_OBSERVATION,
 )
 from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
-from ...utils.file_utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
+from ...utils.file_utils.helpers import parse_technical_plan, parse_academic_plan
 from ...core.schemas.writer_config import WriterConfig
 from ...utils.search_utils.tavily_client import search_web, search_images, extract_urls, score_url
 from ...utils.llm_utils.prompt_loader import load_prompt
@@ -43,12 +43,12 @@ def parsear_plano_node(state: TechnicalWriterState) -> dict:
     with open(plan_path, "r", encoding="utf-8") as f:
         text = f.read()
     if config.mode == "academic":
-        theme, plan_summary, sections = parse_plano_academico(text)
+        theme, plan_summary, sections = parse_academic_plan(text)
     else:
-        theme, plan_summary, sections = parse_plano_tecnico(text)
+        theme, plan_summary, sections = parse_technical_plan(text)
     print(f"   ✅ Tema: {theme} | {len(sections)} seções")
     for s in sections:
-        print(f"      [{s['indice']+1}] {s['titulo']}")
+        print(f"      [{s['index']+1}] {s['title']}")
     return {
         "theme": theme,
         "plan_summary": plan_summary,

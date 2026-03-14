@@ -17,7 +17,7 @@ from .llm_utils import load_prompt, llm_call, parse_json_safe, get_llm, LLMProvi
 from .search_utils import search_web, search_images, extract_urls, score_url
 from .vector_utils import CorpusMongoDB, search_chunks, accumulate_chunks
 from .bib_utils import get_reference_data_react, bibtex_to_abnt, search_doi_in_text
-from .file_utils import resumir_secao, parse_plano_tecnico, parse_plano_academico, fmt_chunks, fmt_snippets, resumir_hist, truncar, salvar_md
+from .file_utils import summarize_section, parse_technical_plan, parse_academic_plan, fmt_chunks, fmt_snippets, summarize_hist, truncate, save_md
 
 # Legacy imports for backwards compatibility
 from .search_utils.tavily_client import buscar_conteudo_tecnico
@@ -44,12 +44,12 @@ __all__ = [
     "bibtex_to_abnt",
     "search_doi_in_text",
     # File
-    "resumir_secao",
-    "parse_plano_tecnico",
-    "parse_plano_academico",
+    "summarize_section",
+    "parse_technical_plan",
+    "parse_academic_plan",
     "fmt_chunks",
     "fmt_snippets",
-    "resumir_hist",
-    "truncar",
-    "salvar_md",
+    "summarize_hist",
+    "truncate",
+    "save_md",
 ]

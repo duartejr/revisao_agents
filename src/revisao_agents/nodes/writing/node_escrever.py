@@ -20,7 +20,7 @@ from ...config import (
     DELAY_BETWEEN_SECTIONS, MAX_REACT_ITERATIONS, TOP_K_OBSERVATION,
 )
 from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
-from ...utils.file_utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
+from ...utils.file_utils.helpers import summarize_section
 from ...core.schemas.writer_config import WriterConfig
 from ...utils.search_utils.tavily_client import search_web, search_images, extract_urls, score_url
 from ...utils.llm_utils.prompt_loader import load_prompt
@@ -48,16 +48,16 @@ def escrever_secoes_node(state: TechnicalWriterState) -> dict:
     react_log = list(state.get("react_log", []))
     verification_stats = list(state.get("verification_stats", []))
     n_total = len(sections)
-    titulos_todos = [s["titulo"] for s in sections]
+    titulos_todos = [s["title"] for s in sections]
     # CorpusMongoDB instance for URL existence checks (no build)
     corpus_check = CorpusMongoDB()
 
     tavily_enabled = state.get("tavily_enabled", True)
     for pos, secao in enumerate(sections):
-        titulo = secao["titulo"]
-        cont_esp = secao.get("conteudo_esperado", "")
-        recursos = secao.get("recursos", "")
-        idx_num = secao.get("indice", pos)
+        titulo = secao["title"]
+        cont_esp = secao.get("expected_content", "")
+        recursos = secao.get("resources", "")
+        idx_num = secao.get("index", pos)
 
         print(f"\n{'━'*70}")
         print(f"  [{pos+1}/{n_total}] PROCESSANDO: {titulo}")
@@ -331,9 +331,9 @@ def escrever_secoes_node(state: TechnicalWriterState) -> dict:
         print(f"  ✅ [{pos+1}/{n_total}] Seção concluída ({taxa:.0f}% verificado)")
 
         written_sections.append({
-            "indice": idx_num,
-            "titulo": titulo,
-            "texto": texto_final,
+            "index": idx_num,
+            "title": titulo,
+            "text": texto_final,
             "urls_usadas": urls_secao,
             "fonte_map": fonte_map_secao,
             "imagens": imagens,
@@ -347,7 +347,7 @@ def escrever_secoes_node(state: TechnicalWriterState) -> dict:
             if img not in all_refs_images:
                 all_refs_images.append(img)
 
-        resumo_sec = resumir_secao(titulo, texto_final)
+        resumo_sec = summarize_section(titulo, texto_final)
         if cumulative_summary:
             cumulative_summary += f"\n\n[Seção {pos+1}: {titulo}] {resumo_sec}"
         else:

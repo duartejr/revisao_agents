@@ -16,7 +16,7 @@ from ...config import (
     MAX_CORPUS_PROMPT, ANCHOR_MIN_SIM,
     EXTRACT_MIN_CHARS, CHUNKS_CACHE_DIR, SNIPPET_MIN_SCORE
 )
-from ..file_utils.helpers import normalizar, fuzzy_sim, fuzzy_search_in_text
+from ..file_utils.helpers import normalize, fuzzy_sim, fuzzy_search_in_text
 from ..search_utils.tavily_client import score_url  # import local
 from ...core.schemas.corpus import Chunk
 
@@ -456,16 +456,16 @@ class CorpusMongoDB:
         if not anchor or len(anchor.strip()) < 15:
             return False, 0.0, ""
 
-        anchor_norm = normalizar(anchor)
+        anchor_norm = normalize(anchor)
         candidatos = self.query(anchor, top_k=TOP_K_VERIFICATION)
 
         for c in candidatos:
-            if anchor_norm in normalizar(c.texto):
+            if anchor_norm in normalize(c.texto):
                 return True, 1.0, c.texto
 
         melhor_score, melhor_trecho = 0.0, ""
         for c in candidatos:
-            score = fuzzy_sim(anchor_norm, normalizar(c.texto))
+            score = fuzzy_sim(anchor_norm, normalize(c.texto))
             if score > melhor_score:
                 melhor_score = score
                 melhor_trecho = c.texto

@@ -1,7 +1,7 @@
 import re
 from typing import List, Tuple
 from ..vector_utils.vector_store import search_chunks
-from ..file_utils.helpers import normalizar, extrair_anchors, eh_paragrafo_verificavel
+from ..file_utils.helpers import extract_anchors, is_paragraph_verifiable
 from ...config import JUIZ_MAX_CORPUS_CHARS, JUIZ_TOP_K, get_llm
 
 def search_chunks_for_paragraph(
@@ -20,7 +20,7 @@ def search_chunks_for_paragraph(
     texto_sem_anchors = re.sub(r'\\\([^)]+\\\)', "", texto_sem_anchors).strip()
 
     # Anchors declaradas são os melhores hints de busca
-    anchors = extrair_anchors(paragrafo)
+    anchors = extract_anchors(paragrafo)
     # Filtra anchors que são só LaTeX ou muito curtas
     anchors_validas = [
         a for a in anchors

@@ -13,7 +13,7 @@ Prompts are loaded from YAML files in prompts/technical/.
 from ..state import ReviewState
 from ..utils.llm_utils.llm_providers import get_llm
 from ..utils.search_utils.tavily_client import buscar_conteudo_tecnico
-from ..utils.file_utils.helpers import fmt_snippets, truncar, salvar_md
+from ..utils.file_utils.helpers import fmt_snippets, truncate, save_md
 from ..utils.llm_utils.prompt_loader import load_prompt
 
 
@@ -74,7 +74,7 @@ def refinar_busca_tecnica_node(state: ReviewState) -> dict:
 def refinar_plano_tecnico_node(state: ReviewState) -> dict:
     """Atualiza o plano técnico com novas fontes e feedback."""
     theme       = state["theme"]
-    current_plan = truncar(state["current_plan"], 700)
+    current_plan = truncate(state["current_plan"], 700)
     ultima     = ""
     for role, c in reversed(state["interview_history"]):
         if role == "user":
@@ -97,7 +97,7 @@ def refinar_plano_tecnico_node(state: ReviewState) -> dict:
 def finalizar_plano_tecnico_node(state: ReviewState) -> dict:
     """Gera o plano técnico final e salva em Markdown."""
     theme       = state["theme"]
-    current_plan = truncar(state["current_plan"], 1000)
+    current_plan = truncate(state["current_plan"], 1000)
     snips      = fmt_snippets(state.get("technical_snippets", [])[:8], 800)
     urls       = state.get("technical_urls", [])
     prompt = load_prompt("technical/finalizar_plano", snips=snips)
@@ -115,7 +115,7 @@ def finalizar_plano_tecnico_node(state: ReviewState) -> dict:
         + plano_final +
         "\n\n## URLs Tecnicas Identificadas\n\n" + urls_md + "\n"
     )
-    path = salvar_md(md, "plans/plano_revisao_tecnica", theme)
+    path = save_md(md, "plans/plano_revisao_tecnica", theme)
     return {"final_plan": plano_final, "final_plan_path": path, "status": "concluido"}
 
 

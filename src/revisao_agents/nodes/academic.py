@@ -13,7 +13,7 @@ Prompts are loaded from YAML files in prompts/academic/.
 from ..state import ReviewState
 from ..utils.llm_utils.llm_providers import get_llm
 from ..utils.vector_utils.vector_store import search_chunks, accumulate_chunks
-from ..utils.file_utils.helpers import fmt_chunks, truncar, salvar_md
+from ..utils.file_utils.helpers import fmt_chunks, truncate, save_md
 from ..utils.llm_utils.prompt_loader import load_prompt
 
 # Constants (may need to be moved to config)
@@ -57,7 +57,7 @@ def refinar_consulta_academico_node(state: ReviewState) -> dict:
 def refinar_plano_academico_node(state: ReviewState) -> dict:
     """Atualiza o plano acadêmico com novos chunks e feedback."""
     theme       = state["theme"]
-    current_plan = truncar(state["current_plan"], 700)
+    current_plan = truncate(state["current_plan"], 700)
     ultima     = ""
     for role, c in reversed(state["interview_history"]):
         if role == "user":
@@ -80,7 +80,7 @@ def refinar_plano_academico_node(state: ReviewState) -> dict:
 def finalizar_plano_academico_node(state: ReviewState) -> dict:
     """Gera o plano acadêmico final e salva em Markdown."""
     theme       = state["theme"]
-    current_plan = truncar(state["current_plan"], 1000)
+    current_plan = truncate(state["current_plan"], 1000)
     ctx        = fmt_chunks(state["relevant_chunks"], 800)
     prompt = load_prompt(
         "academic/finalizar_plano",
@@ -96,7 +96,7 @@ def finalizar_plano_academico_node(state: ReviewState) -> dict:
     print(final_plan)
     print("=" * 70)
     md   = "# Plano de Revisao da Literatura\n\n**Tema:** " + theme + "\n\n" + final_plan
-    path = salvar_md(md, "plans/plano_revisao", theme)
+    path = save_md(md, "plans/plano_revisao", theme)
     return {"final_plan": final_plan, "final_plan_path": path, "status": "concluido"}
 
 

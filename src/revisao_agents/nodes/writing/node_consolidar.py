@@ -20,7 +20,6 @@ from ...config import (
     DELAY_BETWEEN_SECTIONS, MAX_REACT_ITERATIONS, TOP_K_OBSERVATION,
 )
 from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
-from ...utils.file_utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
 from ...core.schemas.writer_config import WriterConfig
 from ...utils.llm_utils.prompt_loader import load_prompt
 from .text_filters import _strip_justification_blocks, _strip_meta_sentences, _strip_figure_table_refs
@@ -37,7 +36,7 @@ def consolidar_node(state: TechnicalWriterState) -> dict:
     """Consolidates written sections into a final document."""
     config = WriterConfig.from_dict(state.get("writer_config", {}))
     theme = state["theme"]
-    secoes = sorted(state["written_sections"], key=lambda s: s["indice"])
+    secoes = sorted(state["written_sections"], key=lambda s: s["index"])
     all_urls = list(dict.fromkeys(state.get("refs_urls", [])))
     all_imagens = state.get("refs_images", [])
     react_log = state.get("react_log", [])
@@ -57,7 +56,7 @@ def consolidar_node(state: TechnicalWriterState) -> dict:
           f"— ✅{total_aprov} aprovados  🔵{total_ajust} ajustados  "
           f"🔧{total_corr} corrigidos | {len(all_urls)} fontes")
 
-    titulos = [s["titulo"] for s in secoes]
+    titulos = [s["title"] for s in secoes]
     p_intro = load_prompt(
         f"{config.prompt_dir}/consolidar_intro",
         tema=theme,
@@ -83,13 +82,13 @@ def consolidar_node(state: TechnicalWriterState) -> dict:
         "\n---\n", "## Sumário\n", "- Introdução",
     ]
     for s in secoes:
-        partes.append(f"- {s['titulo']}")
+        partes.append(f"- {s['title']}")
     partes += ["- Conclusão", "\n\n---\n",
                "## Introdução\n", resp_intro.strip(), "\n\n---\n"]
 
     for s in secoes:
         stats_s = next(
-            (x for x in stats_global if x.get("secao") == s["titulo"]), {}
+            (x for x in stats_global if x.get("secao") == s["title"]), {}
         )
         t_s = stats_s.get("total", 0)
         a_s = stats_s.get("aprovados", 0) + stats_s.get("ajustados", 0)
@@ -101,7 +100,7 @@ def consolidar_node(state: TechnicalWriterState) -> dict:
             f"| {stats_s.get('aprovados', 0)} aprovados, {aj_s} ajustados, "
             f"{r_s} corrigidos -->\n"
         )
-        partes.append(s["texto"].strip())
+        partes.append(s["text"].strip())
         partes.append("\n\n---\n")
 
     partes += ["## Conclusão\n", resp_concl.strip(), "\n\n"]

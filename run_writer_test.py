@@ -77,15 +77,15 @@ print(f"✅ Plan file found: {Path(PLAN_FILE).name}")
 
 # 4. Parse plan sections
 try:
-    from revisao_agents.utils.file_utils.helpers import parse_plano_tecnico
+    from revisao_agents.utils.file_utils.helpers import parse_technical_plan
     with open(PLAN_FILE, "r", encoding="utf-8") as f:
         plan_text = f.read()
-    tema, resumo, secoes = parse_plano_tecnico(plan_text)
+    tema, resumo, secoes = parse_technical_plan(plan_text)
     print(f"✅ Plan parsed: tema='{tema[:60]}' | {len(secoes)} section(s)")
     for s in secoes:
-        print(f"   [{s['indice']+1}] {s['titulo']}")
-        print(f"        conteudo: {s['conteudo_esperado'][:80]}")
-        print(f"        recursos: {s['recursos'][:80]}")
+        print(f"   [{s['index']+1}] {s['title']}")
+        print(f"        content: {s['expected_content'][:80]}")
+        print(f"        resources: {s['resources'][:80]}")
 except Exception as e:
     print(f"❌ Plan parse failed: {e}")
     import traceback; traceback.print_exc()
