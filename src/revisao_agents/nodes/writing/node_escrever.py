@@ -16,8 +16,8 @@ from ...state import TechnicalWriterState
 from ...config import (
     llm_call, parse_json_safe,
     TECHNICAL_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
-    MAX_URLS_EXTRACT, CTX_RESUMO_CHARS, SECAO_MIN_PARAGRAFOS,
-    DELAY_ENTRE_SECOES, MAX_REACT_ITERATIONS, TOP_K_OBSERVACAO,
+    MAX_URLS_EXTRACT, CTX_ABSTRACT_CHARS, MIN_SECTION_PARAGRAPHS,
+    DELAY_BETWEEN_SECTIONS, MAX_REACT_ITERATIONS, TOP_K_OBSERVATION,
 )
 from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
 from ...utils.file_utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
@@ -352,15 +352,15 @@ def escrever_secoes_node(state: TechnicalWriterState) -> dict:
             cumulative_summary += f"\n\n[Seção {pos+1}: {titulo}] {resumo_sec}"
         else:
             cumulative_summary = f"[Seção {pos+1}: {titulo}] {resumo_sec}"
-        if len(cumulative_summary) > CTX_RESUMO_CHARS * 3:
+        if len(cumulative_summary) > CTX_ABSTRACT_CHARS * 3:
             partes = cumulative_summary.split("\n\n[Seção ")
             cumulative_summary = "\n\n[Seção ".join([""] + partes[-4:]).strip()
 
         react_log.extend(log)
 
         if pos < n_total - 1:
-            print(f"\n  ⏳ Aguardando {DELAY_ENTRE_SECOES}s...")
-            time.sleep(DELAY_ENTRE_SECOES)
+            print(f"\n  ⏳ Aguardando {DELAY_BETWEEN_SECTIONS}s...")
+            time.sleep(DELAY_BETWEEN_SECTIONS)
 
     return {
         "written_sections": written_sections,

@@ -19,8 +19,8 @@ if TYPE_CHECKING:
 from ...config import (
     llm_call, parse_json_safe,
     TECHNICAL_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
-    MAX_URLS_EXTRACT, CTX_RESUMO_CHARS, SECAO_MIN_PARAGRAFOS,
-    TOP_K_OBSERVACAO,
+    MAX_URLS_EXTRACT, CTX_ABSTRACT_CHARS, MIN_SECTION_PARAGRAPHS,
+    TOP_K_OBSERVATION,
 )
 from ...core.schemas.techinical_writing import SectionAnswer
 from ...utils.llm_utils.prompt_loader import load_prompt
@@ -76,7 +76,7 @@ def _fase_observacao(
         }
 
     query_obs = " ".join(informacoes_necessarias[:3])
-    chunks_obs = corpus.query(query_obs, top_k=TOP_K_OBSERVACAO)
+    chunks_obs = corpus.query(query_obs, top_k=TOP_K_OBSERVATION)
     amostra_corpus = "\n\n".join(c.texto for c in chunks_obs)[:4000]
 
     informacoes_lista = "\n".join(f"- {i}" for i in informacoes_necessarias)
@@ -123,7 +123,7 @@ def _fase_rascunho(
     if resumo_acumulado.strip():
         ctx_anteriores = (
             "══ SEÇÕES JÁ ESCRITAS (não repita estes conceitos) ══\n"
-            f"{resumo_acumulado[:CTX_RESUMO_CHARS]}\n"
+            f"{resumo_acumulado[:CTX_ABSTRACT_CHARS]}\n"
             "══════════════════════════════════════════════════════\n\n"
         )
 
@@ -134,7 +134,7 @@ def _fase_rascunho(
 
     instru = load_prompt(
         f"{prompt_dir}/fase_rascunho",
-        secao_min_paragrafos=SECAO_MIN_PARAGRAFOS,
+        secao_min_paragrafos=MIN_SECTION_PARAGRAPHS,
         language=language,
         min_sources=min_sources if min_sources > 0 else 2,
     )

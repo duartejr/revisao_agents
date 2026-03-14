@@ -16,8 +16,8 @@ from ...state import TechnicalWriterState
 from ...config import (
     llm_call, parse_json_safe,
     TECHNICAL_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
-    MAX_URLS_EXTRACT, CTX_RESUMO_CHARS, SECAO_MIN_PARAGRAFOS,
-    DELAY_ENTRE_SECOES, MAX_REACT_ITERATIONS, TOP_K_OBSERVACAO,
+    MAX_URLS_EXTRACT, CTX_ABSTRACT_CHARS, MIN_SECTION_PARAGRAPHS,
+    DELAY_BETWEEN_SECTIONS, MAX_REACT_ITERATIONS, TOP_K_OBSERVATION,
 )
 from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
 from ...utils.file_utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
