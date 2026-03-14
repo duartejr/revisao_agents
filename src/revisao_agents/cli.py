@@ -79,7 +79,7 @@ def _run_planning_until_complete(
         "max_questions": max(1, int(rounds)),
         "final_plan": "",
         "final_plan_path": "",
-        "status": "iniciando",
+        "status": "starting",
     }
     config = {"configurable": {"thread_id": f"cli_{review_type}_{theme[:20]}"}}
 

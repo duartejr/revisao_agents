@@ -14,7 +14,7 @@ from ..nodes import (
 )
 
 
-def build_academico_workflow():
+def build_academic_workflow():
     builder = StateGraph(ReviewState)
     builder.add_node("consulta_vetorial",  consulta_vetorial_node)
     builder.add_node("plano_inicial",      plano_inicial_academico_node)
@@ -35,3 +35,8 @@ def build_academico_workflow():
     builder.add_edge("finalizar_plano", END)
 
     return builder.compile(checkpointer=MemorySaver(), interrupt_before=["human_pause"])
+
+
+def build_academico_workflow():
+    """Backward-compatible alias for build_academic_workflow."""
+    return build_academic_workflow()

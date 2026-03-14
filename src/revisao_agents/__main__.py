@@ -1,10 +1,9 @@
-import sys
 import glob
 import os
 
 from .state import ReviewState, TechnicalWriterState
-from .workflows import build_academico_workflow, build_tecnico_workflow
-from .workflows.technical_writing_workflow import build_workflow as build_escrita_workflow
+from .workflows import build_academic_workflow, build_technical_workflow
+from .workflows.technical_writing_workflow import build_workflow as build_writing_workflow
 from .hitl import run_hitl_loop
 from .utils.vector_utils.pdf_ingestor import ingest_pdf_folder
 from .core.schemas.writer_config import WriterConfig
@@ -13,91 +12,91 @@ from .config import print_runtime_config_summary, validate_runtime_config
 
 
 def main():
-    # Garante que os diretórios de saída existem
+    # Ensure output directories exist
     os.makedirs("plans", exist_ok=True)
     os.makedirs("reviews", exist_ok=True)
 
     print_runtime_config_summary()
     startup_issues = validate_runtime_config(strict=False)
     if startup_issues:
-        print("⚠️  Avisos de configuração detectados:")
+        print("⚠️  Configuration warnings detected:")
         for issue in startup_issues:
             print(f"   - {issue}")
-        print("   (o fluxo pode falhar em opções que exigem essas integrações)\n")
+        print("   (The flow may fail in options that require these integrations.)\n")
 
     print("\n" + "=" * 70)
-    print("AGENTE DE PLANEJAMENTO DA REVISAO DA LITERATURA")
+    print("REVIEW PLANNING AGENT")
     print("=" * 70)
-    print("\nOpções:")
-    print("  [1] Planejar Revisão Acadêmica (narrativa)")
-    print("  [2] Planejar Revisão Técnica (capítulo)")
-    print("  [3] Executar Escrita a partir de plano existente (Técnica ou Acadêmica)")
-    print("  [4] Indexar PDFs locais → vetorizar e salvar no MongoDB")
-    print("  [5] Formatar Referências (ABNT, APA, IEEE, etc.) a partir de arquivo YAML/JSON")
-    escolha = input("\nEscolha [1/2/3/4/5]: ").strip()
+    print("\nOptions:")
+    print("  [1] Plan Academic Review (narrative)")
+    print("  [2] Plan Technical Review (chapter)")
+    print("  [3] Execute Writing from Existing Plan (Technical or Academic)")
+    print("  [4] Index Local PDFs → vectorize and save to MongoDB")
+    print("  [5] Format References (ABNT, APA, IEEE, etc.) from YAML/JSON file")
+    choice = input("\nChoose [1/2/3/4/5]: ").strip()
 
-    if escolha == "4":
+    if choice == "4":
         print("\n" + "=" * 70)
-        print("INDEXAR PDFs LOCAIS")
+        print("INDEX LOCAL PDFs")
         print("=" * 70)
-        pasta = input("\nCaminho da pasta com PDFs: ").strip()
-        if not pasta:
-            print("❌ Caminho vazio.")
+        folder = input("\nPath to folder with PDFs: ").strip()
+        if not folder:
+            print("❌ Empty path.")
             return
-        pasta = os.path.expanduser(pasta)
-        if not os.path.isdir(pasta):
-            print(f"❌ Pasta não encontrada: {pasta}")
+        folder = os.path.expanduser(folder)
+        if not os.path.isdir(folder):
+            print(f"❌ Folder not found: {folder}")
             return
-        resultado = ingest_pdf_folder(pasta)
+        result = ingest_pdf_folder(folder)
         print("\n" + "=" * 70)
-        print("RESULTADO DA INDEXAÇÃO")
+        print("INDEXING RESULT")
         print("=" * 70)
-        print(f"  ✅ Novos PDFs indexados : {resultado['indexed']}")
-        print(f"  ⏭️  Já no banco          : {resultado['already']}")
-        print(f"  ⚠️  Texto insuficiente  : {resultado['skipped']}")
-        print(f"  ❌ Erros de leitura     : {resultado['errors']}")
-        print(f"  📦 Chunks inseridos     : {resultado['total_chunks']}")
+        print(f"  ✅ New PDFs indexed : {result['indexed']}")
+        print(f"  ⏭️  Already in DB     : {result['already']}")
+        print(f"  ⚠️  Insufficient text : {result['skipped']}")
+        print(f"  ❌ Reading errors     : {result['errors']}")
+        print(f"  📦 Chunks inserted    : {result['total_chunks']}")
         print("=" * 70)
         return
 
-    if escolha == "5":
+    if choice == "5":
         run_reference_formatter()
         return
 
-    if escolha == "3":
+    if choice == "3":
         # --- Writing mode sub-menu ---
         print("\n" + "-" * 70)
-        print("ESTILO DE ESCRITA:")
-        print("  [a] Técnica   — capítulo didático (busca web + MongoDB)")
-        print("  [b] Acadêmica — revisão narrativa da literatura (corpus-first)")
-        escolha_modo = input("\nEscolha [a/b, padrão=a]: ").strip().lower() or "a"
-        if escolha_modo == "b":
+        print("WRITING STYLE:")
+        print("  [a] Technical section — didactic chapter (web search + MongoDB)")
+        print("  [b] Academic — narrative literature review (corpus-first)")
+        select_mode = input("\nChoose [a/b, default=a]: ").strip().lower() or "a"
+        if select_mode == "b":
             glob_pattern_primary = "plans/plano_revisao_*.md"
-            mode_label = "ACADÊMICA"
+            mode_label = "ACADEMIC"
         else:
             glob_pattern_primary = "plans/plano_revisao_tecnica_*.md"
-            mode_label = "TÉCNICA"
+            mode_label = "TECHNICAL"
 
         # --- Language selection ---
         print("\n" + "-" * 70)
-        print("IDIOMA DA REVISÃO:")
-        print("  [pt] Português (padrão)")
+        print("REVIEW LANGUAGE:")
+        print("  [pt] Portuguese (standard)")
         print("  [en] English")
-        lang_opt = input("\nEscolha [pt/en, padrão=pt]: ").strip().lower() or "pt"
+        lang_opt = input("\nChoose [pt/en, default=pt]: ").strip().lower() or "pt"
         if lang_opt not in ("pt", "en"):
             lang_opt = "pt"
-        if escolha_modo == "b":
+        if select_mode == "b":
             writer_config = WriterConfig.academic(language=lang_opt)
         else:
             writer_config = WriterConfig.technical(language=lang_opt)
-        print(f"   ✔  Idioma: {'Português (pt-BR)' if lang_opt == 'pt' else 'English'}")
+        print(f"   ✔  Language: {'Portuguese (pt-BR)' if lang_opt == 'pt' else 'English'}")
 
         # --- Minimum distinct sources per section ---
-        default_min = 4 if escolha_modo == "b" else 0
+        default_min = 4 if select_mode == "b" else 0
         print("\n" + "-" * 70)
-        print("MÍNIMO DE FONTES DISTINTAS POR SEÇÃO:")
-        print(f"  (padrão = {default_min}; 0 = sem restrição)")
-        min_src_input = input(f"\nMínimo de fontes por seção [{default_min}]: ").strip()
+        print("MINIMUM NUMBER OF DISTINCT SOURCES PER SECTION:")
+        print(f"  (default = {default_min}; 0 = no restriction)")
+        min_src_input = input(f"\nMinimum sources per section [{default_min}]: ").strip()
         try:
             min_src = int(min_src_input) if min_src_input else default_min
         except ValueError:
@@ -105,58 +104,58 @@ def main():
         if min_src < 0:
             min_src = 0
         writer_config.min_sources_per_section = min_src
-        print(f"   ✔  Mínimo fontes/seção: {min_src}")
+        print(f"   ✔  Minimum sources/section: {min_src}")
 
         # --- Tavily search option ---
         print("\n" + "-" * 70)
-        print("Deseja permitir busca web/imagens via Tavily?")
-        print("  [y] Sim (busca web e imagens)")
-        print("  [n] Não (apenas corpus local)")
-        tavily_opt = input("\nPermitir Tavily? [y/N]: ").strip().lower() or "n"
+        print("Do you want to enable web/image search via Tavily?")
+        print("  [y] Yes (web and image search)")
+        print("  [n] No (local corpus only)")
+        tavily_opt = input("\nEnable Tavily? [y/N]: ").strip().lower() or "n"
         tavily_enabled = tavily_opt == "y"
 
         print(f"\n" + "=" * 70)
-        print(f"EXECUÇÃO DE ESCRITA {mode_label}")
+        print(f"WRITING EXECUTION {mode_label}")
         print("=" * 70)
 
         # --- Find plan files ---
         planos = sorted(glob.glob(glob_pattern_primary))
         if not planos:
-            planos = sorted(glob.glob("plans/plano_revisao_*.md"))  # broader fallback
+            planos = sorted(glob.glob("plans/review_plan*.md"))  # broader fallback
         if not planos:
-            planos = sorted(glob.glob("plano_revisao_*.md"))  # root fallback
+            planos = sorted(glob.glob("review_plan*.md"))  # root fallback
         if planos:
-            print("\nPlanos encontrados:")
+            print("\nPlans found:")
             for i, p in enumerate(planos, 1):
                 print(f"  [{i}] {p}")
-            idx = input(f"\n👤 Escolha [1-{len(planos)} ou caminho]: ").strip()
+            idx = input(f"\nChoose [1-{len(planos)} or path]: ").strip()
             if idx.isdigit() and 1 <= int(idx) <= len(planos):
-                caminho = planos[int(idx) - 1]
+                plan_path = planos[int(idx) - 1]
             else:
-                caminho = idx
+                plan_path = idx
         else:
-            caminho = input("\n👤 Caminho do plano (.md): ").strip()
+            plan_path = input("\nPlan path (.md): ").strip()
 
-        if not os.path.exists(caminho):
-            print(f"❌ Arquivo não encontrado: {caminho}")
+        if not os.path.exists(plan_path):
+            print(f"❌ File not found: {plan_path}")
             return
 
         state_init: TechnicalWriterState = {
             "theme": "",
             "plan_summary": "",
             "sections": [],
-            "plan_path": caminho,
+            "plan_path": plan_path,
             "written_sections": [],
             "refs_urls": [],
             "refs_images": [],
             "cumulative_summary": "",
             "react_log": [],
             "verification_stats": [],
-            "status": "iniciando",
+            "status": "starting",
             "writer_config": writer_config.to_dict(),
             "tavily_enabled": tavily_enabled,
         }
-        app = build_escrita_workflow()
+        app = build_writing_workflow()
         try:
             for event in app.stream(state_init):
                 node = list(event.keys())[0] if event else "?"
@@ -165,46 +164,46 @@ def main():
                     if st:
                         print(f"\n   ▶ [{node}] → {st}")
             print("\n" + "=" * 70)
-            print("✅ REVISÃO TÉCNICA CONCLUÍDA")
+            print("✅ WRITING COMPLETED")
             print("=" * 70)
         except KeyboardInterrupt:
-            print("\nCancelado.")
+            print("\nCancelled.")
         return
 
-    # --- Planejamento (opções 1 e 2) ---
-    tema = input("\nTema da revisao: ").strip()
-    if not tema:
-        print("Tema vazio.")
+    # --- Planning (options 1 and 2) ---
+    theme = input("\nReview theme: ").strip()
+    if not theme:
+        print("Empty theme.")
         return
 
-    print("\n[1] Revisao Academica (narrativa da literatura) — busca no corpus MongoDB")
-    print("[2] Revisao Tecnica   (capitulo didatico/detalhado) — busca na internet")
-    print("[3] Ambas")
+    print("\n[1] Academic Review (literature narrative) — search in MongoDB corpus")
+    print("[2] Technical Review   (detailed didactic chapter) — search on the internet")
+    print("[3] Both")
     while True:
-        e = escolha if escolha in ("1", "2", "3") else input("\nEscolha [1/2/3]: ").strip()
+        e = choice if choice in ("1", "2", "3") else input("\nChoice [1/2/3]: ").strip()
         if e in ("1", "2", "3"):
             break
-        escolha = ""  # limpa para pedir novamente
-        print("Digite 1, 2 ou 3.")
-    tipos = {"1": ["academico"], "2": ["tecnico"], "3": ["academico", "tecnico"]}[e]
+        choice = ""  # Clear to order again
+        print("Enter 1, 2, or 3.")
+    review_types = {"1": ["academic"], "2": ["technical"], "3": ["academic", "technical"]}[e]
 
     max_p = 3
     try:
-        n = input("Rodadas de refinamento por plano [padrao 3]: ").strip()
+        n = input("Refinement rounds per plan [default 3]: ").strip()
         if n.isdigit() and int(n) > 0:
             max_p = min(int(n), 6)
     except Exception:
         pass
 
-    for tipo in tipos:
-        label = "ACADEMICA" if tipo == "academico" else "TECNICA"
+    for review_type in review_types:
+        label = "ACADEMIC" if review_type == "academic" else "TECHNICAL"
         print("\n" + "=" * 70)
-        print(f"Iniciando: REVISAO {label} | {repr(tema)} | {max_p} rodadas")
+        print(f"Starting: REVIEW {label} | {repr(theme)} | {max_p} rounds")
         print("-" * 70)
 
         state_init: ReviewState = {
-            "theme":                   tema,
-            "review_type":           tipo,
+            "theme":                   theme,
+            "review_type":             review_type,
             "relevant_chunks":      [],
             "technical_snippets":      [],
             "technical_urls":          [],
@@ -214,27 +213,27 @@ def main():
             "max_questions":          max_p,
             "final_plan":            "",
             "final_plan_path":       "",
-            "status":                 "iniciando",
+            "status":                 "starting",
         }
-        config = {"configurable": {"thread_id": f"revisao_{tipo}_{tema[:20]}"}}
+        config = {"configurable": {"thread_id": f"review_{review_type}_{theme[:20]}"}}
 
-        if tipo == "academico":
-            app = build_academico_workflow()
+        if review_type == "academic":
+            app = build_academic_workflow()
         else:
-            app = build_tecnico_workflow()
+            app = build_technical_workflow()
 
         try:
             run_hitl_loop(app, config, state_init)
         except KeyboardInterrupt:
-            print("\nCancelado.")
+            print("\nCanceled.")
             break
         except Exception as ex:
             import traceback
-            print("\nErro:", str(ex))
+            print("\nError:", str(ex))
             traceback.print_exc()
 
     print("\n" + "=" * 70)
-    print("Sessao de planejamento concluida.")
+    print("Planning session completed.")
     print("=" * 70)
 
 

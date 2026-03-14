@@ -26,7 +26,7 @@ def main(tema: str):
         "max_questions": 1,
         "final_plan": "",
         "final_plan_path": "",
-        "status": "iniciando",
+        "status": "starting",
     }
 
     print(f"Starting academic review for: {tema!r}\n")

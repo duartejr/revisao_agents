@@ -14,7 +14,7 @@ from ..nodes import (
 )
 
 
-def build_tecnico_workflow():
+def build_technical_workflow():
     builder = StateGraph(ReviewState)
     builder.add_node("busca_tecnica_inicial",    busca_tecnica_inicial_node)
     builder.add_node("plano_inicial_tecnico",    plano_inicial_tecnico_node)
@@ -35,3 +35,8 @@ def build_tecnico_workflow():
     builder.add_edge("finalizar_plano_tecnico", END)
 
     return builder.compile(checkpointer=MemorySaver(), interrupt_before=["human_pause"])
+
+
+def build_tecnico_workflow():
+    """Backward-compatible alias for build_technical_workflow."""
+    return build_technical_workflow()

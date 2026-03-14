@@ -23,7 +23,7 @@ def _make_state(**overrides) -> ReviewState:
         "max_questions": 3,
         "final_plan": "",
         "final_plan_path": "",
-        "status": "iniciando",
+        "status": "starting",
     }
     base.update(overrides)
     return base

@@ -26,7 +26,7 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from revisao_agents.state import ReviewState, TechnicalWriterState
-from revisao_agents.workflows import build_academico_workflow, build_tecnico_workflow
+from revisao_agents.workflows import build_academic_workflow, build_technical_workflow
 from revisao_agents.workflows.technical_writing_workflow import (
     build_workflow as build_escrita_workflow,
 )
@@ -148,12 +148,12 @@ def start_planning(
         "max_questions": int(rodadas),
         "final_plan": "",
         "final_plan_path": "",
-        "status": "iniciando",
+        "status": "starting",
     }
 
     thread_id = f"revisao_{tipo_atual}_{tema[:20]}"
     config = {"configurable": {"thread_id": thread_id}}
-    app = build_academico_workflow() if tipo_atual == "academico" else build_tecnico_workflow()
+    app = build_academic_workflow() if tipo_atual == "academico" else build_technical_workflow()
 
     log_q: queue.Queue[str] = queue.Queue()
     with _StdoutCapture(log_q):
@@ -352,7 +352,7 @@ def start_writing(
         "cumulative_summary": "",
         "react_log": [],
         "verification_stats": [],
-        "status": "iniciando",
+        "status": "starting",
         "writer_config": writer_config.to_dict(),
         "tavily_enabled": tavily_enabled,
     }

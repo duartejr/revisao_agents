@@ -115,7 +115,7 @@ state_init: TechnicalWriterState = {
     "cumulative_summary": "",
     "react_log": [],
     "verification_stats": [],
-    "status": "iniciando",
+    "status": "starting",
 }
 
 os.makedirs("reviews", exist_ok=True)

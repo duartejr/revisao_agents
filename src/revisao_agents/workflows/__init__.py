@@ -1,2 +1,2 @@
-from .academic_workflow import build_academico_workflow
-from .technical_workflow import build_tecnico_workflow
+from .academic_workflow import build_academic_workflow, build_academico_workflow
+from .technical_workflow import build_technical_workflow, build_tecnico_workflow

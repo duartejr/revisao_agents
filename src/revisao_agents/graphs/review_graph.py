@@ -9,7 +9,7 @@ delegates directly to those workflow builders.
 
 from __future__ import annotations
 
-from ..workflows import build_academico_workflow, build_tecnico_workflow
+from ..workflows import build_academic_workflow, build_technical_workflow
 
 
 def _normalize_review_type(review_type: str | None) -> str:
@@ -25,7 +25,7 @@ def _normalize_review_type(review_type: str | None) -> str:
 
 def build_academic_graph(checkpointer=None):
     """Build academic planning graph using canonical workflow implementation."""
-    return build_academico_workflow()
+    return build_academic_workflow()
 
 
 # ---------------------------------------------------------------------------
@@ -34,7 +34,7 @@ def build_academic_graph(checkpointer=None):
 
 def build_technical_graph(checkpointer=None):
     """Build technical planning graph using canonical workflow implementation."""
-    return build_tecnico_workflow()
+    return build_technical_workflow()
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +85,7 @@ def run_review_graph(graph, input_text: str, debug: bool = False) -> dict:
         "max_questions": 1,
         "final_plan": "",
         "final_plan_path": "",
-        "status": "iniciando",
+        "status": "starting",
     }
 
     result = state
