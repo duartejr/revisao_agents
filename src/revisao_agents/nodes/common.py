@@ -26,14 +26,14 @@ def human_pause_node(state: ReviewState) -> dict:
 def entrevista_node(state: ReviewState) -> dict:
     """Gera uma pergunta para o usuário baseada no plano atual."""
     theme              = state["theme"]
-    review_type        = state.get("review_type", "academico")
+    review_type        = state.get("review_type", "academic")
     questions_asked    = state["questions_asked"]
     max_questions      = state["max_questions"]
     current_plan       = truncar(state["current_plan"], 500)
     current_history    = resumir_hist(state["interview_history"], 1)
     restantes = max_questions - questions_asked
 
-    if review_type == "tecnico":
+    if review_type in {"tecnico", "technical"}:
         ctx_extra  = fmt_snippets(state.get("technical_snippets", [])[-3:], 400)
         instrucoes = get_prompt_field("common/entrevista", "instrucoes_tecnico")
         tipo_label = "capitulo tecnico"

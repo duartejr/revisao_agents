@@ -12,6 +12,13 @@ from __future__ import annotations
 from ..workflows import build_academico_workflow, build_tecnico_workflow
 
 
+def _normalize_review_type(review_type: str | None) -> str:
+    value = (review_type or "academic").strip().lower()
+    if value in {"technical", "tecnico"}:
+        return "technical"
+    return "academic"
+
+
 # ---------------------------------------------------------------------------
 # Academic review graph
 # ---------------------------------------------------------------------------
@@ -34,15 +41,21 @@ def build_technical_graph(checkpointer=None):
 # Convenience helpers (used by cli.py)
 # ---------------------------------------------------------------------------
 
-def build_review_graph(tipo: str = "academico", checkpointer=None):
+def build_review_graph(
+    review_type: str = "academic",
+    checkpointer=None,
+    tipo: str | None = None,
+):
     """
     Factory that returns the appropriate compiled graph.
 
     Args:
-        tipo: "academico" | "tecnico"
+        review_type: "academic" | "technical"
+        tipo: legacy alias for review_type ("academico" | "tecnico")
         checkpointer: optional LangGraph checkpointer (defaults to MemorySaver)
     """
-    if tipo == "tecnico":
+    normalized = _normalize_review_type(tipo if tipo is not None else review_type)
+    if normalized == "technical":
         return build_technical_graph(checkpointer=checkpointer)
     return build_academic_graph(checkpointer=checkpointer)
 
@@ -62,7 +75,7 @@ def run_review_graph(graph, input_text: str, debug: bool = False) -> dict:
     config = {"configurable": {"thread_id": "cli-run"}}
     state = {
         "theme": input_text,
-        "review_type": "academico",
+        "review_type": "academic",
         "relevant_chunks": [],
         "technical_snippets": [],
         "technical_urls": [],

@@ -28,7 +28,7 @@ def run_hitl_loop(app: Any, config: dict, state_init: dict) -> None:
                 break
         p  = state.values.get("questions_asked", 0)
         mp = state.values.get("max_questions", 3)
-        tp = state.values.get("review_type", "academico")
+        tp = state.values.get("review_type", "academic")
         print(f"\n   [Round {p}/{mp} — {tp} — ok to finish]")
         resp = input("👤 ").strip() or "Keep the current plan."
         hist = state.values.get("interview_history", [])
