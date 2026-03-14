@@ -3,7 +3,7 @@ import os
 
 from .state import ReviewState, TechnicalWriterState
 from .workflows import build_academic_workflow, build_technical_workflow
-from .workflows.technical_writing_workflow import build_workflow as build_writing_workflow
+from .workflows.technical_writing_workflow import build_technical_writing_workflow
 from .hitl import run_hitl_loop
 from .utils.vector_utils.pdf_ingestor import ingest_pdf_folder
 from .core.schemas.writer_config import WriterConfig
@@ -155,7 +155,7 @@ def main():
             "writer_config": writer_config.to_dict(),
             "tavily_enabled": tavily_enabled,
         }
-        app = build_writing_workflow()
+        app = build_technical_writing_workflow()
         try:
             for event in app.stream(state_init):
                 node = list(event.keys())[0] if event else "?"

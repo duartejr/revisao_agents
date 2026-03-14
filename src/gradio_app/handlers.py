@@ -28,7 +28,7 @@ if _SRC not in sys.path:
 from revisao_agents.state import ReviewState, TechnicalWriterState
 from revisao_agents.workflows import build_academic_workflow, build_technical_workflow
 from revisao_agents.workflows.technical_writing_workflow import (
-    build_workflow as build_escrita_workflow,
+    build_technical_writing_workflow,
 )
 from revisao_agents.config import validate_runtime_config
 from revisao_agents.utils.vector_utils.pdf_ingestor import ingest_pdf_folder
@@ -357,7 +357,7 @@ def start_writing(
         "tavily_enabled": tavily_enabled,
     }
 
-    app = build_escrita_workflow()
+            app = build_technical_writing_workflow()
     snapshot_before = set(_list_md("reviews"))
 
     result_q: queue.Queue[tuple[str, Any]] = queue.Queue()

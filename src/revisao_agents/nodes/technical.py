@@ -117,3 +117,23 @@ def finalizar_plano_tecnico_node(state: ReviewState) -> dict:
     )
     path = salvar_md(md, "plans/plano_revisao_tecnica", theme)
     return {"final_plan": plano_final, "final_plan_path": path, "status": "concluido"}
+
+
+def initial_technical_search_node(state: ReviewState) -> dict:
+    return busca_tecnica_inicial_node(state)
+
+
+def initial_technical_plan_node(state: ReviewState) -> dict:
+    return plano_inicial_tecnico_node(state)
+
+
+def refine_technical_search_node(state: ReviewState) -> dict:
+    return refinar_busca_tecnica_node(state)
+
+
+def refine_technical_plan_node(state: ReviewState) -> dict:
+    return refinar_plano_tecnico_node(state)
+
+
+def finalize_technical_plan_node(state: ReviewState) -> dict:
+    return finalizar_plano_tecnico_node(state)

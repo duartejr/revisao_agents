@@ -24,6 +24,11 @@ from .technical import (
     refinar_busca_tecnica_node,
     refinar_plano_tecnico_node,
     finalizar_plano_tecnico_node,
+    initial_technical_search_node,
+    initial_technical_plan_node,
+    refine_technical_search_node,
+    refine_technical_plan_node,
+    finalize_technical_plan_node,
 )
 
 from .common import (
@@ -35,6 +40,9 @@ from .common import (
 )
 
 from .technical_writing import (
+    parse_plan_node,
+    write_sections_node,
+    consolidate_node,
     parsear_plano_node,
     escrever_secoes_node,
     consolidar_node,
@@ -58,6 +66,11 @@ __all__ = [
     "refinar_busca_tecnica_node",
     "refinar_plano_tecnico_node",
     "finalizar_plano_tecnico_node",
+    "initial_technical_search_node",
+    "initial_technical_plan_node",
+    "refine_technical_search_node",
+    "refine_technical_plan_node",
+    "finalize_technical_plan_node",
     # Common agents
     "human_pause_node",
     "entrevista_node",
@@ -65,6 +78,9 @@ __all__ = [
     "interview_node",
     "route_interview",
     # Technical writing agents
+    "parse_plan_node",
+    "write_sections_node",
+    "consolidate_node",
     "parsear_plano_node",
     "escrever_secoes_node",
     "consolidar_node",
