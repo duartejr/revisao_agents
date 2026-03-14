@@ -29,8 +29,8 @@ def _make_state(**overrides) -> ReviewState:
     return base
 
 
-@patch("revisao_agents.nodes.academic.buscar_chunks", return_value=[])
-@patch("revisao_agents.nodes.academic.acumular_chunks", return_value=[])
+@patch("revisao_agents.nodes.academic.search_chunks", return_value=[])
+@patch("revisao_agents.nodes.academic.accumulate_chunks", return_value=[])
 def test_consulta_vetorial_node_returns_dict(mock_acc, mock_busca):
     from revisao_agents.nodes.academic import consulta_vetorial_node
 

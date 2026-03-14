@@ -13,85 +13,106 @@ _client = None
 _collection = None
 _openai_client = None
 
-# Modelo de embedding da OpenAI
+# OpenAI embedding model
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 
 def _get_mongo_collection() -> Collection:
-    """Retorna a coleção MongoDB (conecta se necessário)."""
+    """Returns the MongoDB collection (connects if necessary).
+    Uses global variables to cache the client and collection.
+    
+    Returns:
+        pymongo Collection object for the configured MongoDB Atlas collection.
+    Raises:
+        RuntimeError if MONGODB_URI is not set or connection fails.
+    """
     global _client, _collection
     if _collection is not None:
         return _collection
     if not MONGODB_URI:
-        raise RuntimeError("MONGODB_URI não definida no ambiente.")
+        raise RuntimeError("MONGODB_URI not defined in the environment.")
     _client = pymongo.MongoClient(MONGODB_URI)
     db = _client[MONGODB_DB]
     _collection = db[MONGODB_COLLECTION]
-    # Testa conexão
+    # Test connection
     _client.admin.command('ping')
-    print("   Conectado ao MongoDB Atlas.")
+    print("   Connected to MongoDB Atlas.")
     return _collection
 
 def _get_openai_client():
-    """Retorna cliente OpenAI (inicializa se necessário)."""
+    """Returns OpenAI client (initializes if necessary)."""
     global _openai_client
     if _openai_client is None:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
-            raise RuntimeError("OPENAI_API_KEY não definida no ambiente.")
+            raise RuntimeError("OPENAI_API_KEY not defined in the environment.")
         _openai_client = OpenAI(api_key=api_key)
     return _openai_client
 
-def _gerar_embedding(texto: str) -> List[float]:
+def _generate_embedding(text: str) -> List[float]:
     """
-    Gera embedding para um único texto usando OpenAI.
-    Trunca o texto se necessário (limite do modelo é generoso, mas vamos truncar antes).
+    Generates embedding for a single text using OpenAI.
+    Truncates the text if necessary (model limit is generous, but we'll truncate beforehand).
+
+    Args:
+        text: input text to generate embedding for a single text (e.g., a query or chunk content)
+
+    Returns:
+        List of floats representing the embedding vector.
+    
+    Raises:
+        RuntimeError if OpenAI client is not configured or API call fails.
     """
     client = _get_openai_client()
-    # OpenAI recomenda substituir newlines por espaços
-    texto_limpo = texto.replace("\n", " ").strip()
-    # Truncar se for muito longo (cerca de 8000 tokens, mas vamos limitar a 8000 caracteres)
-    if len(texto_limpo) > 8000:
-        texto_limpo = texto_limpo[:8000]
+    # OpenAI recommends replacing newlines with spaces for better embedding quality
+    text_clean = text.replace("\n", " ").strip()
+    # Truncate if too long (around 8000 tokens, but we'll limit to 8000 characters as a heuristic)
+    if len(text_clean) > 8000:
+        text_clean = text_clean[:8000]
     try:
         response = client.embeddings.create(
-            input=texto_limpo,
+            input=text_clean,
             model=OPENAI_EMBEDDING_MODEL
         )
         return response.data[0].embedding
     except Exception as e:
-        print(f"   Erro ao gerar embedding: {e}")
-        # Retorna embedding vazio? Melhor propagar exceção
+        print(f"   Error generating embedding: {e}")
+        # Return empty embedding? Better to propagate exception
         raise
 
-def buscar_chunks(query: str, k: int = 16) -> List[str]:
+def search_chunks(query: str, k: int = 16) -> List[str]:
     """
-    Busca chunks similares à query usando MongoDB Atlas Vector Search.
-    Gera embedding da query via OpenAI.
-    Retorna lista de strings (conteúdo dos chunks) truncadas.
+    Searches for chunks similar to the query using MongoDB Atlas Vector Search.
+    Generates query embedding via OpenAI.
+
+    Args:
+        query: the search query text
+        k: number of top similar chunks to return
+    Returns:
+        List of truncated strings (content of the chunks).
     """
     collection = _get_mongo_collection()
     
     # Gera embedding para a query
     try:
-        query_embedding = _gerar_embedding(query)
+        query_embedding = _generate_embedding(query)
     except Exception as e:
-        print(f"   Falha ao gerar embedding da consulta: {e}")
+        print(f"   Failure to generate query embedding.: {e}")
         return []
     
-    # Pipeline de agregação com $vectorSearch
+    # Aggregation pipeline with $vectorSearch
     pipeline = [
         {
             "$vectorSearch": {
                 "index": VECTOR_INDEX_NAME,
-                "path": "embedding",          # campo onde está o embedding
+                "path": "embedding",          # field where the embedding is stored
                 "queryVector": query_embedding,
-                "numCandidates": k * 10,      # número de candidatos para busca
+                "numCandidates": k * 10,      # number of candidates for search
                 "limit": k,
             }
         },
         {
             "$project": {
-                "text": 1,                     # campo com o conteúdo do chunk
+                "text": 1,                     # field with the chunk content
                 "score": {"$meta": "vectorSearchScore"}
             }
         }
@@ -100,18 +121,31 @@ def buscar_chunks(query: str, k: int = 16) -> List[str]:
     try:
         results = list(collection.aggregate(pipeline))
     except Exception as e:
-        print(f"   Erro na busca vetorial MongoDB: {e}")
+        print(f"   Error in MongoDB vector search: {e}")
         return []
     
-    # Extrai o texto, truncando se necessário
+    # Extract text, truncating if necessary
     chunks = [r["text"][:CHUNK_MAX_CHARS] for r in results if "text" in r]
-    print(f"   {len(chunks)} chunks recuperados do MongoDB.")
+    print(f"   {len(chunks)} chunks retrieved from MongoDB.")
     return chunks
 
-def acumular_chunks(existentes: List[str], novos: List[str]) -> List[str]:
-    """Acumula chunks novos sem duplicatas, respeitando o limite máximo."""
-    vistos = set(existentes)
-    acum = existentes + [c for c in novos if c not in vistos]
-    if len(acum) > MAX_CHUNKS_TOTAL:
-        acum = acum[-MAX_CHUNKS_TOTAL:]
-    return acum
+def accumulate_chunks(existing: List[str], new: List[str]) -> List[str]:
+    """Accumulates new chunks without duplicates, respecting the maximum limit.
+    
+    Args:
+        existing: List of existing chunks.
+        new: List of new chunks to add.
+
+    Returns:
+        List of accumulated chunks, truncated to the maximum limit if necessary.
+    """
+    seen = set(existing)
+    accumulated = existing + [c for c in new if c not in seen]
+    if len(accumulated) > MAX_CHUNKS_TOTAL:
+        accumulated = accumulated[-MAX_CHUNKS_TOTAL:]
+    return accumulated
+
+__all__ = [
+    "search_chunks",
+    "accumulate_chunks",
+]

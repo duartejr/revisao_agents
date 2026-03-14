@@ -15,7 +15,7 @@ Backwards-compatible imports from subfolders (for existing code):
 # Re-export from subfolders for backwards compatibility
 from .llm_utils import load_prompt, llm_call, parse_json_safe, get_llm, LLMProvider
 from .search_utils import search_web, search_images, extract_urls, score_url
-from .vector_utils import CorpusMongoDB, buscar_chunks, acumular_chunks
+from .vector_utils import CorpusMongoDB, search_chunks, accumulate_chunks
 from .bib_utils import get_reference_data_react, bibtex_to_abnt, search_doi_in_text
 from .file_utils import resumir_secao, parse_plano_tecnico, parse_plano_academico, fmt_chunks, fmt_snippets, resumir_hist, truncar, salvar_md
 
@@ -37,8 +37,8 @@ __all__ = [
     "buscar_conteudo_tecnico",
     # Vector
     "CorpusMongoDB",
-    "buscar_chunks",
-    "acumular_chunks",
+    "search_chunks",
+    "accumulate_chunks",
     # Bibliography
     "get_reference_data_react",
     "bibtex_to_abnt",

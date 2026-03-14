@@ -12,7 +12,7 @@ Prompts are loaded from YAML files in prompts/academic/.
 
 from ..state import ReviewState
 from ..utils.llm_utils.llm_providers import get_llm
-from ..utils.vector_utils.vector_store import buscar_chunks, acumular_chunks
+from ..utils.vector_utils.vector_store import search_chunks, accumulate_chunks
 from ..utils.file_utils.helpers import fmt_chunks, truncar, salvar_md
 from ..utils.llm_utils.prompt_loader import load_prompt
 
@@ -24,7 +24,7 @@ def consulta_vetorial_node(state: ReviewState) -> dict:
     """Busca chunks iniciais sobre o theme."""
     theme = state["theme"]
     print("\n[MONGODB] query:", repr(theme))
-    chunks = buscar_chunks(theme)
+    chunks = search_chunks(theme)
     print("   ", len(chunks), "chunks recuperados")
     return {"relevant_chunks": chunks, "status": "chunks_ok"}
 
@@ -48,8 +48,8 @@ def refinar_consulta_academico_node(state: ReviewState) -> dict:
             query = c[:150]
             break
     print("\n[FAISS re-consulta] query:", repr(query[:60]))
-    novos = buscar_chunks(query)
-    acum  = acumular_chunks(state["relevant_chunks"], novos)
+    novos = search_chunks(query)
+    acum  = accumulate_chunks(state["relevant_chunks"], novos)
     print("   ", len(novos), "recuperados | total:", len(acum))
     return {"relevant_chunks": acum, "status": "chunks_refinados"}
 

@@ -1,10 +1,10 @@
 import re
 from typing import List, Tuple
-from ..vector_utils.vector_store import buscar_chunks  # nossa nova função que usa MongoDB/OpenAI
+from ..vector_utils.vector_store import search_chunks
 from ..file_utils.helpers import normalizar, extrair_anchors, eh_paragrafo_verificavel
 from ...config import JUIZ_MAX_CORPUS_CHARS, JUIZ_TOP_K, get_llm
 
-def buscar_chunks_para_paragrafo(
+def search_chunks_for_paragraph(
     paragrafo: str,
     corpus_prompt_completo: str,
     tema_secao: str,
@@ -33,8 +33,8 @@ def buscar_chunks_para_paragrafo(
     if not queries:
         return corpus_prompt_completo[:JUIZ_MAX_CORPUS_CHARS]
 
-    # Usa a função buscar_chunks do vector_store (MongoDB)
-    # Nota: buscar_chunks retorna apenas o texto; precisamos do contexto da fonte.
+    # Uses search_chunks from vector_store (MongoDB)
+    # Note: search_chunks returns only text; source metadata is not included.
     # Vamos enriquecer com metadados? Por enquanto só texto.
     partes: List[str] = []
     chars = 0
@@ -44,8 +44,8 @@ def buscar_chunks_para_paragrafo(
         q = q.strip()
         if not q:
             continue
-        # buscar_chunks retorna lista de strings (conteúdo)
-        resultados = buscar_chunks(q, k=JUIZ_TOP_K)
+        # search_chunks returns a list of chunk text strings
+        resultados = search_chunks(q, k=JUIZ_TOP_K)
         for texto_chunk in resultados:
             # deduplicação simples
             chave = texto_chunk[:100]
