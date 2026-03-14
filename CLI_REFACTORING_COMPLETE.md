@@ -44,9 +44,8 @@ All core components verified working:
 
 ```
 ✓ State Definitions
-  - RevisaoState (11 fields)
+  - ReviewState (11 fields)
   - EscritaTecnicaState (12 fields)
-  - ReviewState (alias)
 
 ✓ Schemas
   - Chunk, Source, SectionAnswer

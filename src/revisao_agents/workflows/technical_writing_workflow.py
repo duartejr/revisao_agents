@@ -1,11 +1,11 @@
 from langgraph.graph import StateGraph, END
 
-from ..state import EscritaTecnicaState
+from ..state import TechnicalWriterState
 from ..nodes.technical_writing import parsear_plano_node, escrever_secoes_node, consolidar_node
 
 
 def build_workflow():
-    builder = StateGraph(EscritaTecnicaState)
+    builder = StateGraph(TechnicalWriterState)
     builder.add_node("parsear_plano",  parsear_plano_node)
     builder.add_node("escrever_secoes", escrever_secoes_node)
     builder.add_node("consolidar",     consolidar_node)

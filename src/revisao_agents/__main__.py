@@ -2,7 +2,7 @@ import sys
 import glob
 import os
 
-from .state import RevisaoState, EscritaTecnicaState
+from .state import ReviewState, TechnicalWriterState
 from .workflows import build_academico_workflow, build_tecnico_workflow
 from .workflows.technical_writing_workflow import build_workflow as build_escrita_workflow
 from .hitl import run_hitl_loop
@@ -141,17 +141,17 @@ def main():
             print(f"❌ Arquivo não encontrado: {caminho}")
             return
 
-        state_init: EscritaTecnicaState = {
-            "tema": "",
-            "resumo_plano": "",
-            "secoes": [],
-            "caminho_plano": caminho,
-            "secoes_escritas": [],
+        state_init: TechnicalWriterState = {
+            "theme": "",
+            "plan_summary": "",
+            "sections": [],
+            "plan_path": caminho,
+            "written_sections": [],
             "refs_urls": [],
-            "refs_imagens": [],
-            "resumo_acumulado": "",
+            "refs_images": [],
+            "cumulative_summary": "",
             "react_log": [],
-            "stats_verificacao": [],
+            "verification_stats": [],
             "status": "iniciando",
             "writer_config": writer_config.to_dict(),
             "tavily_enabled": tavily_enabled,
@@ -202,18 +202,18 @@ def main():
         print(f"Iniciando: REVISAO {label} | {repr(tema)} | {max_p} rodadas")
         print("-" * 70)
 
-        state_init: RevisaoState = {
-            "tema":                   tema,
-            "tipo_revisao":           tipo,
-            "chunks_relevantes":      [],
-            "snippets_tecnicos":      [],
-            "urls_tecnicos":          [],
-            "plano_atual":            "",
-            "historico_entrevista":   [],
-            "perguntas_feitas":       0,
-            "max_perguntas":          max_p,
-            "plano_final":            "",
-            "plano_final_path":       "",
+        state_init: ReviewState = {
+            "theme":                   tema,
+            "review_type":           tipo,
+            "relevant_chunks":      [],
+            "technical_snippets":      [],
+            "technical_urls":          [],
+            "current_plan":            "",
+            "interview_history":   [],
+            "questions_asked":       0,
+            "max_questions":          max_p,
+            "final_plan":            "",
+            "final_plan_path":       "",
             "status":                 "iniciando",
         }
         config = {"configurable": {"thread_id": f"revisao_{tipo}_{tema[:20]}"}}

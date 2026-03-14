@@ -25,7 +25,7 @@ _SRC = os.path.join(os.path.dirname(__file__), "..")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from revisao_agents.state import RevisaoState, EscritaTecnicaState
+from revisao_agents.state import ReviewState, TechnicalWriterState
 from revisao_agents.workflows import build_academico_workflow, build_tecnico_workflow
 from revisao_agents.workflows.technical_writing_workflow import (
     build_workflow as build_escrita_workflow,
@@ -136,18 +136,18 @@ def start_planning(
     tipo_atual = tipos_list[0]
     label = "ACADÊMICA" if tipo_atual == "academico" else "TÉCNICA"
 
-    state_init: RevisaoState = {
-        "tema": tema,
-        "tipo_revisao": tipo_atual,
-        "chunks_relevantes": [],
-        "snippets_tecnicos": [],
-        "urls_tecnicos": [],
-        "plano_atual": "",
-        "historico_entrevista": [],
-        "perguntas_feitas": 0,
-        "max_perguntas": int(rodadas),
-        "plano_final": "",
-        "plano_final_path": "",
+    state_init: ReviewState = {
+        "theme": tema,
+        "review_type": tipo_atual,
+        "relevant_chunks": [],
+        "technical_snippets": [],
+        "technical_urls": [],
+        "current_plan": "",
+        "interview_history": [],
+        "questions_asked": 0,
+        "max_questions": int(rodadas),
+        "final_plan": "",
+        "final_plan_path": "",
         "status": "iniciando",
     }
 
@@ -173,19 +173,19 @@ def start_planning(
     graph_state = app.get_state(config)
 
     if not graph_state.next:
-        plan_path = graph_state.values.get("plano_final_path", "")
+        plan_path = graph_state.values.get("final_plan_path", "")
         rendered = _read_md(plan_path)
         history.append({"role": "assistant", "content": f"✅ Planejamento {label} concluído! Plano salvo em `{plan_path}`"})
         return history, {}, "✅ Concluído", rendered
 
     agent_question = ""
-    for role, content in reversed(graph_state.values.get("historico_entrevista", [])):
+    for role, content in reversed(graph_state.values.get("interview_history", [])):
         if role == "assistant":
             agent_question = content
             break
 
-    p  = graph_state.values.get("perguntas_feitas", 0)
-    mp = graph_state.values.get("max_perguntas", rodadas)
+    p  = graph_state.values.get("questions_asked", 0)
+    mp = graph_state.values.get("max_questions", rodadas)
     history.append({"role": "assistant", "content": f"[Rodada {p}/{mp} — {tipo_atual}]\n\n{agent_question}"})
 
     session_state = {
@@ -193,7 +193,7 @@ def start_planning(
         "config": config,
         "tipo": tipo_atual,
         "tipos_pendentes": tipos_list[1:],
-        "tema": tema,
+        "theme": tema,
         "rodadas": rodadas,
     }
 
@@ -219,11 +219,11 @@ def continue_planning(
 
     history = history + [{"role": "user", "content": user_msg}]
 
-    hist = app.get_state(config).values.get("historico_entrevista", [])
+    hist = app.get_state(config).values.get("interview_history", [])
     app.update_state(
         config,
-        {"historico_entrevista": hist + [("user", user_msg)]},
-        as_node="pausa_humana",
+        {"interview_history": hist + [("user", user_msg)]},
+        as_node="human_pause",
     )
 
     log_q: queue.Queue[str] = queue.Queue()
@@ -244,7 +244,7 @@ def continue_planning(
     graph_state = app.get_state(config)
 
     if not graph_state.next:
-        plan_path = graph_state.values.get("plano_final_path", "")
+        plan_path = graph_state.values.get("final_plan_path", "")
         rendered = _read_md(plan_path)
         finished_msg = (
             f"✅ Planejamento {label} concluído! Plano salvo em `{plan_path}`"
@@ -255,7 +255,7 @@ def continue_planning(
         tipos_pendentes = session_state.get("tipos_pendentes", [])
         if tipos_pendentes:
             next_history, next_state, next_status, _ = start_planning(
-                tema=session_state["tema"],
+                tema=session_state["theme"],
                 tipo=tipos_pendentes[0],
                 rodadas=session_state["rodadas"],
             )
@@ -265,13 +265,13 @@ def continue_planning(
         return history, {}, "✅ Todos os planejamentos concluídos!", rendered
 
     agent_question = ""
-    for role, content in reversed(graph_state.values.get("historico_entrevista", [])):
+    for role, content in reversed(graph_state.values.get("interview_history", [])):
         if role == "assistant":
             agent_question = content
             break
 
-    p  = graph_state.values.get("perguntas_feitas", 0)
-    mp = graph_state.values.get("max_perguntas", session_state.get("rodadas", 3))
+    p  = graph_state.values.get("questions_asked", 0)
+    mp = graph_state.values.get("max_questions", session_state.get("rodadas", 3))
     history = history + [{"role": "assistant", "content": f"[Rodada {p}/{mp} — {tipo}]\n\n{agent_question}"}]
 
     return history, session_state, f"🔄 {label} em andamento — rodada {p}/{mp}", ""
@@ -341,17 +341,17 @@ def start_writing(
         writer_config = WriterConfig.technical(language=language)
     writer_config.min_sources_per_section = max(0, int(min_src))
 
-    state_init: EscritaTecnicaState = {
-        "tema": "",
-        "resumo_plano": "",
-        "secoes": [],
-        "caminho_plano": plan_path,
-        "secoes_escritas": [],
+    state_init: TechnicalWriterState = {
+        "theme": "",
+        "plan_summary": "",
+        "sections": [],
+        "plan_path": plan_path,
+        "written_sections": [],
         "refs_urls": [],
-        "refs_imagens": [],
-        "resumo_acumulado": "",
+        "refs_images": [],
+        "cumulative_summary": "",
         "react_log": [],
-        "stats_verificacao": [],
+        "verification_stats": [],
         "status": "iniciando",
         "writer_config": writer_config.to_dict(),
         "tavily_enabled": tavily_enabled,

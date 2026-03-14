@@ -102,19 +102,19 @@ print(f"Plan: {Path(PLAN_FILE).name}")
 print(f"Sections: {len(secoes)}")
 print("=" * 70)
 
-from revisao_agents.state import EscritaTecnicaState
+from revisao_agents.state import TechnicalWriterState
 
-state_init: EscritaTecnicaState = {
-    "tema": "",
-    "resumo_plano": "",
-    "secoes": [],
-    "caminho_plano": PLAN_FILE,
-    "secoes_escritas": [],
+state_init: TechnicalWriterState = {
+    "theme": "",
+    "plan_summary": "",
+    "sections": [],
+    "plan_path": PLAN_FILE,
+    "written_sections": [],
     "refs_urls": [],
-    "refs_imagens": [],
-    "resumo_acumulado": "",
+    "refs_images": [],
+    "cumulative_summary": "",
     "react_log": [],
-    "stats_verificacao": [],
+    "verification_stats": [],
     "status": "iniciando",
 }
 
@@ -238,7 +238,7 @@ else:
     print("❌ No log file found")
 
 # Stats from final state
-stats = final_state.get("stats_verificacao", [])
+stats = final_state.get("verification_stats", [])
 if stats:
     print(f"\n📊 Verification stats:")
     for s in stats:

@@ -12,7 +12,7 @@ from typing import List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
-from ...state import EscritaTecnicaState
+from ...state import TechnicalWriterState
 from ...config import (
     llm_call, parse_json_safe,
     TECHNICAL_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
@@ -35,25 +35,25 @@ from .verification import (
     _verificar_paragrafo_com_anchor, _verificar_e_corrigir_secao_com_anchor,
 )
 
-def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
+def escrever_secoes_node(state: TechnicalWriterState) -> dict:
     """Main node for writing sections with search, extraction and verification."""
     config = WriterConfig.from_dict(state.get("writer_config", {}))
     prompt_dir = config.prompt_dir
-    tema = state["tema"]
-    secoes = state["secoes"]
-    secoes_escritas = []
+    theme = state["theme"]
+    sections = state["sections"]
+    written_sections = []
     all_refs_urls = list(state.get("refs_urls", []))
-    all_refs_imagens = list(state.get("refs_imagens", []))
-    resumo_acumulado = state.get("resumo_acumulado", "")
+    all_refs_images = list(state.get("refs_images", []))
+    cumulative_summary = state.get("cumulative_summary", "")
     react_log = list(state.get("react_log", []))
-    stats_verificacao = list(state.get("stats_verificacao", []))
-    n_total = len(secoes)
-    titulos_todos = [s["titulo"] for s in secoes]
+    verification_stats = list(state.get("verification_stats", []))
+    n_total = len(sections)
+    titulos_todos = [s["titulo"] for s in sections]
     # CorpusMongoDB instance for URL existence checks (no build)
     corpus_check = CorpusMongoDB()
 
     tavily_enabled = state.get("tavily_enabled", True)
-    for pos, secao in enumerate(secoes):
+    for pos, secao in enumerate(sections):
         titulo = secao["titulo"]
         cont_esp = secao.get("conteudo_esperado", "")
         recursos = secao.get("recursos", "")
@@ -73,8 +73,8 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
         # FASE 1: Pensamento
         print(f"\n  🧠 FASE 1 — Pensamento...")
         log.append("\n── FASE 1: PENSAMENTO ──")
-        plano = _fase_pensamento(tema, titulo, cont_esp, recursos, prompt_dir=prompt_dir, language=config.language)
-        queries = plano.get("queries_busca", [f"{tema} {titulo}"])
+        plano = _fase_pensamento(theme, titulo, cont_esp, recursos, prompt_dir=prompt_dir, language=config.language)
+        queries = plano.get("queries_busca", [f"{theme} {titulo}"])
         queries_img = plano.get("queries_imagens", [f"{titulo} diagram"])
         informacoes = plano.get("informacoes_necessarias", [cont_esp[:120]])
         log.extend([f"Queries: {queries}", f"Informações: {informacoes}"])
@@ -139,7 +139,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
         if not corpus_prompt.strip() and not _corpus_suficiente and tavily_enabled:
             print("  ⚠️  Corpus vazio! Busca de último recurso...")
             log.append("⚠️  Corpus vazio — busca de emergência")
-            q_emerg = f"{titulo} {tema} technical documentation filetype:pdf"
+            q_emerg = f"{titulo} {theme} technical documentation filetype:pdf"
             res_emerg = search_web(q_emerg, 6)
             corpus_check.tavily_enabled = tavily_enabled
             novos_emerg, _, urls_vistas = _extrair_com_fallback(
@@ -191,8 +191,8 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
         print(f"\n  ✍️  FASE 6 — Rascunho anchored...")
         log.append("\n── FASE 6: RASCUNHO ──")
         rascunho, urls_usadas_fase6 = _fase_rascunho(
-            tema, titulo, cont_esp, recursos, referencia_completa, urls_secao,
-            resumo_acumulado, pos, n_total, titulos_todos, len(extraidos),
+            theme, titulo, cont_esp, recursos, referencia_completa, urls_secao,
+            cumulative_summary, pos, n_total, titulos_todos, len(extraidos),
             prompt_dir=prompt_dir,
             language=config.language,
             min_sources=config.min_sources_per_section,
@@ -221,9 +221,9 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
                 f"{'━'*60}\n"
             )
             rascunho_retry, urls_retry = _fase_rascunho(
-                tema, titulo, cont_esp, recursos,
+                theme, titulo, cont_esp, recursos,
                 referencia_completa + diversity_hint, urls_secao,
-                resumo_acumulado, pos, n_total, titulos_todos, len(extraidos),
+                cumulative_summary, pos, n_total, titulos_todos, len(extraidos),
                 prompt_dir=prompt_dir,
                 language=config.language,
                 min_sources=config.min_sources_per_section,
@@ -266,7 +266,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
         )
 
         log.append(relatorio_verif)
-        stats_verificacao.append({"secao": titulo, **stats})
+        verification_stats.append({"secao": titulo, **stats})
 
         if not texto_final.strip().startswith("## "):
             texto_final = f"## {titulo}\n\n{texto_final.strip()}"
@@ -330,7 +330,7 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
 
         print(f"  ✅ [{pos+1}/{n_total}] Seção concluída ({taxa:.0f}% verificado)")
 
-        secoes_escritas.append({
+        written_sections.append({
             "indice": idx_num,
             "titulo": titulo,
             "texto": texto_final,
@@ -344,17 +344,17 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
                 all_refs_urls.append(u)
 
         for img in imagens:
-            if img not in all_refs_imagens:
-                all_refs_imagens.append(img)
+            if img not in all_refs_images:
+                all_refs_images.append(img)
 
         resumo_sec = resumir_secao(titulo, texto_final)
-        if resumo_acumulado:
-            resumo_acumulado += f"\n\n[Seção {pos+1}: {titulo}] {resumo_sec}"
+        if cumulative_summary:
+            cumulative_summary += f"\n\n[Seção {pos+1}: {titulo}] {resumo_sec}"
         else:
-            resumo_acumulado = f"[Seção {pos+1}: {titulo}] {resumo_sec}"
-        if len(resumo_acumulado) > CTX_RESUMO_CHARS * 3:
-            partes = resumo_acumulado.split("\n\n[Seção ")
-            resumo_acumulado = "\n\n[Seção ".join([""] + partes[-4:]).strip()
+            cumulative_summary = f"[Seção {pos+1}: {titulo}] {resumo_sec}"
+        if len(cumulative_summary) > CTX_RESUMO_CHARS * 3:
+            partes = cumulative_summary.split("\n\n[Seção ")
+            cumulative_summary = "\n\n[Seção ".join([""] + partes[-4:]).strip()
 
         react_log.extend(log)
 
@@ -363,12 +363,12 @@ def escrever_secoes_node(state: EscritaTecnicaState) -> dict:
             time.sleep(DELAY_ENTRE_SECOES)
 
     return {
-        "secoes_escritas": secoes_escritas,
+        "written_sections": written_sections,
         "refs_urls": all_refs_urls,
-        "refs_imagens": all_refs_imagens,
-        "resumo_acumulado": resumo_acumulado,
+        "refs_images": all_refs_images,
+        "cumulative_summary": cumulative_summary,
         "react_log": react_log,
-        "stats_verificacao": stats_verificacao,
+        "verification_stats": verification_stats,
         "status": "secoes_escritas",
     }
 

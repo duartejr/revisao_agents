@@ -61,17 +61,17 @@ def run_review_graph(graph, input_text: str, debug: bool = False) -> dict:
     """
     config = {"configurable": {"thread_id": "cli-run"}}
     state = {
-        "tema": input_text,
-        "tipo_revisao": "academico",
-        "chunks_relevantes": [],
-        "snippets_tecnicos": [],
-        "urls_tecnicos": [],
-        "plano_atual": "",
-        "historico_entrevista": [],
-        "perguntas_feitas": 0,
-        "max_perguntas": 1,
-        "plano_final": "",
-        "plano_final_path": "",
+        "theme": input_text,
+        "review_type": "academico",
+        "relevant_chunks": [],
+        "technical_snippets": [],
+        "technical_urls": [],
+        "current_plan": "",
+        "interview_history": [],
+        "questions_asked": 0,
+        "max_questions": 1,
+        "final_plan": "",
+        "final_plan_path": "",
         "status": "iniciando",
     }
 

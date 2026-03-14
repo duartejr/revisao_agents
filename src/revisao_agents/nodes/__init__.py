@@ -22,7 +22,7 @@ from .technical import (
 )
 
 from .common import (
-    pausa_humana_node,
+    human_pause_node,
     entrevista_node,
     roteador_entrevista,
 )
@@ -47,7 +47,7 @@ __all__ = [
     "refinar_plano_tecnico_node",
     "finalizar_plano_tecnico_node",
     # Common agents
-    "pausa_humana_node",
+    "human_pause_node",
     "entrevista_node",
     "roteador_entrevista",
     # Technical writing agents

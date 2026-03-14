@@ -27,28 +27,28 @@ def _resolve_tema(input_value: str) -> str:
 
 def _run_planning_until_complete(
     graph,
-    tema: str,
-    tipo: str,
+    theme: str,
+    review_type: str,
     rodadas: int,
     auto_response: str,
     debug: bool,
 ) -> dict:
     """Execute planning graph with automatic HITL responses until completion."""
     state_init = {
-        "tema": tema,
-        "tipo_revisao": tipo,
-        "chunks_relevantes": [],
-        "snippets_tecnicos": [],
-        "urls_tecnicos": [],
-        "plano_atual": "",
-        "historico_entrevista": [],
-        "perguntas_feitas": 0,
-        "max_perguntas": max(1, int(rodadas)),
-        "plano_final": "",
-        "plano_final_path": "",
+        "theme": theme,
+        "review_type": review_type,
+        "relevant_chunks": [],
+        "technical_snippets": [],
+        "technical_urls": [],
+        "current_plan": "",
+        "interview_history": [],
+        "questions_asked": 0,
+        "max_questions": max(1, int(rodadas)),
+        "final_plan": "",
+        "final_plan_path": "",
         "status": "iniciando",
     }
-    config = {"configurable": {"thread_id": f"cli_{tipo}_{tema[:20]}"}}
+    config = {"configurable": {"thread_id": f"cli_{review_type}_{theme[:20]}"}}
 
     for event in graph.stream(state_init, config=config):
         if debug:
@@ -59,14 +59,14 @@ def _run_planning_until_complete(
         if not current.next:
             return current.values
 
-        if "pausa_humana" not in current.next:
+        if "human_pause" not in current.next:
             raise RuntimeError(f"Fluxo inesperado: aguardando nós {current.next}")
 
-        history = current.values.get("historico_entrevista", [])
+        history = current.values.get("interview_history", [])
         graph.update_state(
             config,
-            {"historico_entrevista": history + [("user", auto_response)]},
-            as_node="pausa_humana",
+            {"interview_history": history + [("user", auto_response)]},
+            as_node="human_pause",
         )
         for event in graph.stream(None, config=config):
             if debug:
@@ -91,34 +91,34 @@ def main(
         console.print("[bold red]Erro:[/bold red] --tipo deve ser 'academico' ou 'tecnico'.")
         raise typer.Exit(2)
 
-    tema = _resolve_tema(input_value)
-    if not tema:
+    theme = _resolve_tema(input_value)
+    if not theme:
         console.print("[bold red]Erro:[/bold red] tema vazio após leitura do argumento/arquivo.")
         raise typer.Exit(2)
 
-    console.print(f"[bold green]Iniciando planejamento:[/bold green] {tipo_norm} | tema={tema!r}")
+    console.print(f"[bold green]Iniciando planejamento:[/bold green] {tipo_norm} | tema={theme!r}")
 
     try:
         graph = build_review_graph(tipo=tipo_norm)
         result = _run_planning_until_complete(
             graph=graph,
-            tema=tema,
-            tipo=tipo_norm,
+            theme=theme,
+            review_type=tipo_norm,
             rodadas=rodadas,
             auto_response=auto_response,
             debug=debug,
         )
 
-        plano_final = result.get("plano_final", "")
-        plano_path = result.get("plano_final_path", "")
+        final_plan = result.get("final_plan", "")
+        plan_path = result.get("final_plan_path", "")
 
         console.print("\n[bold]Resultado final do planejamento:[/bold]")
-        console.print(plano_final or result.get("plano_atual", "Sem plano final gerado."))
-        if plano_path:
-            console.print(f"\n[green]Plano salvo automaticamente em:[/green] {plano_path}")
+        console.print(final_plan or result.get("current_plan", "Sem plano final gerado."))
+        if plan_path:
+            console.print(f"\n[green]Plano salvo automaticamente em:[/green] {plan_path}")
 
         if output_file:
-            payload = plano_final or result.get("plano_atual", "")
+            payload = final_plan or result.get("current_plan", "")
             output_file.write_text(payload, encoding="utf-8")
             console.print(f"[green]Salvo em:[/green] {output_file}")
 

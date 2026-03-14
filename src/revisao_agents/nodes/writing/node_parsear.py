@@ -12,7 +12,7 @@ from typing import List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
-from ...state import EscritaTecnicaState
+from ...state import TechnicalWriterState
 from ...config import (
     llm_call, parse_json_safe,
     TECHNICAL_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
@@ -35,32 +35,32 @@ from .verification import (
     _verificar_paragrafo_com_anchor, _verificar_e_corrigir_secao_com_anchor,
 )
 
-def parsear_plano_node(state: EscritaTecnicaState) -> dict:
+def parsear_plano_node(state: TechnicalWriterState) -> dict:
     """Parses a plan file and extracts sections. Supports both technical and academic modes."""
     config = WriterConfig.from_dict(state.get("writer_config", {}))
-    caminho = state["caminho_plano"]
-    print(f"\n📖 Lendo plano: {caminho} (modo: {config.mode})")
-    with open(caminho, "r", encoding="utf-8") as f:
-        texto = f.read()
+    plan_path = state["plan_path"]
+    print(f"\n📖 Lendo plano: {plan_path} (modo: {config.mode})")
+    with open(plan_path, "r", encoding="utf-8") as f:
+        text = f.read()
     if config.mode == "academic":
-        tema, resumo, secoes = parse_plano_academico(texto)
+        theme, plan_summary, sections = parse_plano_academico(text)
     else:
-        tema, resumo, secoes = parse_plano_tecnico(texto)
-    print(f"   ✅ Tema: {tema} | {len(secoes)} seções")
-    for s in secoes:
+        theme, plan_summary, sections = parse_plano_tecnico(text)
+    print(f"   ✅ Tema: {theme} | {len(sections)} seções")
+    for s in sections:
         print(f"      [{s['indice']+1}] {s['titulo']}")
     return {
-        "tema": tema,
-        "resumo_plano": resumo,
-        "secoes": secoes,
-        "secoes_escritas": [],
+        "theme": theme,
+        "plan_summary": plan_summary,
+        "sections": sections,
+        "written_sections": [],
         "refs_urls": [],
-        "refs_imagens": [],
-        "resumo_acumulado": "",
+        "refs_images": [],
+        "cumulative_summary": "",
         "react_log": [],
-        "stats_verificacao": [],
+        "verification_stats": [],
         "status": "plano_parseado",
-        "caminho_plano": caminho,
+        "plan_path": plan_path,
         "writer_config": state.get("writer_config", {}),
     }
 
