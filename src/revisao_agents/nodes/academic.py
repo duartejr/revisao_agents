@@ -98,3 +98,23 @@ def finalizar_plano_academico_node(state: ReviewState) -> dict:
     md   = "# Plano de Revisao da Literatura\n\n**Tema:** " + theme + "\n\n" + final_plan
     path = salvar_md(md, "plans/plano_revisao", theme)
     return {"final_plan": final_plan, "final_plan_path": path, "status": "concluido"}
+
+
+def vector_search_node(state: ReviewState) -> dict:
+    return consulta_vetorial_node(state)
+
+
+def initial_academic_plan_node(state: ReviewState) -> dict:
+    return plano_inicial_academico_node(state)
+
+
+def refine_academic_search_node(state: ReviewState) -> dict:
+    return refinar_consulta_academico_node(state)
+
+
+def refine_academic_plan_node(state: ReviewState) -> dict:
+    return refinar_plano_academico_node(state)
+
+
+def finalize_academic_plan_node(state: ReviewState) -> dict:
+    return finalizar_plano_academico_node(state)

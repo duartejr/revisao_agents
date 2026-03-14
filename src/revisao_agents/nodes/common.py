@@ -73,3 +73,14 @@ def roteador_entrevista(state: ReviewState) -> str:
                 return "finalizar"
             break
     return "continuar"
+
+
+def interview_node(state: ReviewState) -> dict:
+    return entrevista_node(state)
+
+
+def route_interview(state: ReviewState) -> str:
+    decision = roteador_entrevista(state)
+    if decision == "continuar":
+        return "continue"
+    return "finalize"
