@@ -77,7 +77,7 @@ def _fase_observacao(
 
     query_obs = " ".join(informacoes_necessarias[:3])
     chunks_obs = corpus.query(query_obs, top_k=TOP_K_OBSERVATION)
-    amostra_corpus = "\n\n".join(c.texto for c in chunks_obs)[:4000]
+    amostra_corpus = "\n\n".join(c.text for c in chunks_obs)[:4000]
 
     informacoes_lista = "\n".join(f"- {i}" for i in informacoes_necessarias)
     prompt_obs = load_prompt(
@@ -212,7 +212,7 @@ def _extrair_com_fallback(
         raw = extract_urls(urls_para_extrair)
         for item in raw:
             url = item.get("url", "")
-            c = item.get("conteudo", "")
+            c = item.get("content", "")
             if len(c) >= EXTRACT_MIN_CHARS:
                 validos.append(item)
                 print(f"      ✅ {url[:]} ({len(c):,} chars)")
@@ -232,7 +232,7 @@ def _extrair_com_fallback(
                 if u and u not in urls_tentadas and not corpus.url_exists(u):
                     urls_tentadas.add(u)
                     for item in extract_urls([u]):
-                        if len(item.get("conteudo", "")) >= EXTRACT_MIN_CHARS:
+                        if len(item.get("content", "")) >= EXTRACT_MIN_CHARS:
                             validos.append(item)
                             resultados.extend(res_alt)
                             print(f"      ✅ Fallback: {item.get('url', '')[:72]}")

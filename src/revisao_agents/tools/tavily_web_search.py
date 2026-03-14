@@ -637,8 +637,8 @@ def extract_tavily(urls: List[str], incluir_imagens: bool = True) -> dict:
           "extraidos": [
             {
               "url"     : str,
-              "titulo"  : str,
-              "conteudo": str,
+              "title"   : str,
+              "content" : str,
               "imagens" : [str],
             }, ...
           ],
@@ -662,17 +662,17 @@ def extract_tavily(urls: List[str], incluir_imagens: bool = True) -> dict:
 
             for item in res.get("results", []):
                 url      = item.get("url", "")
-                conteudo = item.get("raw_content", item.get("content", ""))
-                imagens  = item.get("images", []) if incluir_imagens else []
+                content = item.get("raw_content", item.get("content", ""))
+                images  = item.get("images", []) if incluir_imagens else []
 
                 extraidos.append({
-                    "url":      url,
-                    "titulo":   item.get("title", ""),
-                    "conteudo": conteudo,
-                    "imagens":  imagens,
+                    "url": url,
+                    "title": item.get("title", ""),
+                    "content": content,
+                    "images": images,
                 })
-                print(f"   ✔ {url[:60]} — {len(conteudo):,} chars"
-                      f"{f', {len(imagens)} img(s)' if imagens else ''}")
+                print(f"   ✔ {url[:60]} — {len(content):,} chars"
+                      f"{f', {len(images)} img(s)' if images else ''}")
 
             for item in res.get("failed_results", []):
                 falhos.append(item.get("url", ""))
@@ -689,10 +689,10 @@ def extract_tavily(urls: List[str], incluir_imagens: bool = True) -> dict:
         query_repr,
         [
             {
-                "url":     e["url"],
-                "title":   e["titulo"],
-                "snippet": e["conteudo"],#[:3000],
-                "imagens": e["imagens"],
+                "url": e["url"],
+                "title": e["title"],
+                "snippet": e["content"],
+                "imagens": e["images"],
             }
             for e in extraidos
         ],

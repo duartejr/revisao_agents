@@ -122,13 +122,13 @@ def escrever_secoes_node(state: TechnicalWriterState) -> dict:
         print(f"\n  🗄️  Indexando no MongoDB...")
         log.append("\n── INDEXAÇÃO MONGODB ──")
         slug_secao = re.sub(r"[^\w]", "_", titulo[:30]).lower()
-        prefixo = f"s{pos+1:02d}_{slug_secao}"
+        prefix = f"s{pos+1:02d}_{slug_secao}"
 
         if _corpus_suficiente:
             # Reuse the global check corpus — no new documents to index
             corpus = corpus_check
         else:
-            corpus = CorpusMongoDB().build(extraidos, resultados, prefixo=prefixo)
+            corpus = CorpusMongoDB().build(extraidos, resultados, prefix=prefix)
 
         query_retrieval = f"{titulo} {cont_esp} {recursos}"
         corpus_prompt, urls_secao, _ = corpus.render_prompt(
@@ -148,7 +148,7 @@ def escrever_secoes_node(state: TechnicalWriterState) -> dict:
             )
             if novos_emerg:
                 extraidos.extend(novos_emerg)
-                corpus = CorpusMongoDB().build(extraidos, resultados, prefixo=prefixo)
+                corpus = CorpusMongoDB().build(extraidos, resultados, prefix=prefix)
                 corpus_prompt, urls_secao, _ = corpus.render_prompt(
                     query_retrieval, max_chars=MAX_CORPUS_PROMPT
                 )
@@ -302,7 +302,7 @@ def escrever_secoes_node(state: TechnicalWriterState) -> dict:
             num = int(match.group(1))
             citacoes_encontradas.add(num)
 
-        todas_urls_corpus = corpus._urls_usadas if hasattr(corpus, '_urls_usadas') else urls_secao
+        todas_urls_corpus = corpus._used_urls if hasattr(corpus, '_used_urls') else urls_secao
 
         referencias_secao = []
         urls_faltantes = []

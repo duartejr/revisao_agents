@@ -8,9 +8,9 @@ from typing import Optional, NamedTuple
 class Chunk(NamedTuple):
     """Represents a text chunk retrieved from the MongoDB corpus."""
 
-    texto: str
+    text: str
     url: str
-    titulo: str
-    fonte_idx: int
+    title: str
+    source_idx: int
     file_path: Optional[str] = None  # optional, for compatibility
     chunk_idx: str = ""              # identifies the specific chunk

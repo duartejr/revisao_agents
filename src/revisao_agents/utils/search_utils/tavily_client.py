@@ -61,13 +61,20 @@ def search_images(queries: List[str], max_results: int = 8) -> List[dict]:
         return []
 
 def extract_urls(urls: List[str]) -> List[dict]:
-    """Extrai texto completo de URLs via Tavily Extract."""
+    """Extract full page text from URLs and normalize the payload shape."""
     if not urls:
         return []
     try:
         from ...tools.tavily_web_search import extract_tavily
         res = extract_tavily.invoke({"urls": urls, "incluir_imagens": True})
-        return res.get("extraidos", [])
+        normalized = []
+        for item in res.get("extraidos", []):
+            normalized.append({
+                "url": item.get("url", ""),
+                "title": item.get("title", item.get("titulo", "")),
+                "content": item.get("content", item.get("conteudo", "")),
+            })
+        return normalized
     except Exception as e:
         print(f"   ⚠️  extract: {e}")
         return []
