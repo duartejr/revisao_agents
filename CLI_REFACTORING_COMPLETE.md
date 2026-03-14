@@ -49,7 +49,7 @@ All core components verified working:
   - ReviewState (alias)
 
 ✓ Schemas
-  - Chunk, Fonte, RespostaSecao
+  - Chunk, Source, SectionAnswer
 
 ✓ Constants
   - 35+ configuration parameters
@@ -138,7 +138,7 @@ src/revisao_agents/
 ├── core/
 │   └── schemas/                   # Pydantic schemas
 │       ├── corpus.py              # Chunk definitions
-│       └── technical_writing.py   # Fonte, RespostaSecao
+│       └── technical_writing.py   # Source, SectionAnswer
 ├── utils/
 │   ├── constants.py               # Constants with env vars (NEW)
 │   ├── prompt_loader.py           # Prompt rendering
@@ -181,11 +181,11 @@ CHUNK_SIZE=512
 CHUNK_OVERLAP=64
 
 # Search
-TOP_K_ESCRITA=5
-TOP_K_VERIFICACAO=3
+TOP_K_WRITER=5
+TOP_K_VERIFICATION=3
 
 # Technical
-TECNICO_MAX_RESULTS=10
+TECHINICAL_MAX_RESULTS=10
 
 # Checkpointing
 DEFAULT_CHECKPOINT_TYPE=memory  # Options: memory, sqlite, postgres

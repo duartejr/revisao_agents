@@ -18,11 +18,11 @@ if TYPE_CHECKING:
 
 from ...config import (
     llm_call, parse_json_safe,
-    TECNICO_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
+    TECHNICAL_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
     MAX_URLS_EXTRACT, CTX_RESUMO_CHARS, SECAO_MIN_PARAGRAFOS,
     TOP_K_OBSERVACAO,
 )
-from ...core.schemas.techinical_writing import RespostaSecao, Fonte
+from ...core.schemas.techinical_writing import SectionAnswer
 from ...utils.llm_utils.prompt_loader import load_prompt
 from ...utils.search_utils.tavily_client import search_web, extract_urls, score_url
 
@@ -153,8 +153,8 @@ def _fase_rascunho(
         + instru.text
         + f"\n## {titulo}\n"
     )
-    resultado: RespostaSecao = llm_call(
-        prompt, temperature=instru.temperature, response_schema=RespostaSecao
+    resultado: SectionAnswer = llm_call(
+        prompt, temperature=instru.temperature, response_schema=SectionAnswer
     )
     rascunho = resultado.rascunho
     fontes_usadas = resultado.fontes_usadas

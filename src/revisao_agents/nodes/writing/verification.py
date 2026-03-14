@@ -8,8 +8,8 @@ _juiz_paragrafo_melhorado            : 3-level LLM judge (APROVADO/AJUSTADO/CORR
 _monitorar_taxa_verificacao          : decide if more context is needed.
 _buscar_conteudo_complementar        : complementary web search when rate is low.
 _verificar_e_corrigir_secao_adaptativa : full adaptive loop (legacy, no anchors).
-_verificar_paragrafo_com_ancora      : anchor-directed single-paragraph check.
-_verificar_e_corrigir_secao_com_ancora : full anchor-directed adaptive loop.
+_verificar_paragrafo_com_anchor      : anchor-directed single-paragraph check.
+_verificar_e_corrigir_secao_com_anchor : full anchor-directed adaptive loop.
 """
 
 import re
@@ -23,15 +23,15 @@ from ...config import llm_call, EXTRACT_MIN_CHARS
 from ...utils.llm_utils.prompt_loader import load_prompt
 from ...utils.search_utils.tavily_client import search_web, extract_urls
 from ..writing.text_filters import (
-    _ANCORA_PATTERN,
+    _ANCHORS_PATTERN,
     _strip_justification_blocks,
     _strip_meta_sentences,
     _strip_figure_table_refs,
 )
-from ..writing.anchor_helpers import (
-    _extrair_ancora_principal,
-    _extrair_citacao_ancora,
-    _extrair_todas_ancoras_com_citacoes,
+from ...helpers.anchor_helpers import (
+    _extract_main_anchor,
+    _extract_citation_anchor,
+    _extract_all_anchors_with_citations,
 )
 
 
@@ -80,15 +80,15 @@ def _juiz_paragrafo_melhorado(
 
     Returns (texto_final, nivel, log_entry, eh_verificavel).
     """
-    ancoras = _ANCORA_PATTERN.findall(paragrafo_limpo)
-    tem_ancoras = len([a for a in ancoras if len(a.strip()) > 20]) > 0
+    anchors = _ANCHORS_PATTERN.findall(paragrafo_limpo)
+    tem_anchors = len([a for a in anchors if len(a.strip()) > 20]) > 0
     num_claims = _contar_claims_verificaveis(paragrafo_limpo)
 
-    if num_claims == 0 and not tem_ancoras:
+    if num_claims == 0 and not tem_anchors:
         log_entry = f"⏭️  ESTRUTURAL  | {paragrafo_limpo[:70].replace(chr(10), ' ')}..."
         return paragrafo_limpo, "ESTRUTURAL", log_entry, False
 
-    if tem_ancoras and len(paragrafo_limpo) < 100:
+    if tem_anchors and len(paragrafo_limpo) < 100:
         log_entry = f"✅ APROVADO  | {paragrafo_limpo[:70].replace(chr(10), ' ')}..."
         return paragrafo_limpo, "APROVADO", log_entry, True
 
@@ -265,7 +265,7 @@ def _verificar_e_corrigir_secao_adaptativa(
             if not bloco:
                 continue
 
-            bloco_limpo = re.sub(r'\[ÂNCORA:\s*"[^"]*"\]', "", bloco).strip()
+            bloco_limpo = re.sub(r'\[ANCHOR:\s*"[^"]*"\]', "", bloco).strip()
             bloco_limpo = re.sub(r'  +', ' ', bloco_limpo)
 
             if bloco_limpo.startswith("#") or len(bloco_limpo) < 60:
@@ -317,7 +317,7 @@ def _verificar_e_corrigir_secao_adaptativa(
             break
 
     texto_corrigido = "\n\n".join(p for p in resultado if p)
-    texto_corrigido = re.sub(r'\[ÂNCORA:\s*"[^"]*"\]', "", texto_corrigido)
+    texto_corrigido = re.sub(r'\[ANCHOR:\s*"[^"]*"\]', "", texto_corrigido)
     texto_corrigido = re.sub(r'\n{3,}', '\n\n', texto_corrigido)
 
     verificados = stats["aprovados"] + stats["ajustados"]
@@ -332,7 +332,7 @@ def _verificar_e_corrigir_secao_adaptativa(
 # Anchor-directed single paragraph
 # ---------------------------------------------------------------------------
 
-def _verificar_paragrafo_com_ancora(
+def _verificar_paragrafo_com_anchor(
     bloco: str,
     corpus: "CorpusMongoDB",
     fonte_map: dict,
@@ -344,23 +344,23 @@ def _verificar_paragrafo_com_ancora(
 
     Returns (texto_final, nivel, log_entry, eh_verificavel).
     """
-    bloco_limpo = re.sub(r'\[ÂNCORA:\s*"[^"]*"\]', "", bloco).strip()
+    bloco_limpo = re.sub(r'\[ANCHOR:\s*"[^"]*"\]', "", bloco).strip()
     bloco_limpo = re.sub(r'  +', ' ', bloco_limpo)
 
     if bloco_limpo.startswith("#") or len(bloco_limpo) < 60:
         return bloco_limpo, "ESTRUTURAL", "⏭️  ESTRUTURAL", False
 
-    ancora_principal = _extrair_ancora_principal(bloco)
+    anchor_principal = _extract_main_anchor(bloco)
 
-    if ancora_principal:
-        num_citacao = _extrair_citacao_ancora(bloco, ancora_principal)
+    if anchor_principal:
+        num_citacao = _extract_citation_anchor(bloco, anchor_principal)
         if num_citacao and num_citacao in fonte_map:
             url_citada = fonte_map[num_citacao]
-            print(f"     🎯 Âncora encontrada ({len(ancora_principal)} chars) → [{num_citacao}]")
+            print(f"     🎯 Anchor encontrada ({len(anchor_principal)} chars) → [{num_citacao}]")
             print(f"        URL: {url_citada[:60]}")
 
             fontes, urls_usadas, n_chunks = corpus.render_prompt_url(
-                texto_ancora=ancora_principal,
+                texto_anchor=anchor_principal,
                 url_citada=url_citada,
                 max_chars=3000,
                 top_k=5,
@@ -373,20 +373,20 @@ def _verificar_paragrafo_com_ancora(
                 print(f"        ⚠️  Nenhum chunk encontrado, usando busca geral")
                 fontes = corpus.render_prompt(bloco_limpo[:300], max_chars=3000)[0]
         else:
-            print(f"     ⚠️  Âncora sem citação válida")
+            print(f"     ⚠️  Anchor sem citação válida")
             fontes = corpus.render_prompt(bloco_limpo[:300], max_chars=3000)[0]
     else:
-        ancoras_com_cit = _extrair_todas_ancoras_com_citacoes(bloco)
-        if ancoras_com_cit:
-            ancoras_com_urls = [
+        anchors_com_cit = _extract_all_anchors_with_citations(bloco)
+        if anchors_com_cit:
+            anchors_com_urls = [
                 (at, fonte_map[nc])
-                for at, nc in ancoras_com_cit
+                for at, nc in anchors_com_cit
                 if nc in fonte_map
             ]
-            if ancoras_com_urls:
-                print(f"     🎯 {len(ancoras_com_urls)} âncoras com URLs")
-                fontes, urls_usadas, n_chunks = corpus.render_prompt_ancoras(
-                    ancoras_com_urls=ancoras_com_urls,
+            if anchors_com_urls:
+                print(f"     🎯 {len(anchors_com_urls)} anchors com URLs")
+                fontes, urls_usadas, n_chunks = corpus.render_prompt_anchors(
+                    anchors_com_urls=anchors_com_urls,
                     max_chars=3000,
                 )
                 if fontes:
@@ -410,7 +410,7 @@ def _verificar_paragrafo_com_ancora(
 # Anchor-directed adaptive loop (main)
 # ---------------------------------------------------------------------------
 
-def _verificar_e_corrigir_secao_com_ancora(
+def _verificar_e_corrigir_secao_com_anchor(
     texto_secao: str,
     corpus: "CorpusMongoDB",
     fonte_map: dict,
@@ -425,16 +425,16 @@ def _verificar_e_corrigir_secao_com_ancora(
 
     while iteracao < 3:
         iteracao += 1
-        print(f"\n     └─ Verificação iter {iteracao}/3 (com âncoras)")
+        print(f"\n     └─ Verificação iter {iteracao}/3 (com anchors)")
 
         blocos = re.split(r'\n{2,}', texto_secao.strip())
         resultado = []
-        log_linhas = [f"\n### Verificação com Âncoras — {titulo} (iter {iteracao})"]
+        log_linhas = [f"\n### Verificação com Anchors — {titulo} (iter {iteracao})"]
 
         stats = {
             "total": 0, "aprovados": 0, "ajustados": 0, "corrigidos": 0,
             "estruturais": 0, "verificaveis": 0, "pulados": 0,
-            "ancoras_usadas": 0,
+            "anchors_usadas": 0,
         }
 
         for i, bloco in enumerate(blocos):
@@ -442,10 +442,10 @@ def _verificar_e_corrigir_secao_com_ancora(
             if not bloco:
                 continue
 
-            if bool(re.search(r'\[ÂNCORA:', bloco)):
-                stats["ancoras_usadas"] += 1
+            if bool(re.search(r'\[ANCHOR:', bloco)):
+                stats["anchors_usadas"] += 1
 
-            texto_final, nivel, log_entry, eh_verificavel = _verificar_paragrafo_com_ancora(
+            texto_final, nivel, log_entry, eh_verificavel = _verificar_paragrafo_com_anchor(
                 bloco=bloco,
                 corpus=corpus,
                 fonte_map=fonte_map,
@@ -472,8 +472,8 @@ def _verificar_e_corrigir_secao_com_ancora(
         log_linhas.append(
             f"\n**Resultado:** {verificados}/{stats['verificaveis']} ({taxa:.0f}%) — {motivo}"
         )
-        log_linhas.append(f"**Âncoras usadas:** {stats['ancoras_usadas']} parágrafos")
-        print(f"     📊 {taxa:.0f}% | {motivo} | {stats['ancoras_usadas']} âncoras")
+        log_linhas.append(f"**Anchors usadas:** {stats['anchors_usadas']} parágrafos")
+        print(f"     📊 {taxa:.0f}% | {motivo} | {stats['anchors_usadas']} anchors")
 
         if not precisa_mais or iteracao >= 3:
             break
@@ -488,13 +488,13 @@ def _verificar_e_corrigir_secao_com_ancora(
             break
 
     texto_corrigido = "\n\n".join(p for p in resultado if p)
-    texto_corrigido = re.sub(r'\[ÂNCORA:\s*"[^"]*"\]', "", texto_corrigido)
+    texto_corrigido = re.sub(r'\[ANCHOR:\s*"[^"]*"\]', "", texto_corrigido)
     texto_corrigido = re.sub(r'\n{3,}', '\n\n', texto_corrigido)
 
     verificados = stats["aprovados"] + stats["ajustados"]
     taxa_final = (verificados / stats["verificaveis"] * 100) if stats["verificaveis"] > 0 else 100
     print(f"\n     📊 FINAL: {verificados}/{stats['verificaveis']} ({taxa_final:.0f}%)")
-    print(f"     🎯 Âncoras utilizadas: {stats['ancoras_usadas']} parágrafos")
+    print(f"     🎯 Anchors utilizadas: {stats['anchors_usadas']} parágrafos")
 
     relatorio = "\n".join(log_linhas)
     return texto_corrigido, relatorio, stats

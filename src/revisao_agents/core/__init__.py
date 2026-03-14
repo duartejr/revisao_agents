@@ -1,8 +1,8 @@
 # src/revisao_agents/core/__init__.py
 """
-Módulos core compartilhados por todo o pacote revisao_agents.
-Aqui ficam schemas Pydantic e utilities que não são específicas de agents/tools.
+Core modules shared across the revisao_agents package.
+This includes Pydantic schemas and utilities that are not specific to agents/tools.
 """
 
-# Re-exporta tudo para imports limpos em qualquer lugar do projeto
+# Re-export all modules for clean imports anywhere in the project
 from .schemas import *

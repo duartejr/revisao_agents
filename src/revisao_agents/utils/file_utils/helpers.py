@@ -3,7 +3,7 @@ import re
 import json
 import difflib
 from typing import List, Optional
-from ...config import HIST_MAX_TURNS, PLANO_MAX_CHARS
+from ...config import HIST_MAX_TURNS, PLAN_MAX_CHARS
 
 
 def fmt_chunks(chunks: List[str], max_chars: int = 1200) -> str:
@@ -38,7 +38,7 @@ def resumir_hist(historico: List[tuple], max_turns: int = HIST_MAX_TURNS) -> str
         linhas.append(f"{label}: {resumo}")
     return "\n".join(linhas)
 
-def truncar(s: str, n: int = PLANO_MAX_CHARS) -> str:
+def truncar(s: str, n: int = PLAN_MAX_CHARS) -> str:
     return s if len(s) <= n else s[:n] + "\n...[truncado]"
 
 def salvar_md(conteudo: str, prefixo: str, tema: str) -> str:
@@ -67,14 +67,14 @@ def fuzzy_sim(a: str, b: str) -> float:
     """SequenceMatcher ratio entre dois textos normalizados."""
     return difflib.SequenceMatcher(None, a, b).ratio()
 
-def fuzzy_search_in_text(ancora_norm: str, corpus_norm: str) -> tuple:
+def fuzzy_search_in_text(anchor_norm: str, corpus_norm: str) -> tuple:
     """
-    Desliza uma janela pelo corpus tentando encontrar a âncora por fuzzy.
+    Desliza uma janela pelo corpus tentando encontrar a anchor por fuzzy.
     Returns: (melhor_score, trecho_original[:120])
     """
-    palavras_ancora = ancora_norm.split()
+    palavras_anchor = anchor_norm.split()
     palavras_corpus = corpus_norm.split()
-    n = len(palavras_ancora)
+    n = len(palavras_anchor)
     if n == 0:
         return 0.0, ""
 
@@ -84,7 +84,7 @@ def fuzzy_search_in_text(ancora_norm: str, corpus_norm: str) -> tuple:
 
     for i in range(0, max(1, len(palavras_corpus) - n), passo):
         janela = " ".join(palavras_corpus[i: i + n + n // 3])
-        score  = fuzzy_sim(ancora_norm, janela)
+        score  = fuzzy_sim(anchor_norm, janela)
         if score > melhor:
             melhor = score
             melhor_trecho = janela[:120]
@@ -183,9 +183,9 @@ def parse_plano_academico(texto: str) -> tuple:
     return tema, resumo, secoes
 
 
-def extrair_ancoras(texto: str) -> list:
-    """Extracts anchor texts [ÂNCORA: "..."] from a text block."""
-    pattern = re.compile(r'\[ÂNCORA:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
+def extrair_anchors(texto: str) -> list:
+    """Extracts anchor texts [ANCHOR: "..."] from a text block."""
+    pattern = re.compile(r'\[ANCHOR:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
     return [m.strip() for m in pattern.findall(texto)]
 
 
@@ -210,7 +210,7 @@ def eh_paragrafo_verificavel(paragrafo: str) -> bool:
     # Has numbers, citations, or strong verbs → likely verifiable
     has_numbers = bool(re.search(r'\b\d+[\d.,]*\b', p))
     has_citations = bool(re.search(r'\[\d+\]', p))
-    has_anchors = bool(re.search(r'\[ÂNCORA:', p))
+    has_anchors = bool(re.search(r'\[ANCHOR:', p))
     has_verbs = bool(re.search(
         r'\b(foi|é|são|demonstra|prova|mostra|evidencia|encontrou|'
         r'observou|descobriu|propôs|definiu)\b', p, re.IGNORECASE

@@ -1,7 +1,7 @@
 import re
 from typing import List, Tuple
 from ..vector_utils.vector_store import buscar_chunks  # nossa nova função que usa MongoDB/OpenAI
-from ..file_utils.helpers import normalizar, extrair_ancoras, eh_paragrafo_verificavel
+from ..file_utils.helpers import normalizar, extrair_anchors, eh_paragrafo_verificavel
 from ...config import JUIZ_MAX_CORPUS_CHARS, JUIZ_TOP_K, get_llm
 
 def buscar_chunks_para_paragrafo(
@@ -11,24 +11,24 @@ def buscar_chunks_para_paragrafo(
 ) -> str:
     """
     Monta o bloco de fontes relevantes para verificar o parágrafo.
-    Usa as âncoras declaradas como queries de busca no MongoDB.
+    Usa as anchors declaradas como queries de busca no MongoDB.
     """
-    # Limpa âncoras e LaTeX pesado do texto para a query
-    texto_sem_ancoras = re.sub(r'\[ÂNCORA:\s*"[^"]*"\]', "", paragrafo)
-    texto_sem_ancoras = re.sub(r'\$\$[^$]+\$\$', "", texto_sem_ancoras)
-    texto_sem_ancoras = re.sub(r'\$[^$]+\$', "", texto_sem_ancoras)
-    texto_sem_ancoras = re.sub(r'\\\([^)]+\\\)', "", texto_sem_ancoras).strip()
+    # Limpa anchors e LaTeX pesado do texto para a query
+    texto_sem_anchors = re.sub(r'\[ANCHOR:\s*"[^"]*"\]', "", paragrafo)
+    texto_sem_anchors = re.sub(r'\$\$[^$]+\$\$', "", texto_sem_anchors)
+    texto_sem_anchors = re.sub(r'\$[^$]+\$', "", texto_sem_anchors)
+    texto_sem_anchors = re.sub(r'\\\([^)]+\\\)', "", texto_sem_anchors).strip()
 
-    # Âncoras declaradas são os melhores hints de busca
-    ancoras = extrair_ancoras(paragrafo)
-    # Filtra âncoras que são só LaTeX ou muito curtas
-    ancoras_validas = [
-        a for a in ancoras
+    # Anchors declaradas são os melhores hints de busca
+    anchors = extrair_anchors(paragrafo)
+    # Filtra anchors que são só LaTeX ou muito curtas
+    anchors_validas = [
+        a for a in anchors
         if len(a.strip()) >= 20
         and not re.match(r'^[\\\$\{\}\[\]_\^]+', a.strip())
     ]
 
-    queries = ancoras_validas[:3] + ([texto_sem_ancoras[:200]] if texto_sem_ancoras else [])
+    queries = anchors_validas[:3] + ([texto_sem_anchors[:200]] if texto_sem_anchors else [])
 
     if not queries:
         return corpus_prompt_completo[:JUIZ_MAX_CORPUS_CHARS]

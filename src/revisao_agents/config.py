@@ -25,12 +25,12 @@ OPENAI_API_KEY         = _env_clean("OPENAI_API_KEY", "")
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 
 # Parâmetros de busca técnica
-TECNICO_MAX_RESULTS  = 10
+TECHNICAL_MAX_RESULTS  = 10
 MAX_URLS_EXTRACT     = 7
 CTX_PLANO_CHARS      = 1200
 CTX_RESUMO_CHARS     = 1400
 SECAO_MIN_PARAGRAFOS = 8
-MAX_IMAGENS_SECAO    = 6
+MAX_IMAGES_SECTION  = 6
 DELAY_ENTRE_SECOES   = 5
 MAX_REACT_ITERATIONS = 2
 EXTRACT_MIN_CHARS    = 500
@@ -39,26 +39,25 @@ SNIPPET_MIN_SCORE    = 0.7
 # Chunking e embeddings
 CHUNK_SIZE        = 1200
 CHUNK_OVERLAP     = 240
-TOP_K_ESCRITA     = 6
+TOP_K_WRITER      = 6
 TOP_K_OBSERVACAO  = 5
-TOP_K_VERIFICACAO = 6
+TOP_K_VERIFICATION = 6
 MAX_CORPUS_PROMPT = 25000
 CHUNK_MAX_CHARS   = 600
 MAX_CHUNKS_TOTAL  = 100
 CHUNKS_CACHE_DIR  = os.getenv("CHUNKS_CACHE_DIR", "./chunks_cache")
 
-# Verificação de âncoras
-ANCORA_MIN_SIM_FAISS = 0.82
-ANCORA_MIN_SIM_FUZZY = 0.72
+# Anchors verify similarity threshold (cosine similarity)
+ANCHOR_MIN_SIM = 0.82
 
 HIST_MAX_TURNS   = 6
-PLANO_MAX_CHARS  = 3000
+PLAN_MAX_CHARS  = 3000
 CHUNKS_PER_QUERY = 5
 JUIZ_TOP_K       = 12
 JUIZ_MAX_CORPUS_CHARS = 8000
 
 # Domínios
-DOMINIOS_PRIORITARIOS = [
+PRIORITY_DOMAINS = [
     ".pdf", "doi.org", "scielo", "copernicus", "arxiv.org",
     "researchgate.net", "springer.com", "elsevier.com", "mdpi.com",
     "nature.com", "wiley.com", "tandfonline.com", "cambridge.org",
@@ -68,7 +67,7 @@ DOMINIOS_PRIORITARIOS = [
     "ufrgs.br", "ufmg.br", "ufc.br", "ufpe.br",
 ]
 
-DOMINIOS_BLOQUEADOS_EXTRACT = [
+BLOCKED_DOMAINS_EXTRACT = [
     "jstor.org", "proquest.com", "web.b.ebscohost.com",
 ]
 

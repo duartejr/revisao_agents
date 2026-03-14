@@ -2,7 +2,7 @@
 text_filters.py — regex patterns and LLM output cleanup helpers.
 
 Contains:
-- _ANCORA_PATTERN          : matches [ÂNCORA: "..."] in generated text.
+- _ANCHORS_PATTERN          : matches [ANCHOR: "..."] in generated text.
 - _strip_justification_blocks : removes LLM reasoning blocks after the paragraph.
 - _strip_meta_sentences    : removes meta-organisational opening sentences.
 - _strip_figure_table_refs : removes dangling Figure/Table/Equation references.
@@ -13,7 +13,7 @@ import re
 # ---------------------------------------------------------------------------
 # Core anchor pattern (used across multiple modules)
 # ---------------------------------------------------------------------------
-_ANCORA_PATTERN = re.compile(r'\[ÂNCORA:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
+_ANCHORS_PATTERN = re.compile(r'\[ANCHOR:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
 
 # ---------------------------------------------------------------------------
 # Patterns for LLM-generated justification/meta blocks

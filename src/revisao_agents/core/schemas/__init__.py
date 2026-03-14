@@ -1,11 +1,11 @@
 # src/revisao_agents/core/schemas/__init__.py
 """
-Schemas centralizados do projeto.
-Importe tudo daqui para ter acesso limpo em qualquer lugar do projeto.
+Centralized schemas for the project.
+Import everything from here for clean access anywhere in the project.
 """
 
 # Pydantic models — technical writing output
-from .techinical_writing import Fonte, RespostaSecao
+from .techinical_writing import Source, SectionAnswer
 
 # NamedTuple schemas — corpus / retrieval
 from .corpus import Chunk
@@ -15,8 +15,8 @@ from .writer_config import WriterConfig
 
 __all__ = [
     # technical_writing
-    "Fonte",
-    "RespostaSecao",
+    "Source",
+    "SectionAnswer",
     # corpus
     "Chunk",
     # writer config

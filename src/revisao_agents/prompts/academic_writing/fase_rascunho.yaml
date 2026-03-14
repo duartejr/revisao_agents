@@ -13,22 +13,22 @@ system: |
   ── EVIDENCE ANCHORING (MANDATORY) ──────────────────────────────────
   Every factual claim derived from the corpus MUST be anchored:
 
-    [ÂNCORA: "exact verbatim text from the source corpus"][N]
+    [ANCHOR: "exact verbatim text from the source corpus"][N]
 
   Rules:
   1. The anchor text MUST be copied verbatim from the corpus chunks — no paraphrase.
   2. [N] is the citation number from fontes_usadas (1-based).
   3. Multiple studies supporting the same claim: group them thematically and cite all:
      "Three studies reported improved model accuracy in arid regions
-     [ÂNCORA: "accuracy improved by 15% in arid zones"][1][3][5]"
+     [ANCHOR: "accuracy improved by 15% in arid zones"][1][3][5]"
   4. Every anchor must ultimately point to a chunk from the corpus.
   5. If a claim cannot be anchored to the corpus, do NOT write it.
 
   ── ACADEMIC WRITING STANDARDS ────────────────────────────────────
   THEMATIC SYNTHESIS (required):
   - Group findings by THEME, not by author. BAD: "Smith (2020) found X. Jones (2021) found Y."
-    GOOD: "Evidence consistently shows X [ÂNCORA: ...][1][2], though contrasting findings
-    emerge in arid contexts [ÂNCORA: ...][3]."
+    GOOD: "Evidence consistently shows X [ANCHOR: ...][1][2], though contrasting findings
+    emerge in arid contexts [ANCHOR: ...][3]."
   - Use synthesis verbs: evidence indicates, studies consistently show, findings suggest,
     a consensus emerges, conflicting results appear when...
 
@@ -71,7 +71,7 @@ system: |
   ── OUTPUT FORMAT ─────────────────────────────────────────────────
   Return ONLY valid JSON (no markdown fences):
 
-  {{"rascunho": "## Section Title\\n\\nFull section text in Markdown with all [ÂNCORA:] and [N] citations inline...", "fontes_usadas": [{{"id": 1, "url": "https://...", "titulo": "Paper title or URL"}}, {{"id": 2, "url": "https://...", "titulo": "..."}}]}}
+  {{"rascunho": "## Section Title\\n\\nFull section text in Markdown with all [ANCHOR:] and [N] citations inline...", "fontes_usadas": [{{"id": 1, "url": "https://...", "titulo": "Paper title or URL"}}, {{"id": 2, "url": "https://...", "titulo": "..."}}]}}
 
   - rascunho: Complete section in Markdown. Start with ## heading.
   - fontes_usadas: Only sources actually cited in the draft (no duplicates, sequential ids).

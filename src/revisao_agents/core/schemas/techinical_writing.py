@@ -4,25 +4,25 @@ from typing import List
 
 
 # ── Schema de saída ───────────────────────────────────────────────────────────
-class Fonte(BaseModel):
-    """Representa uma fonte citada no corpus MongoDB."""
+class Source(BaseModel):
+    """Represent a source cited in the MongoDB corpus."""
 
     id: int = Field(
-        description="Índice numérico da fonte conforme aparece no corpus, ex: 1, 2, 3"
+        description="Numeric index of the source as it appears in the corpus, e.g., 1, 2, 3"
     )
-    url: str = Field(description="URL completa da fonte extraída do corpus")
-    titulo: str = Field(description="Título do documento ou página da fonte")
+    url: str = Field(description="Full URL of the source extracted from the corpus")
+    titulo: str = Field(description="Title of the document or page of the source")
 
 
-class RespostaSecao(BaseModel):
-    """Modelo de saída esperado pelo agent de escrita técnica."""
+class SectionAnswer(BaseModel):
+    """Expected output model for the technical writing agent."""
 
-    rascunho: str = Field(
+    draft: str = Field(
         description=(
-            "Texto completo da seção com todas as âncoras [ÂNCORA: '...'] "
-            "e citações [N] embutidas inline, em Markdown."
+            "Full text of the section with all anchors [ANCHOR: '...'] "
+            "and citations [N] embedded inline, in Markdown."
         )
     )
-    fontes_usadas: List[Fonte] = Field(
-        description="Apenas as fontes efetivamente citadas no rascunho, sem repetição."
+    used_sources: List[Source] = Field(
+        description="Only the sources actually cited in the draft, without repetition."
     )

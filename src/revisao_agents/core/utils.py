@@ -47,14 +47,30 @@ def parse_json_safe(text: str, default: Any = None) -> Any:
 
 
 def truncate(text: str, max_chars: int = 2000, suffix: str = "…") -> str:
-    """Truncate *text* to *max_chars*, appending *suffix* if cut."""
+    """Truncate *text* to *max_chars*, appending *suffix* if cut.
+    If *text* is shorter than *max_chars*, returns it unchanged.
+    
+    Args:
+        text:      Input string to truncate.
+        max_chars: Maximum allowed characters before truncation.
+        suffix:    String to append when truncation occurs (default: "…").
+    
+    Returns:
+        Truncated string with suffix if applicable.
+    """
     if len(text) <= max_chars:
         return text
     return text[:max_chars] + suffix
 
 
 def slugify(text: str) -> str:
-    """Convert *text* to a filesystem-safe slug (lowercase, hyphens)."""
+    """Convert *text* to a filesystem-safe slug (lowercase, hyphens).
+    
+    Args:
+        text: Input string to slugify.
+    Returns:
+        Slugified version of the input string.
+    """
     text = text.lower().strip()
     text = re.sub(r"[^\w\s-]", "", text)
     text = re.sub(r"[\s_]+", "-", text)

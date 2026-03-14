@@ -31,34 +31,32 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "64"))
 CHUNK_MAX_CHARS = int(os.getenv("CHUNK_MAX_CHARS", "5000"))
 MAX_CHUNKS_TOTAL = int(os.getenv("MAX_CHUNKS_TOTAL", "100"))
 MAX_CORPUS_PROMPT = int(os.getenv("MAX_CORPUS_PROMPT", "10000"))
-PLANO_MAX_CHARS = int(os.getenv("PLANO_MAX_CHARS", "8000"))
+PLAN_MAX_CHARS = int(os.getenv("PLAN_MAX_CHARS", "8000"))
 
 # ============================================================================
 # Search Parameters
 # ============================================================================
-TOP_K_ESCRITA = int(os.getenv("TOP_K_ESCRITA", "5"))
-TOP_K_VERIFICACAO = int(os.getenv("TOP_K_VERIFICACAO", "3"))
+TOP_K_WRITER = int(os.getenv("TOP_K_WRITER", "5"))
+TOP_K_VERIFICATION = int(os.getenv("TOP_K_VERIFICATION", "3"))
 SNIPPET_MIN_SCORE = float(os.getenv("SNIPPET_MIN_SCORE", "0.3"))
 
 # ============================================================================
 # Technical Search Configuration
 # ============================================================================
-TECNICO_MAX_RESULTS = int(os.getenv("TECNICO_MAX_RESULTS", "10"))
-DOMINIOS_PRIORITARIOS = os.getenv(
-    "DOMINIOS_PRIORITARIOS",
+TECHNICAL_MAX_RESULTS = int(os.getenv("TECHNICAL_MAX_RESULTS", "10"))
+PRIORITY_DOMAINS = os.getenv(
+    "PRIORITY_DOMAINS",
     "arxiv.org,researchgate.net,scholar.google.com,github.com,sciencedirect.com"
 ).split(",")
-DOMINIOS_BLOQUEADOS_EXTRACT = os.getenv(
-    "DOMINIOS_BLOQUEADOS_EXTRACT",
+BLOCKED_DOMAINS_EXTRACT = os.getenv(
+    "BLOCKED_DOMAINS_EXTRACT",
     ""
-).split(",") if os.getenv("DOMINIOS_BLOQUEADOS_EXTRACT") else []
-MAX_IMAGENS_SECAO = int(os.getenv("MAX_IMAGENS_SECAO", "2"))
+).split(",") if os.getenv("BLOCKED_DOMAINS_EXTRACT") else []
+MAX_IMAGES_SECTION = int(os.getenv("MAX_IMAGES_SECTION", "2"))
 
 # ============================================================================
 # Anchor Matching Configuration
 # ============================================================================
-ANCORA_MIN_SIM_FAISS = float(os.getenv("ANCORA_MIN_SIM_FAISS", "0.5"))
-ANCORA_MIN_SIM_FUZZY = float(os.getenv("ANCORA_MIN_SIM_FUZZY", "0.6"))
 EXTRACT_MIN_CHARS = int(os.getenv("EXTRACT_MIN_CHARS", "50"))
 
 # ============================================================================
@@ -101,19 +99,17 @@ __all__ = [
     "CHUNK_MAX_CHARS",
     "MAX_CHUNKS_TOTAL",
     "MAX_CORPUS_PROMPT",
-    "PLANO_MAX_CHARS",
+    "PLAN_MAX_CHARS",
     # Search
-    "TOP_K_ESCRITA",
-    "TOP_K_VERIFICACAO",
+    "TOP_K_WRITER",
+    "TOP_K_VERIFICATION",
     "SNIPPET_MIN_SCORE",
     # Technical
-    "TECNICO_MAX_RESULTS",
-    "DOMINIOS_PRIORITARIOS",
-    "DOMINIOS_BLOQUEADOS_EXTRACT",
-    "MAX_IMAGENS_SECAO",
+    "TECHNICAL_MAX_RESULTS",
+    "PRIORITY_DOMAINS",
+    "BLOCKED_DOMAINS_EXTRACT",
+    "MAX_IMAGES_SECTION",
     # Anchor
-    "ANCORA_MIN_SIM_FAISS",
-    "ANCORA_MIN_SIM_FUZZY",
     "EXTRACT_MIN_CHARS",
     # Caching
     "CHUNKS_CACHE_DIR",

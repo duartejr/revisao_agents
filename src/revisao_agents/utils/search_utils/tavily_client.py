@@ -1,6 +1,6 @@
 import time
 from typing import List, Dict
-from ...config import TECNICO_MAX_RESULTS, DOMINIOS_PRIORITARIOS, DOMINIOS_BLOQUEADOS_EXTRACT
+from ...config import TECHNICAL_MAX_RESULTS, PRIORITY_DOMAINS, BLOCKED_DOMAINS_EXTRACT
 
 def buscar_conteudo_tecnico(query: str, urls_anteriores: List[str]) -> Dict:
     """
@@ -10,7 +10,7 @@ def buscar_conteudo_tecnico(query: str, urls_anteriores: List[str]) -> Dict:
     try:
         from ...tools.tavily_web_search import search_tavily_tecnico_incremental
         return search_tavily_tecnico_incremental(
-            query, urls_anteriores, max_results=TECNICO_MAX_RESULTS
+            query, urls_anteriores, max_results=TECHNICAL_MAX_RESULTS
         )
     except Exception as e:
         print("   Busca tecnica falhou: " + str(e))
@@ -23,7 +23,7 @@ def score_url(url: str, snippet: str = "", score_tavily: float = 0.0) -> float:
     ul = url.lower()
     pts = score_tavily * 2.0
 
-    for d in DOMINIOS_PRIORITARIOS:
+    for d in PRIORITY_DOMAINS:
         if d in ul:
             pts += 3.0
             break
@@ -32,7 +32,7 @@ def score_url(url: str, snippet: str = "", score_tavily: float = 0.0) -> float:
         pts += 4.0
     if "doi.org" in ul:
         pts += 3.0
-    if any(d in ul for d in DOMINIOS_BLOQUEADOS_EXTRACT):
+    if any(d in ul for d in BLOCKED_DOMAINS_EXTRACT):
         pts -= 10.0
 
     if len(snippet) > 400:
@@ -40,7 +40,7 @@ def score_url(url: str, snippet: str = "", score_tavily: float = 0.0) -> float:
 
     return pts
 
-def search_web(query: str, max_results: int = TECNICO_MAX_RESULTS) -> List[dict]:
+def search_web(query: str, max_results: int = TECHNICAL_MAX_RESULTS) -> List[dict]:
     """Busca técnica no Tavily e retorna lista de resultados."""
     try:
         from ...tools.tavily_web_search import search_tavily_tecnico_incremental
@@ -55,7 +55,7 @@ def search_images(queries: List[str], max_results: int = 8) -> List[dict]:
     try:
         from ...tools.tavily_web_search import search_tavily_images
         res = search_tavily_images.invoke({"queries": queries, "max_results": max_results})
-        return res.get("imagens", [])[:max_results]  # MAX_IMAGENS_SECAO deve estar em config
+        return res.get("imagens", [])[:max_results]  # MAX_IMAGES_SECTION deve estar em config
     except Exception as e:
         print(f"   ⚠️  search_images: {e}")
         return []
