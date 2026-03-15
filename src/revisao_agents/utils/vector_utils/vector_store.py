@@ -6,7 +6,7 @@ from openai import OpenAI
 
 from ...config import (
     MONGODB_URI, MONGODB_DB, MONGODB_COLLECTION,
-    VECTOR_INDEX_NAME, CHUNK_MAX_CHARS, MAX_CHUNKS_TOTAL
+    VECTOR_INDEX_NAME, CHUNK_MAX_CHARS, MAX_CHUNKS_TOTAL, CHUNKS_CACHE_DIR
 )
 
 _client = None
@@ -15,6 +15,43 @@ _openai_client = None
 
 # OpenAI embedding model
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
+
+
+def _project_root() -> str:
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+
+
+def _resolve_chunk_path(file_path: str) -> str:
+    if not file_path:
+        return ""
+    if os.path.isabs(file_path):
+        return file_path
+
+    root = _project_root()
+    candidate = os.path.abspath(os.path.join(root, file_path))
+    if os.path.exists(candidate):
+        return candidate
+
+    cache_dir = CHUNKS_CACHE_DIR if os.path.isabs(CHUNKS_CACHE_DIR) else os.path.abspath(os.path.join(root, CHUNKS_CACHE_DIR))
+    by_basename = os.path.join(cache_dir, os.path.basename(file_path))
+    if os.path.exists(by_basename):
+        return by_basename
+
+    return candidate
+
+
+def _read_chunk_text(result: dict) -> str:
+    if result.get("text"):
+        return str(result["text"])
+
+    file_path = _resolve_chunk_path(str(result.get("file_path", "")))
+    if not file_path:
+        return ""
+    try:
+        with open(file_path, "r", encoding="utf-8") as file_handle:
+            return file_handle.read()
+    except Exception:
+        return ""
 
 def _get_mongo_collection() -> Collection:
     """Returns the MongoDB collection (connects if necessary).
@@ -112,7 +149,8 @@ def search_chunks(query: str, k: int = 16) -> List[str]:
         },
         {
             "$project": {
-                "text": 1,                     # field with the chunk content
+                "text": 1,
+                "file_path": 1,
                 "score": {"$meta": "vectorSearchScore"}
             }
         }
@@ -124,8 +162,11 @@ def search_chunks(query: str, k: int = 16) -> List[str]:
         print(f"   Error in MongoDB vector search: {e}")
         return []
     
-    # Extract text, truncating if necessary
-    chunks = [r["text"][:CHUNK_MAX_CHARS] for r in results if "text" in r]
+    chunks = []
+    for result in results:
+        chunk_text = _read_chunk_text(result)
+        if chunk_text:
+            chunks.append(chunk_text[:CHUNK_MAX_CHARS])
     print(f"   {len(chunks)} chunks retrieved from MongoDB.")
     return chunks
 

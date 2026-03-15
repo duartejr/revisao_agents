@@ -360,8 +360,8 @@ def _verificar_paragrafo_com_anchor(
             print(f"        URL: {url_citada[:60]}")
 
             fontes, urls_usadas, n_chunks = corpus.render_prompt_url(
-                texto_anchor=anchor_principal,
-                url_citada=url_citada,
+                anchor_text=anchor_principal,
+                cited_urls=url_citada,
                 max_chars=3000,
                 top_k=5,
                 include_neighbors=True,

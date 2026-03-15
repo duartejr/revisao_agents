@@ -27,7 +27,16 @@ class CorpusMongoDB:
         self._source_map: Dict[int, str] = {}
         self._n_docs = 0
         self._total_chunks = 0
-        # Ensures the the directory for storing chunk text files exists.
+        project_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
+        )
+        if os.path.isabs(CHUNKS_CACHE_DIR):
+            self._chunks_cache_dir = CHUNKS_CACHE_DIR
+        else:
+            self._chunks_cache_dir = os.path.abspath(
+                os.path.join(project_root, CHUNKS_CACHE_DIR)
+            )
+        os.makedirs(self._chunks_cache_dir, exist_ok=True)
 
     def _get_collection(self) -> Collection:
         """Establishes and returns the MongoDB collection connection.
@@ -182,7 +191,7 @@ class CorpusMongoDB:
         # Create a unique name based on the URL and index to avoid collisions
         url_hash = hashlib.md5(url.encode()).hexdigest()[:10]
         filename = f"{url_hash}_{chunk_index}.txt"
-        file_path = os.path.join(CHUNKS_CACHE_DIR, filename)
+        file_path = os.path.join(self._chunks_cache_dir, filename)
         # Avoid overwriting if it already exists (can be called again for the same chunk)
         if not os.path.exists(file_path):
             with open(file_path, "w", encoding="utf-8") as f:

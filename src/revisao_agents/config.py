@@ -18,7 +18,7 @@ def _env_clean(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip().strip("'").strip('"')
 
 # Caminhos e modelos
-VECTOR_DB_PATH   = _env_clean("VECTOR_DB_PATH", "./vector_db_suelen/faiss_index")
+VECTOR_DB_PATH   = _env_clean("VECTOR_DB_PATH", "./vector_db_suelen/vector_index")
 EMBEDDINGS_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 # MongoDB Atlas
@@ -44,8 +44,8 @@ EXTRACT_MIN_CHARS    = 500
 SNIPPET_MIN_SCORE    = 0.7
 
 # Chunking e embeddings
-CHUNK_SIZE        = 1200
-CHUNK_OVERLAP     = 240
+CHUNK_SIZE        = 2400
+CHUNK_OVERLAP     = 480
 TOP_K_WRITER      = 6
 TOP_K_OBSERVATION = 5
 TOP_K_VERIFICATION = 6

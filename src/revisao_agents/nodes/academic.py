@@ -47,7 +47,7 @@ def refinar_consulta_academico_node(state: ReviewState) -> dict:
         if role == "user":
             query = c[:150]
             break
-    print("\n[FAISS re-consulta] query:", repr(query[:60]))
+    print("\n[MONGODB re-query] query:", repr(query[:60]))
     novos = search_chunks(query)
     acum  = accumulate_chunks(state["relevant_chunks"], novos)
     print("   ", len(novos), "recuperados | total:", len(acum))

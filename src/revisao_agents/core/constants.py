@@ -24,8 +24,8 @@ OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-s
 # ─────────────────────────────────────────────────────────────────────────────
 # Chunk / Context Limits
 # ─────────────────────────────────────────────────────────────────────────────
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "600"))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "100"))
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "2400"))
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "480"))
 CHUNK_MAX_CHARS = int(os.getenv("CHUNK_MAX_CHARS", "50000"))
 MAX_CHUNKS_TOTAL = int(os.getenv("MAX_CHUNKS_TOTAL", "500"))
 MAX_CORPUS_PROMPT = int(os.getenv("MAX_CORPUS_PROMPT", "3000"))

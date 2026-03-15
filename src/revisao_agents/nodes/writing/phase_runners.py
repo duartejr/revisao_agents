@@ -156,9 +156,10 @@ def _fase_rascunho(
     resultado: SectionAnswer = llm_call(
         prompt, temperature=instru.temperature, response_schema=SectionAnswer
     )
-    rascunho = resultado.rascunho
-    fontes_usadas = resultado.fontes_usadas
-    return rascunho, fontes_usadas
+    draft = resultado.draft
+    used_sources = resultado.used_sources
+
+    return draft, used_sources
 
 
 # ---------------------------------------------------------------------------
