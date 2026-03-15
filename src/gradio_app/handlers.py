@@ -15,6 +15,7 @@ yields.  This produces true, line-by-line live output in the UI.
 from __future__ import annotations
 
 import glob
+import logging
 import os
 import queue
 import sys
@@ -78,6 +79,80 @@ class _StdoutCapture:
     @property
     def encoding(self) -> str:
         return getattr(self._original, "encoding", "utf-8")
+
+
+class _StderrCapture:
+    """
+    Context manager that redirects sys.stderr to a queue so exceptions,
+    warnings and direct stderr writes also appear in the live UI stream.
+    """
+
+    def __init__(self, q: "queue.Queue[str]"):
+        self._q = q
+        self._buf = ""
+        self._original: Any = None
+
+    def __enter__(self) -> "_StderrCapture":
+        self._original = sys.stderr
+        sys.stderr = self  # type: ignore[assignment]
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        if self._buf.strip():
+            self._q.put(self._buf.rstrip())
+            self._buf = ""
+        sys.stderr = self._original
+
+    def write(self, text: str) -> int:
+        self._original.write(text)
+        self._buf += text
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            stripped = line.rstrip()
+            if stripped:
+                self._q.put(stripped)
+        return len(text)
+
+    def flush(self) -> None:
+        self._original.flush()
+
+    @property
+    def encoding(self) -> str:
+        return getattr(self._original, "encoding", "utf-8")
+
+
+class _QueueLogHandler(logging.Handler):
+    def __init__(self, q: "queue.Queue[str]"):
+        super().__init__(level=logging.NOTSET)
+        self._q = q
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+        except Exception:
+            msg = record.getMessage()
+        if msg.strip():
+            self._q.put(msg.rstrip())
+
+
+class _LoggingCapture:
+    """
+    Context manager that adds a queue-backed logging handler to the root
+    logger so logging calls are streamed live to the UI.
+    """
+
+    def __init__(self, q: "queue.Queue[str]"):
+        self._q = q
+        self._handler = _QueueLogHandler(q)
+        self._logger = logging.getLogger()
+
+    def __enter__(self) -> "_LoggingCapture":
+        self._handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+        self._logger.addHandler(self._handler)
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        self._logger.removeHandler(self._handler)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -357,7 +432,7 @@ def start_writing(
         "tavily_enabled": tavily_enabled,
     }
 
-            app = build_technical_writing_workflow()
+    app = build_technical_writing_workflow()
     snapshot_before = set(_list_md("reviews"))
 
     result_q: queue.Queue[tuple[str, Any]] = queue.Queue()
@@ -365,21 +440,28 @@ def start_writing(
 
     def _worker() -> None:
         log_q: queue.Queue[str] = queue.Queue()
+        stop_logs = threading.Event()
 
-        def _drain() -> None:
-            while not log_q.empty():
-                result_q.put(("log", log_q.get_nowait()))
+        def _forward_logs_live() -> None:
+            while not stop_logs.is_set() or not log_q.empty():
+                try:
+                    line = log_q.get(timeout=0.2)
+                except queue.Empty:
+                    continue
+                result_q.put(("log", line))
 
-        with _StdoutCapture(log_q):
+        log_thread = threading.Thread(target=_forward_logs_live, daemon=True)
+        log_thread.start()
+
+        with _StdoutCapture(log_q), _StderrCapture(log_q), _LoggingCapture(log_q):
             try:
                 for event in app.stream(state_init):
-                    _drain()
                     result_q.put(("event", event))
             except Exception as exc:
-                _drain()
                 result_q.put(("error", exc))
             finally:
-                _drain()
+                stop_logs.set()
+                log_thread.join(timeout=1.0)
 
         result_q.put(("done", _DONE))
 
