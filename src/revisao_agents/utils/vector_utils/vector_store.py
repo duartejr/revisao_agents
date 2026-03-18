@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import Any, List
 import pymongo
 from pymongo.collection import Collection
 from openai import OpenAI
@@ -170,6 +170,87 @@ def search_chunks(query: str, k: int = 16) -> List[str]:
     print(f"   {len(chunks)} chunks retrieved from MongoDB.")
     return chunks
 
+
+def search_chunk_records(query: str, k: int = 16) -> List[dict[str, Any]]:
+    """Search chunks and return text plus source metadata.
+
+    Args:
+        query: Search query text.
+        k: Number of top similar chunks to return.
+
+    Returns:
+        List of records with chunk text, source metadata, and score.
+    """
+    collection = _get_mongo_collection()
+
+    try:
+        query_embedding = _generate_embedding(query)
+    except Exception as e:
+        print(f"   Failure to generate query embedding.: {e}")
+        return []
+
+    pipeline = [
+        {
+            "$vectorSearch": {
+                "index": VECTOR_INDEX_NAME,
+                "path": "embedding",
+                "queryVector": query_embedding,
+                "numCandidates": k * 10,
+                "limit": k,
+            }
+        },
+        {
+            "$project": {
+                "text": 1,
+                "file_path": 1,
+                "title": 1,
+                "url": 1,
+                "source_title": 1,
+                "source_url": 1,
+                "doi": 1,
+                "score": {"$meta": "vectorSearchScore"},
+            }
+        },
+    ]
+
+    try:
+        results = list(collection.aggregate(pipeline))
+    except Exception as e:
+        print(f"   Error in MongoDB vector search: {e}")
+        return []
+
+    records: List[dict[str, Any]] = []
+    for result in results:
+        chunk_text = _read_chunk_text(result)
+        if not chunk_text:
+            continue
+
+        file_path = str(result.get("file_path", ""))
+        source_title = (
+            str(result.get("title", "") or "").strip()
+            or str(result.get("source_title", "") or "").strip()
+            or (os.path.basename(file_path) if file_path else "(unknown source)")
+        )
+        source_url = (
+            str(result.get("url", "") or "").strip()
+            or str(result.get("source_url", "") or "").strip()
+        )
+        doi = str(result.get("doi", "") or "").strip()
+
+        records.append(
+            {
+                "chunk": chunk_text[:CHUNK_MAX_CHARS],
+                "file_path": file_path,
+                "source_title": source_title,
+                "source_url": source_url,
+                "doi": doi,
+                "score": float(result.get("score", 0.0) or 0.0),
+            }
+        )
+
+    print(f"   {len(records)} chunk records retrieved from MongoDB.")
+    return records
+
 def accumulate_chunks(existing: List[str], new: List[str]) -> List[str]:
     """Accumulates new chunks without duplicates, respecting the maximum limit.
     
@@ -188,5 +269,6 @@ def accumulate_chunks(existing: List[str], new: List[str]) -> List[str]:
 
 __all__ = [
     "search_chunks",
+    "search_chunk_records",
     "accumulate_chunks",
 ]

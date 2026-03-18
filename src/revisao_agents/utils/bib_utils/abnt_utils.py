@@ -25,6 +25,13 @@ def bibtex_to_abnt(bibtex: str, url: Optional[str] = None) -> str:
     """Convert a BibTeX entry to a simplified ABNT-style citation string.
 
     Format: ``Author. Title. Journal, Year. DOI: … | Disponível em: …``
+
+    Args:
+        bibtex: A string containing the BibTeX entry.
+        url: Optional URL to include if DOI is not available.
+    
+    Returns:
+        A string formatted in a simplified ABNT citation style.
     """
     extracted: dict = {}
     for key, pattern in _BIBTEX_PATTERNS.items():
@@ -52,7 +59,14 @@ def bibtex_to_abnt(bibtex: str, url: Optional[str] = None) -> str:
 
 
 def generate_fallback_abnt(file_path: str) -> str:
-    """Return a minimal ABNT-like citation when no bibliographic data is available."""
+    """Return a minimal ABNT-like citation when no bibliographic data is available.
+    
+    Args:
+        file_path: The path or URL of the file to generate a citation for.
+    
+    Returns:
+        A string in the format "FileName. Disponível em: file_path".
+    """
     file_name = Path(file_path).stem
     file_name_clean = " ".join(file_name.split("_")[:5])
     return f"{file_name_clean}. Disponível em: {file_path}"

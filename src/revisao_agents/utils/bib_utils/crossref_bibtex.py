@@ -11,7 +11,7 @@ Helper implementations live in:
 
 import logging
 import re
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, Any
 from pathlib import Path
 
 from .doi_utils import (

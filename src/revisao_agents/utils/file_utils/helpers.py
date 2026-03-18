@@ -1,8 +1,7 @@
 import os
 import re
-import json
 import difflib
-from typing import List, Optional
+from typing import List
 from ...config import HIST_MAX_TURNS, PLAN_MAX_CHARS
 
 

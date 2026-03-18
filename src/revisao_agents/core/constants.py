@@ -61,3 +61,50 @@ EXTRACT_MIN_CHARS = int(os.getenv("EXTRACT_MIN_CHARS", "500"))
 # ─────────────────────────────────────────────────────────────────────────────
 CHUNKS_CACHE_DIR = os.getenv("CHUNKS_CACHE_DIR", ".chunks_cache")
 HIST_MAX_TURNS = int(os.getenv("HIST_MAX_TURNS", "20"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dialog
+# ─────────────────────────────────────────────────────────────────────────────
+DIALOG_MAX_TURNS = int(os.getenv("DIALOG_MAX_TURNS", "5"))
+DIALOG_TURN_CHAR_LIMIT = int(os.getenv("DIALOG_TURN_CHAR_LIMIT", "3000"))
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Performance / Checkpointing
+# ─────────────────────────────────────────────────────────────────────────────
+DEFAULT_CHECKPOINT_TYPE = os.getenv("DEFAULT_CHECKPOINT_TYPE", "memory")
+DEFAULT_CHECKPOINT_DB = os.getenv("DEFAULT_CHECKPOINT_DB", "sqlite:///checkpoints.db")
+DEFAULT_CHECKPOINT_POSTGRES_URL = os.getenv(
+    "DEFAULT_CHECKPOINT_POSTGRES_URL",
+    "postgresql://user:password@localhost/checkpoints",
+)
+
+
+__all__ = [
+    "MONGODB_URI",
+    "MONGODB_DB",
+    "MONGODB_COLLECTION",
+    "VECTOR_INDEX_NAME",
+    "OPENAI_API_KEY",
+    "OPENAI_EMBEDDING_MODEL",
+    "CHUNK_SIZE",
+    "CHUNK_OVERLAP",
+    "CHUNK_MAX_CHARS",
+    "MAX_CHUNKS_TOTAL",
+    "MAX_CORPUS_PROMPT",
+    "PLAN_MAX_CHARS",
+    "TOP_K_WRITER",
+    "TOP_K_VERIFICATION",
+    "SNIPPET_MIN_SCORE",
+    "TECHNICAL_MAX_RESULTS",
+    "PRIORITY_DOMAINS",
+    "BLOCKED_DOMAINS_EXTRACT",
+    "MAX_IMAGES_SECTION",
+    "EXTRACT_MIN_CHARS",
+    "CHUNKS_CACHE_DIR",
+    "HIST_MAX_TURNS",
+    "DIALOG_MAX_TURNS",
+    "DIALOG_TURN_CHAR_LIMIT",
+    "DEFAULT_CHECKPOINT_TYPE",
+    "DEFAULT_CHECKPOINT_DB",
+    "DEFAULT_CHECKPOINT_POSTGRES_URL",
+]

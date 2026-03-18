@@ -232,8 +232,8 @@ BLOCKED_DOMAINS = [
               "flickr.com",                        "500px.com",                      "smugmug.com",        "photobucket.com",
                "imgur.com",                      "tinypic.com",                   "postimages.org",              "imgbb.com",
              "imagebb.com",      "muralsonoro.squarespace.com",                    "brapci.inf.br",             "ouranos.ca",
-     "theconversation.com",                 "aitimeline.world", "seas.gwu.edu", "en.wikipedia.org", "en.wikipedia.com", 
-    "pt.wikipedia.org", "pt.wikipedia.com", "av.tib.eu"
+     "theconversation.com",                 "aitimeline.world",                     "seas.gwu.edu",       "en.wikipedia.org",
+        "en.wikipedia.com",                 "pt.wikipedia.org",                 "pt.wikipedia.com",              "av.tib.eu",
 ]
 
 
