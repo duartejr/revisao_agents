@@ -1,144 +1,123 @@
 import re
 from typing import List, Tuple
-from ..vector_utils.vector_store import buscar_chunks  # nossa nova função que usa MongoDB/OpenAI
-from ..file_utils.helpers import normalizar, extrair_anchors, eh_paragrafo_verificavel
-from ...config import JUIZ_MAX_CORPUS_CHARS, JUIZ_TOP_K, get_llm
+from ..vector_utils.vector_store import search_chunks
+from ..file_utils.helpers import extract_anchors
+from ..llm_utils.prompt_loader import load_prompt
+from ...config import JUDGE_MAX_CORPUS_CHARS, JUDGE_TOP_K, get_llm
 
-def buscar_chunks_para_paragrafo(
-    paragrafo: str,
-    corpus_prompt_completo: str,
-    tema_secao: str,
+def search_chunks_for_paragraph(
+    paragraph: str,
+    full_corpus_prompt: str,
 ) -> str:
     """
-    Monta o bloco de fontes relevantes para verificar o parágrafo.
-    Usa as anchors declaradas como queries de busca no MongoDB.
-    """
-    # Limpa anchors e LaTeX pesado do texto para a query
-    texto_sem_anchors = re.sub(r'\[ANCHOR:\s*"[^"]*"\]', "", paragrafo)
-    texto_sem_anchors = re.sub(r'\$\$[^$]+\$\$', "", texto_sem_anchors)
-    texto_sem_anchors = re.sub(r'\$[^$]+\$', "", texto_sem_anchors)
-    texto_sem_anchors = re.sub(r'\\\([^)]+\\\)', "", texto_sem_anchors).strip()
+    Assemble the block of relevant sources to check the paragraph.
+    Use the declared anchors as search queries in MongoDB.
 
-    # Anchors declaradas são os melhores hints de busca
-    anchors = extrair_anchors(paragrafo)
-    # Filtra anchors que são só LaTeX ou muito curtas
-    anchors_validas = [
+    Args:
+        paragraph: The cleaned paragraph text to verify.
+        full_corpus_prompt: The full text of the document (for fallback).
+    
+    Returns:
+        A string containing the concatenated relevant chunks from the corpus.
+    """
+    # Clean anchors and heavy LaTeX from the text for the query.
+    text_without_anchors = re.sub(r'\[ANCHOR:\s*"[^"]*"\]', "", paragraph)
+    text_without_anchors = re.sub(r'\$\$[^$]+\$\$', "", text_without_anchors)
+    text_without_anchors = re.sub(r'\$[^$]+\$', "", text_without_anchors)
+    text_without_anchors = re.sub(r'\\\([^)]+\\\)', "", text_without_anchors).strip()
+
+    # Declared anchors are the best search hints, but if they are too LaTeX-heavy or short, we can also use the cleaned paragraph text as a fallback query.
+    anchors = extract_anchors(paragraph)
+    # Filter anchors that are only LaTeX or too short
+    valid_anchors = [
         a for a in anchors
         if len(a.strip()) >= 20
         and not re.match(r'^[\\\$\{\}\[\]_\^]+', a.strip())
     ]
 
-    queries = anchors_validas[:3] + ([texto_sem_anchors[:200]] if texto_sem_anchors else [])
+    queries = valid_anchors[:3] + ([text_without_anchors[:200]] if text_without_anchors else [])
 
     if not queries:
-        return corpus_prompt_completo[:JUIZ_MAX_CORPUS_CHARS]
+        return full_corpus_prompt[:JUDGE_MAX_CORPUS_CHARS]
 
-    # Usa a função buscar_chunks do vector_store (MongoDB)
-    # Nota: buscar_chunks retorna apenas o texto; precisamos do contexto da fonte.
-    # Vamos enriquecer com metadados? Por enquanto só texto.
-    partes: List[str] = []
+    # Uses search_chunks from vector_store (MongoDB)
+    parts: List[str] = []
     chars = 0
-    chunks_vistos = set()
+    chunks_seen = set()
 
     for q in queries:
         q = q.strip()
         if not q:
             continue
-        # buscar_chunks retorna lista de strings (conteúdo)
-        resultados = buscar_chunks(q, k=JUIZ_TOP_K)
-        for texto_chunk in resultados:
-            # deduplicação simples
-            chave = texto_chunk[:100]
-            if chave in chunks_vistos:
+        # search_chunks returns a list of chunk text strings
+        results = search_chunks(q, k=JUDGE_TOP_K)
+        for chunk_text in results:
+            # simple deduplication
+            key = chunk_text[:100]
+            if key in chunks_seen:
                 continue
-            chunks_vistos.add(chave)
-            bloco = f"{texto_chunk}\n\n"
-            if chars + len(bloco) > JUIZ_MAX_CORPUS_CHARS:
+            chunks_seen.add(key)
+            block = f"{chunk_text}\n\n"
+            if chars + len(block) > JUDGE_MAX_CORPUS_CHARS:
                 break
-            partes.append(bloco)
-            chars += len(bloco)
+            parts.append(block)
+            chars += len(block)
 
-    if partes:
-        return "".join(partes)
+    if parts:
+        return "".join(parts)
 
     # fallback
-    return corpus_prompt_completo[:JUIZ_MAX_CORPUS_CHARS]
+    return full_corpus_prompt[:JUDGE_MAX_CORPUS_CHARS]
 
-def juiz_paragrafo(paragrafo_limpo: str, fontes: str) -> Tuple[str, str, str]:
+def judge_paragraph(clean_paragraph: str, sources: str) -> Tuple[str, str, str]:
     """
-    Juiz LLM com 3 níveis.
-    Retorna (texto_final, nivel, log_entry)
-    nivel ∈ {"APROVADO", "AJUSTADO", "CORRIGIDO"}
+    LLM Judge with 3 levels.
+    Returns (final_text, level, log_entry)
+    level ∈ {"APPROVED", "ADJUSTED", "CORRECTED"}
+
+    Args:
+        clean_paragraph: The cleaned paragraph text to verify.
+        sources: The assembled relevant sources to check against.
+    Returns:
+        A tuple containing the final paragraph text after judgment, the decision level, and a log entry summarizing the judgment.
+
     """
-    prompt = f"""Você é um verificador de fatos técnicos. Analise o parágrafo abaixo contra as fontes.
+    prompt = load_prompt(
+        "common/anchor_verification_judge",
+        clean_paragraph=clean_paragraph,
+        sources=sources,
+    )
 
-PARÁGRAFO:
-{paragrafo_limpo}
-
-FONTES DISPONÍVEIS:
-{fontes}
-
-TAREFA: Classifique o parágrafo em um de três níveis e retorne o texto adequado.
-
-NÍVEL 1 — APROVADO
-  Use quando: todas as afirmações têm suporte nas fontes OU são conhecimento técnico universal estabelecido.
-  Ação: retorne o parágrafo sem nenhuma modificação.
-  DECISÃO: APROVADO
-  TEXTO: [parágrafo sem modificação]
-
-NÍVEL 2 — AJUSTADO
-  Use quando: o conteúdo essencial está correto mas há imprecisão de escopo (ex: "bacias hidrográficas"
-  quando a fonte diz "séries temporais") ou escolha de palavra inexata — não é erro factual grave.
-  Ação: corrija apenas a imprecisão específica, mantenha o restante idêntico.
-  DECISÃO: AJUSTADO
-  TEXTO: [parágrafo com mínima correção]
-
-NÍVEL 3 — CORRIGIDO
-  Use SOMENTE quando: há afirmação factualmente errada em relação às fontes, OU há afirmação específica
-  sem nenhum suporte nas fontes disponíveis (não é conhecimento universal).
-  Ação:
-    - Afirmação errada → corrija para o que a fonte diz
-    - Afirmação sem suporte → REMOVA a frase inteira
-    - NÃO adicione informações que não estejam nas fontes
-  DECISÃO: CORRIGIDO
-  TEXTO: [parágrafo corrigido]
-
-IMPORTANTE:
-  - Se as fontes forem insuficientes para verificar o parágrafo → use APROVADO (benefício da dúvida)
-  - NÃO use CORRIGIDO por diferença de estilo ou vocabulário
-  - NÃO use CORRIGIDO porque a fonte não confirma explicitamente algo que é conhecimento técnico geral
-  - RESPONDA APENAS com DECISÃO e TEXTO. Sem explicações adicionais."""
-
-    resp = get_llm(temperature=0.0).invoke(prompt)
+    resp = get_llm(temperature=0.0).invoke(prompt.text)
     resp_text = resp.content if hasattr(resp, "content") else str(resp)
 
-    nivel = "APROVADO"
-    texto_final = paragrafo_limpo
+    level = "APPROVED"
+    final_text = clean_paragraph
 
     m_dec = re.search(
-        r"DECIS[ÃA]O\s*:\s*(APROVADO|AJUSTADO|CORRIGIDO)",
+        r"DECISION\s*:\s*(APPROVED|ADJUSTED|CORRECTED)",
         resp_text, re.IGNORECASE
     )
     if m_dec:
-        nivel = m_dec.group(1).upper()
+        level = m_dec.group(1).upper()
 
-    m_txt = re.search(r"TEXTO\s*:\s*([\s\S]+)", resp_text, re.IGNORECASE)
+    m_txt = re.search(r"TEXT\s*:\s*([\s\S]+)", resp_text, re.IGNORECASE)
     if m_txt:
-        candidato = m_txt.group(1).strip()
-        candidato = re.sub(
-            r"^DECIS[ÃA]O\s*:.*\n?", "", candidato, flags=re.IGNORECASE
+        candidate = m_txt.group(1).strip()
+        candidate = re.sub(
+            r"^DECISION\s*:.*\n?", "", candidate, flags=re.IGNORECASE
         ).strip()
-        if candidato:
-            texto_final = candidato
+        if candidate:
+            final_text = candidate  
 
-    trecho = paragrafo_limpo[:70].replace('\n', ' ')
-    if nivel == "APROVADO":
-        log_entry = f"✅ APROVADO  | {trecho}..."
-    elif nivel == "AJUSTADO":
-        corr = texto_final[:70].replace('\n', ' ')
-        log_entry = f"🔵 AJUSTADO  | {trecho}...\n     → {corr}..."
+    patch = clean_paragraph[:70].replace('\n', ' ')
+    if level == "APPROVED":
+        log_entry = f"✅ APPROVED  | {patch}..."
+    elif level == "ADJUSTED":
+        corr = final_text[:70].replace('\n', ' ')
+        log_entry = f"🔵 ADJUSTED  | {patch}...\n     → {corr}..."
     else:
-        corr = texto_final[:70].replace('\n', ' ')
-        log_entry = f"🔧 CORRIGIDO | {trecho}...\n     → {corr}..."
+        corr = final_text[:70].replace('\n', ' ')
+        log_entry = f"🔧 CORRECTED | {patch}...\n     → {corr}..."
 
-    return texto_final, nivel, log_entry
+    return final_text, level, log_entry

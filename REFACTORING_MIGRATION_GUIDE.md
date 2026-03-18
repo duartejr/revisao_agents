@@ -70,7 +70,7 @@ from src.revisao_agents.workflows.academic_workflow import build_academico_workf
 When inside package modules, use relative imports:
 
 ```python
-from ..state import RevisaoState
+from ..state import ReviewState
 ```
 
 ### Compatibility guidance

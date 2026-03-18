@@ -28,9 +28,19 @@ if _SRC not in sys.path:
 import gradio as gr
 
 from gradio_app.handlers import (
+    cancel_review_edit,
+    confirm_review_edit,
+    get_current_llm_provider,
+    get_llm_provider_status,
+    save_review_manual_edit,
+    list_llm_providers,
     start_planning,
+    start_review_session,
     continue_planning,
+    list_review_files,
     list_plan_files,
+    review_chat_turn,
+    set_llm_provider,
     start_writing,
     index_pdfs,
     format_references,
@@ -59,6 +69,13 @@ body, .gradio-container {
 #app-header p {
     color: #6b7280;
     margin: 0.2rem 0 0;
+}
+#llm-switch-bar {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 0.75rem;
+    margin: 0.4rem 0 1rem;
+    background: #f9fafb;
 }
 .status-bar {
     border-radius: 6px;
@@ -119,6 +136,28 @@ def build_app() -> gr.Blocks:
               <p>Planeje, escreva e gerencie revisões académicas e técnicas com IA</p>
             </div>
             """
+        )
+
+        with gr.Row(elem_id="llm-switch-bar"):
+            llm_provider_selector = gr.Dropdown(
+                label="LLM Provider (global)",
+                choices=list_llm_providers(),
+                value=get_current_llm_provider(),
+                allow_custom_value=False,
+                scale=1,
+            )
+            llm_provider_status = gr.Textbox(
+                label="Status do Provider",
+                value=get_llm_provider_status(),
+                interactive=False,
+                elem_classes="status-bar",
+                scale=2,
+            )
+
+        llm_provider_selector.change(
+            fn=set_llm_provider,
+            inputs=[llm_provider_selector],
+            outputs=[llm_provider_selector, llm_provider_status],
         )
 
         # ══════════════════════════════════════════════════════════════════
@@ -298,6 +337,106 @@ def build_app() -> gr.Blocks:
                 fn=_on_write,
                 inputs=[write_plan, write_mode, write_lang, write_min_src, write_tavily, write_chatbot],
                 outputs=[write_chatbot, write_status, write_rendered],
+            )
+
+        # ══════════════════════════════════════════════════════════════════
+        # TAB 3 — Revisão Interativa
+        # ══════════════════════════════════════════════════════════════════
+        with gr.Tab("🤖 Revisão Interativa"):
+            gr.Markdown(
+                "### Revisar Documento com Chat\n"
+                "Selecione uma revisão em **reviews/**. O sistema cria uma cópia de trabalho e "
+                "só aplica mudanças após confirmação explícita."
+            )
+
+            with gr.Row():
+                with gr.Column(scale=1):
+                    review_file = gr.Dropdown(
+                        label="Arquivo de revisão",
+                        choices=list_review_files(),
+                        allow_custom_value=False,
+                    )
+                    review_refresh = gr.Button("🔄 Atualizar arquivos", size="sm")
+                    review_start = gr.Button("▶ Iniciar sessão", variant="primary")
+                    review_web_toggle = gr.Checkbox(
+                        label="🌐 Permitir busca na internet",
+                        value=False,
+                        info="Ative para que o agente possa pesquisar artigos online.",
+                    )
+                    review_status = gr.Textbox(
+                        label="Status",
+                        interactive=False,
+                        elem_classes="status-bar",
+                    )
+                    review_confirm = gr.Button("✅ Confirm Edit", variant="secondary")
+                    review_cancel = gr.Button("🗑️ Cancel Edit", variant="secondary")
+
+                with gr.Column(scale=2):
+                    review_chatbot = gr.Chatbot(
+                        label="Review Assistant",
+                        height=360,
+                        layout="bubble",
+                        buttons=["copy", "copy_all"],
+                    )
+                    review_input = gr.Textbox(
+                        label="Sua pergunta/comando",
+                        placeholder="Ex.: what are the papers cited in section 2?",
+                        lines=3,
+                    )
+                    review_send = gr.Button("💬 Enviar", variant="primary")
+
+                with gr.Column(scale=2):
+                    review_preview = gr.Textbox(
+                        label="Documento de trabalho (editável)",
+                        value="",
+                        placeholder="Inicie a sessão para carregar o documento...",
+                        lines=22,
+                        max_lines=50,
+                        interactive=True,
+                    )
+                    review_save = gr.Button("💾 Salvar edição manual", variant="secondary")
+
+            review_session = gr.State({})
+
+            review_refresh.click(
+                fn=lambda: gr.update(choices=list_review_files(), value=None),
+                inputs=[],
+                outputs=[review_file],
+            )
+
+            review_start.click(
+                fn=start_review_session,
+                inputs=[review_file, review_chatbot, review_session],
+                outputs=[review_chatbot, review_session, review_status, review_preview],
+            )
+
+            review_send.click(
+                fn=review_chat_turn,
+                inputs=[review_input, review_chatbot, review_session, review_web_toggle],
+                outputs=[review_chatbot, review_session, review_status, review_preview],
+            )
+            review_input.submit(
+                fn=review_chat_turn,
+                inputs=[review_input, review_chatbot, review_session, review_web_toggle],
+                outputs=[review_chatbot, review_session, review_status, review_preview],
+            )
+
+            review_confirm.click(
+                fn=confirm_review_edit,
+                inputs=[review_chatbot, review_session],
+                outputs=[review_chatbot, review_session, review_status, review_preview],
+            )
+
+            review_cancel.click(
+                fn=cancel_review_edit,
+                inputs=[review_chatbot, review_session],
+                outputs=[review_chatbot, review_session, review_status, review_preview],
+            )
+
+            review_save.click(
+                fn=save_review_manual_edit,
+                inputs=[review_preview, review_chatbot, review_session],
+                outputs=[review_chatbot, review_session, review_status, review_preview],
             )
 
         # ══════════════════════════════════════════════════════════════════

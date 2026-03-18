@@ -1,251 +1,282 @@
 """
-SOLUÇÃO COMPLETA: Rastreamento de Citações com Mapeamento Fonte → URL
+COMPLETE SOLUTION: Citation Tracking with Source → URL Mapping
 ======================================================================
 
-Problema: Citações [14] no texto não correspondem às URLs [1], [2], [3] nas referências
-Causa: Não há rastreamento de qual URL foi usada em qual parágrafo
+Problem: Citations [14] in the text do not match URLs [1], [2], [3] in the references
+Cause: No tracking of which URL was used in which paragraph
 
-Solução:
-1. Durante escrita: Rastrear qual URL foi usada em cada trecho
-2. Durante consolidação: Mapear citações para URLs reais
-3. Re-numerar tudo consistentemente
+Solution:
 
-Este é um patch para escrever_secoes_node E consolidar_node
+1. During writing: Track which URL was used in each section
+2. During consolidation: Map citations to actual URLs
+3. Re-number everything consistently
+
+This is a patch for write_sections_node and consolidate_node
 """
 
 import re
 from typing import Dict, List, Tuple, Set
 
 
-class CitacaoRastreador:
-    """Rastreia qual fonte foi usada em qual parágrafo."""
+class CitationTracker:
+    """Tracks which source was used in which paragraph."""
     
     def __init__(self):
-        # Mapa: {numero_citacao: url}
-        self.citacao_para_url: Dict[int, str] = {}
+        # Map: {citation_number: url}
+        self.citation_to_url: Dict[int, str] = {}
         
-        # Contador de fontes para esta seção
-        self.fonte_counter = 1
+        # Counter for sources in this section
+        self.source_counter = 1
         
-        # URLs já adicionadas (evita duplicatas)
-        self.urls_vistas: Set[str] = set()
+        # URLs already added (avoids duplicates)
+        self.seen_urls: Set[str] = set()
     
-    def adicionar_fonte(self, url: str) -> int:
+    def add_source(self, url: str) -> int:
         """
-        Registra uma URL e retorna o número de citação.
+        Registers a URL and returns the citation number.
         
-        Exemplo:
-            tracker.adicionar_fonte("https://paper1.pdf")
-            → retorna 1
+        Example:
+            tracker.add_source("https://paper1.pdf")
+            → returns 1
             
-            tracker.adicionar_fonte("https://paper2.pdf")
-            → retorna 2
+            tracker.add_source("https://paper2.pdf")
+            → returns 2
             
-            tracker.adicionar_fonte("https://paper1.pdf")  # duplicada
-            → retorna 1 (já tinha sido adicionada)
+            tracker.add_source("https://paper1.pdf")  # duplicate
+            → returns 1 (already added)
+        
+        Args:
+            url: The URL of the source to add.
+        
+        Returns:
+            The citation number assigned to this URL.
         """
-        if url in self.urls_vistas:
-            # Encontra o número já atribuído
-            for num, u in self.citacao_para_url.items():
+        if url in self.seen_urls:
+            # Finds the already assigned number
+            for num, u in self.citation_to_url.items():
                 if u == url:
                     return num
         
-        # URL nova
-        self.urls_vistas.add(url)
-        num = self.fonte_counter
-        self.citacao_para_url[num] = url
-        self.fonte_counter += 1
+        # New URL
+        self.seen_urls.add(url)
+        num = self.source_counter
+        self.citation_to_url[num] = url
+        self.source_counter += 1
         return num
     
-    def obter_urls_ordenadas(self) -> List[str]:
-        """Retorna lista de URLs na ordem das citações [1], [2], [3]..."""
+    def get_ordered_urls(self) -> List[str]:
+        """Returns a list of URLs in the order of citations [1], [2], [3]...
+        
+        Example:
+            If citation_to_url = {1: "https://paper1.pdf", 2: "https://paper2.pdf"}
+            → returns ["https://paper1.pdf", "https://paper2.pdf"]
+        """
         urls = []
-        for i in range(1, self.fonte_counter):
-            if i in self.citacao_para_url:
-                urls.append(self.citacao_para_url[i])
+        for i in range(1, self.source_counter):
+            if i in self.citation_to_url:
+                urls.append(self.citation_to_url[i])
         return urls
     
-    def obter_mapa_completo(self) -> Dict[int, str]:
-        """Retorna dicionário completo {numero_citacao: url}"""
-        return self.citacao_para_url.copy()
+    def get_full_map(self) -> Dict[int, str]:
+        """Returns the complete dictionary {citation_number: url}
+        
+        Example:
+            If citation_to_url = {1: "https://paper1.pdf", 2: "https://paper2.pdf"}
+            → returns {1: "https://paper1.pdf", 2: "https://paper2.pdf"}
+        """
+        return self.citation_to_url.copy()
 
 
-def extrair_citacoes_numeradas(texto: str) -> List[int]:
+def extract_numbered_citations(text: str) -> List[int]:
     """
-    Extrai ALL [N] do texto na ordem de aparição.
+    Extracts ALL [N] from the text in the order of appearance.
     
-    Exemplo:
+    Example:
         "conforme [13]... e [14]... e [13] novamente"
         → [13, 14, 13]
     """
     pattern = r'\[(\d+)\]'
-    matches = re.findall(pattern, texto)
+    matches = re.findall(pattern, text)
     return [int(m) for m in matches]
 
 
-def criar_mapa_remapeamento(citacoes_originais: List[int]) -> Dict[int, int]:
+def create_remap_map(original_citations: List[int]) -> Dict[int, int]:
     """
-    Cria mapa old_idx → new_idx na ordem de primeira aparição.
+    Creates a map old_idx → new_idx in the order of first appearance.
     
-    Exemplo:
+    Example:
         [13, 14, 13, 15]
         → {13: 1, 14: 2, 15: 3}
+    
+    Args:
+        original_citations: A list of citation numbers extracted from the text.
+    
+    Returns:
+        A dictionary mapping original citation numbers to new sequential numbers.
     """
-    mapa = {}
-    novo_idx = 1
-    for old_idx in citacoes_originais:
-        if old_idx not in mapa:
-            mapa[old_idx] = novo_idx
-            novo_idx += 1
-    return mapa
+    map = {}
+    new_idx = 1
+    for old_idx in original_citations:
+        if old_idx not in map:
+            map[old_idx] = new_idx
+            new_idx += 1
+    return map
 
 
-def remapear_texto_com_rastreamento(
-    texto: str,
-    fonte_map_original: Dict[int, str],
-    mapa_remapeamento: Dict[int, int],
+def remap_text_with_tracking(
+    text: str,
+    original_source_map: Dict[int, str],
+    remap_map: Dict[int, int],
 ) -> Tuple[str, Dict[int, str], Dict[int, int]]:
     """
-    Re-mapeia citações E retorna novo mapa fonte→url.
+    Re-maps citations AND returns a new source→URL map.
     
     Args:
-        texto: "conforme [13]... e [14]..."
-        fonte_map_original: {13: "url13", 14: "url14", ...}
-        mapa_remapeamento: {13: 1, 14: 2, ...}
+        text: "as shown in [13]... and [14]..."
+        original_source_map: {13: "url13", 14: "url14", ...}
+        remap_map: {13: 1, 14: 2, ...}
     
     Returns:
-        (texto_remapeado, novo_mapa_fonte_url, mapa_remapeamento)
+        (remapped_text, new_source_map, remap_map)
     
-    Exemplo:
-        texto = "conforme [13]... e [14]..."
-        fonte_map = {13: "https://paper13.pdf", 14: "https://paper14.pdf"}
-        mapa = {13: 1, 14: 2}
+    Example:
+        text = "as shown in [13]... and [14]..."
+        original_source_map = {13: "https://paper13.pdf", 14: "https://paper14.pdf"}
+        remap_map = {13: 1, 14: 2}
         
-        → texto_novo = "conforme [1]... e [2]..."
-        → novo_mapa = {1: "https://paper13.pdf", 2: "https://paper14.pdf"}
-        → mapa = {13: 1, 14: 2}
+        → remapped_text = "as shown in [1]... and [2]..."
+        → new_source_map = {1: "https://paper13.pdf", 2: "https://paper14.pdf"}
+        → remap_map = {13: 1, 14: 2}
     """
     
-    def substituir(match):
+    def replace_idx(match: re.Match) -> str:
+        """Replaces [old_idx] with [new_idx] using remap_map.
+        
+        Args:
+            match: A regex match object for a citation like [13].
+        
+        Returns:
+            A string with the citation number remapped, like [1].
+        """
         old_idx = int(match.group(1))
-        new_idx = mapa_remapeamento.get(old_idx, old_idx)
+        new_idx = remap_map.get(old_idx, old_idx)
         return f"[{new_idx}]"
     
-    texto_remapeado = re.sub(r'\[(\d+)\]', substituir, texto)
+    remapped_text = re.sub(r'\[(\d+)\]', replace_idx, text)
     
-    # Cria novo mapa fonte→url
-    novo_mapa = {}
-    for old_idx, new_idx in mapa_remapeamento.items():
-        if old_idx in fonte_map_original:
-            novo_mapa[new_idx] = fonte_map_original[old_idx]
+    # Create new map source→url with new indices
+    new_source_map = {}
+    for old_idx, new_idx in remap_map.items():
+        if old_idx in original_source_map:
+            new_source_map[new_idx] = original_source_map[old_idx]
     
-    return texto_remapeado, novo_mapa, mapa_remapeamento
+    return remapped_text, new_source_map, remap_map
 
 
-def sincronizar_texto_com_references(
-    texto: str,
-    fonte_map_original: Dict[int, str],
+def synchronize_text_with_references(
+    text: str,
+    original_source_map: Dict[int, str],
 ) -> Tuple[str, List[str]]:
     """
-    Sincroniza completamente texto e referências.
-    
+    Completely synchronizes text and references.
+
     Workflow:
-    1. Extrai [N] do texto
-    2. Cria mapa remapeamento
-    3. Re-numera [N]
-    4. Re-ordena URLs
+    1. Extracts [N] from the text
+    2. Creates a remap map
+    3. Re-numbers [N]
+    4. Re-orders URLs
     
     Args:
-        texto: "conforme [13]... e [14]..."
-        fonte_map_original: {13: "url", 14: "url", ...}
+        text: "as shown in [13]... and [14]..."
+        original_source_map: {13: "url", 14: "url", ...}
     
     Returns:
-        (texto_com_[1][2], urls_ordenadas_[1][2])
+        (text_with_[1][2], ordered_urls_[1][2])
     """
     
-    # Extrai citações originais
-    citacoes = extrair_citacoes_numeradas(texto)
+    # Extract original citations
+    citations = extract_numbered_citations(text)
     
-    if not citacoes:
-        return texto, list(fonte_map_original.values())
+    if not citations:
+        return text, list(original_source_map.values())
     
-    # Cria mapa remapeamento
-    mapa = criar_mapa_remapeamento(citacoes)
+    # Create remap map
+    remap_map = create_remap_map(citations)
     
-    # Re-mapeia
-    texto_novo, novo_mapa_fonte, _ = remapear_texto_com_rastreamento(
-        texto, fonte_map_original, mapa
+    # Re-map
+    new_text, new_source_map, _ = remap_text_with_tracking(
+        text, original_source_map, remap_map
     )
     
-    # Extrai URLs na ordem nova
-    urls_ordenadas = []
-    for i in range(1, len(novo_mapa_fonte) + 1):
-        if i in novo_mapa_fonte:
-            urls_ordenadas.append(novo_mapa_fonte[i])
+    # Extract URLs in new order
+    ordered_urls = []
+    for i in range(1, len(new_source_map) + 1):
+        if i in new_source_map:
+            ordered_urls.append(new_source_map[i])
     
-    return texto_novo, urls_ordenadas
+    return new_text, ordered_urls
 
 # ============================================================================
-# TESTES
+# TESTS
 # ============================================================================
 
-def teste_rastreamento_completo():
-    """Teste completo do sistema."""
+def test_complete_tracking():
+    """Complete system test."""
     
     print("=" * 70)
-    print("TESTE: Rastreamento Completo de Citações")
+    print("TEST: Complete Citation Tracking with Source→URL Mapping")
     print("=" * 70)
     
-    # Simula escrever_secoes_node
-    print("\n[1] FASE: Escrita com citações [13], [14]")
+    # Simulate writing_node_sections with citations and source map
+    print("\n[1] PHASE: Writing with citations [13], [14]")
     
-    texto_escrito = """
-    Conforme mostra [13], um estudo recente [14] demonstra que [13] é válido.
-    Além disso, [15] refuta a teoria anterior [14].
+    written_text = """
+    As shown in [13], a recent study [14] demonstrates that [13] is valid.
+    Furthermore, [15] refutes the previous theory [14].
     """
     
-    # Simula fonte_map do corpus
-    fonte_map_original = {
+    # Simulate source_map of the corpus
+    original_source_map = {
         13: "https://paper-chronos-1.pdf",
         14: "https://paper-chronos-2.pdf",
         15: "https://paper-lstm.pdf",
     }
     
-    print(f"\n📝 Texto original (com citações [13], [14], [15]):")
-    print(texto_escrito.strip())
+    print(f"\n📝 Original text (with citations [13], [14], [15]):")
+    print(written_text.strip())
     
-    print(f"\n📚 Fonte map original:")
-    for idx, url in fonte_map_original.items():
+    print(f"\n📚 Original source map:")
+    for idx, url in original_source_map.items():
         print(f"   [{idx}] {url}")
     
-    # Simula consolidar_node
-    print("\n[2] CONSOLIDANDO: Sincronizando citações")
+    # Simulate consolidating_node
+    print("\n[2] CONSOLIDATING: Synchronizing citations and references...")
     
-    texto_sincronizado, urls_ordenadas = sincronizar_texto_com_references(
-        texto_escrito,
-        fonte_map_original
+    synchronized_text, ordered_urls = synchronize_text_with_references(
+        written_text,
+        original_source_map
     )
     
-    print(f"\n✅ Texto sincronizado (com citações [1], [2], [3]):")
-    print(texto_sincronizado.strip())
+    print(f"\n✅ Synchronized text (with citations [1], [2], [3]):")
+    print(synchronized_text.strip())
     
-    print(f"\n✅ URLs ordenadas (para referências):")
-    for i, url in enumerate(urls_ordenadas, 1):
+    print(f"\n✅ Ordered URLs (for references):")
+    for i, url in enumerate(ordered_urls, 1):
         print(f"   [{i}] {url}")
     
-    # Validação
-    print(f"\n🔍 VALIDAÇÃO:")
-    citacoes_no_texto = extrair_citacoes_numeradas(texto_sincronizado)
-    print(f"   Citações encontradas: {citacoes_no_texto}")
-    print(f"   URLs disponíveis: {len(urls_ordenadas)}")
+    # Validation: Check if all citations have a corresponding URL
+    print(f"\n🔍 VALIDATION:")
+    citations_in_text = extract_numbered_citations(synchronized_text)
+    print(f"   Citations found: {citations_in_text}")
+    print(f"   URLs available: {len(ordered_urls)}")
     
-    if max(citacoes_no_texto) <= len(urls_ordenadas):
-        print(f"   ✅ SUCESSO: Todas as citações têm referência!")
+    if max(citations_in_text) <= len(ordered_urls):
+        print(f"   ✅ SUCCESS: All citations have a reference!")
     else:
-        print(f"   ❌ ERRO: Citações órfãs encontradas!")
+        print(f"   ❌ ERROR: Orphan citations found!")
     
     print("\n" + "=" * 70)
 
 
 if __name__ == "__main__":
-    teste_rastreamento_completo()
+    test_complete_tracking()

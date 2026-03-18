@@ -10,18 +10,18 @@ Nodes for the technical review workflow:
 Prompts are loaded from YAML files in prompts/technical/.
 """
 
-from ..state import RevisaoState
+from ..state import ReviewState
 from ..utils.llm_utils.llm_providers import get_llm
 from ..utils.search_utils.tavily_client import buscar_conteudo_tecnico
-from ..utils.file_utils.helpers import fmt_snippets, truncar, salvar_md
+from ..utils.file_utils.helpers import fmt_snippets, truncate, save_md
 from ..utils.llm_utils.prompt_loader import load_prompt
 
 
-def busca_tecnica_inicial_node(state: RevisaoState) -> dict:
+def busca_tecnica_inicial_node(state: ReviewState) -> dict:
     """Busca inicial de conteúdo técnico via Tavily."""
-    tema = state["tema"]
-    print("\n[Busca tecnica inicial] tema:", repr(tema))
-    res      = buscar_conteudo_tecnico(tema, [])
+    theme = state["theme"]
+    print("\n[Busca tecnica inicial] tema:", repr(theme))
+    res      = buscar_conteudo_tecnico(theme, [])
     urls     = res.get("total_acumulado", [])
     snippets = res.get("resultados", [])
     print("\n" + "=" * 70)
@@ -32,31 +32,31 @@ def busca_tecnica_inicial_node(state: RevisaoState) -> dict:
         print("       " + r.get("url",   "")[:80])
         print("       " + r.get("snippet", "")[:120] + "...")
     print("=" * 70)
-    return {"urls_tecnicos": urls, "snippets_tecnicos": snippets,
+    return {"technical_urls": urls, "technical_snippets": snippets,
             "status": "busca_tecnica_ok"}
 
 
-def plano_inicial_tecnico_node(state: RevisaoState) -> dict:
+def plano_inicial_tecnico_node(state: ReviewState) -> dict:
     """Gera o rascunho inicial do plano técnico."""
-    tema     = state["tema"]
-    snippets = fmt_snippets(state.get("snippets_tecnicos", []), 1200)
-    prompt = load_prompt("technical/plano_inicial", tema=tema, snippets=snippets)
+    theme     = state["theme"]
+    snippets = fmt_snippets(state.get("technical_snippets", []), 1200)
+    prompt = load_prompt("technical/plano_inicial", tema=theme, snippets=snippets)
     resp  = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     plano = resp.content if hasattr(resp, "content") else str(resp)
     print("\nPlano tecnico inicial elaborado.")
-    return {"plano_atual": plano, "status": "plano_tecnico_inicial_pronto"}
+    return {"current_plan": plano, "status": "plano_tecnico_inicial_pronto"}
 
 
-def refinar_busca_tecnica_node(state: RevisaoState) -> dict:
+def refinar_busca_tecnica_node(state: ReviewState) -> dict:
     """Refaz busca técnica com base na última pergunta."""
-    query = state["tema"]
-    for role, c in reversed(state["historico_entrevista"]):
+    query = state["theme"]
+    for role, c in reversed(state["interview_history"]):
         if role == "user":
-            query = state["tema"] + " " + c[:100]
+            query = state["theme"] + " " + c[:100]
             break
     query = query.strip()
     print("\n[Re-busca tecnica] query:", repr(query[:70]))
-    urls_ant = state.get("urls_tecnicos", [])
+    urls_ant = state.get("technical_urls", [])
     res      = buscar_conteudo_tecnico(query, urls_ant)
     novos    = res.get("urls_novos", [])
     total    = res.get("total_acumulado", urls_ant)
@@ -66,40 +66,40 @@ def refinar_busca_tecnica_node(state: RevisaoState) -> dict:
         for r in snips_n[:4]:
             print("  * " + r.get("title", "")[:60])
             print("    " + r.get("url",   "")[:70])
-    snips_acum = (snips_n + state.get("snippets_tecnicos", []))[:20]
-    return {"urls_tecnicos": total, "snippets_tecnicos": snips_acum,
+    snips_acum = (snips_n + state.get("technical_snippets", []))[:20]
+    return {"technical_urls": total, "technical_snippets": snips_acum,
             "status": "busca_tecnica_refinada"}
 
 
-def refinar_plano_tecnico_node(state: RevisaoState) -> dict:
+def refinar_plano_tecnico_node(state: ReviewState) -> dict:
     """Atualiza o plano técnico com novas fontes e feedback."""
-    tema       = state["tema"]
-    plano_curr = truncar(state["plano_atual"], 700)
+    theme       = state["theme"]
+    current_plan = truncate(state["current_plan"], 700)
     ultima     = ""
-    for role, c in reversed(state["historico_entrevista"]):
+    for role, c in reversed(state["interview_history"]):
         if role == "user":
             ultima = c[:300]
             break
-    snips = fmt_snippets(state.get("snippets_tecnicos", [])[:5], 800)
+    snips = fmt_snippets(state.get("technical_snippets", [])[:5], 800)
     prompt = load_prompt(
         "technical/refinar_plano",
-        tema=tema,
-        plano_curr=plano_curr,
+        tema=theme,
+        plano_curr=current_plan,
         ultima=ultima,
         snips=snips,
     )
     resp  = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     plano = resp.content if hasattr(resp, "content") else str(resp)
     print("   Plano tecnico atualizado.")
-    return {"plano_atual": plano, "status": "plano_tecnico_refinado"}
+    return {"current_plan": plano, "status": "plano_tecnico_refinado"}
 
 
-def finalizar_plano_tecnico_node(state: RevisaoState) -> dict:
+def finalizar_plano_tecnico_node(state: ReviewState) -> dict:
     """Gera o plano técnico final e salva em Markdown."""
-    tema       = state["tema"]
-    plano_curr = truncar(state["plano_atual"], 1000)
-    snips      = fmt_snippets(state.get("snippets_tecnicos", [])[:8], 800)
-    urls       = state.get("urls_tecnicos", [])
+    theme       = state["theme"]
+    current_plan = truncate(state["current_plan"], 1000)
+    snips      = fmt_snippets(state.get("technical_snippets", [])[:8], 800)
+    urls       = state.get("technical_urls", [])
     prompt = load_prompt("technical/finalizar_plano", snips=snips)
     resp        = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     plano_final = resp.content if hasattr(resp, "content") else str(resp)
@@ -111,9 +111,29 @@ def finalizar_plano_tecnico_node(state: RevisaoState) -> dict:
     urls_md = "\n".join("- " + u for u in urls[:30])
     md = (
         "# Plano de Revisao Tecnica\n\n"
-        "**Tema:** " + tema + "\n\n"
+        "**Tema:** " + theme + "\n\n"
         + plano_final +
         "\n\n## URLs Tecnicas Identificadas\n\n" + urls_md + "\n"
     )
-    path = salvar_md(md, "plans/plano_revisao_tecnica", tema)
-    return {"plano_final": plano_final, "plano_final_path": path, "status": "concluido"}
+    path = save_md(md, "plans/plano_revisao_tecnica", theme)
+    return {"final_plan": plano_final, "final_plan_path": path, "status": "concluido"}
+
+
+def initial_technical_search_node(state: ReviewState) -> dict:
+    return busca_tecnica_inicial_node(state)
+
+
+def initial_technical_plan_node(state: ReviewState) -> dict:
+    return plano_inicial_tecnico_node(state)
+
+
+def refine_technical_search_node(state: ReviewState) -> dict:
+    return refinar_busca_tecnica_node(state)
+
+
+def refine_technical_plan_node(state: ReviewState) -> dict:
+    return refinar_plano_tecnico_node(state)
+
+
+def finalize_technical_plan_node(state: ReviewState) -> dict:
+    return finalizar_plano_tecnico_node(state)

@@ -211,7 +211,7 @@ def _buscar_conteudo_complementar(
             if urls_para_extrair:
                 raw = extract_urls(urls_para_extrair)
                 for item in raw:
-                    if len(item.get("conteudo", "")) >= EXTRACT_MIN_CHARS:
+                    if len(item.get("content", "")) >= EXTRACT_MIN_CHARS:
                         extraidos_novos.append(item)
                         num_novos += 1
             time.sleep(1)
@@ -223,7 +223,7 @@ def _buscar_conteudo_complementar(
 
     corpus_novo = CorpusMongoDB().build(extraidos_novos, [])
     if corpus_novo._n_docs > 0:
-        corpus_atual._urls_usadas.extend(corpus_novo._urls_usadas)
+        corpus_atual._used_urls.extend(corpus_novo._used_urls)
         corpus_atual._total_chunks += corpus_novo._total_chunks
         print(f"      ✅ +{num_novos} chunks indexados")
 
@@ -360,8 +360,8 @@ def _verificar_paragrafo_com_anchor(
             print(f"        URL: {url_citada[:60]}")
 
             fontes, urls_usadas, n_chunks = corpus.render_prompt_url(
-                texto_anchor=anchor_principal,
-                url_citada=url_citada,
+                anchor_text=anchor_principal,
+                cited_urls=url_citada,
                 max_chars=3000,
                 top_k=5,
                 include_neighbors=True,

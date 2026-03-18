@@ -77,15 +77,15 @@ print(f"✅ Plan file found: {Path(PLAN_FILE).name}")
 
 # 4. Parse plan sections
 try:
-    from revisao_agents.utils.file_utils.helpers import parse_plano_tecnico
+    from revisao_agents.utils.file_utils.helpers import parse_technical_plan
     with open(PLAN_FILE, "r", encoding="utf-8") as f:
         plan_text = f.read()
-    tema, resumo, secoes = parse_plano_tecnico(plan_text)
+    tema, resumo, secoes = parse_technical_plan(plan_text)
     print(f"✅ Plan parsed: tema='{tema[:60]}' | {len(secoes)} section(s)")
     for s in secoes:
-        print(f"   [{s['indice']+1}] {s['titulo']}")
-        print(f"        conteudo: {s['conteudo_esperado'][:80]}")
-        print(f"        recursos: {s['recursos'][:80]}")
+        print(f"   [{s['index']+1}] {s['title']}")
+        print(f"        content: {s['expected_content'][:80]}")
+        print(f"        resources: {s['resources'][:80]}")
 except Exception as e:
     print(f"❌ Plan parse failed: {e}")
     import traceback; traceback.print_exc()
@@ -102,20 +102,20 @@ print(f"Plan: {Path(PLAN_FILE).name}")
 print(f"Sections: {len(secoes)}")
 print("=" * 70)
 
-from revisao_agents.state import EscritaTecnicaState
+from revisao_agents.state import TechnicalWriterState
 
-state_init: EscritaTecnicaState = {
-    "tema": "",
-    "resumo_plano": "",
-    "secoes": [],
-    "caminho_plano": PLAN_FILE,
-    "secoes_escritas": [],
+state_init: TechnicalWriterState = {
+    "theme": "",
+    "plan_summary": "",
+    "sections": [],
+    "plan_path": PLAN_FILE,
+    "written_sections": [],
     "refs_urls": [],
-    "refs_imagens": [],
-    "resumo_acumulado": "",
+    "refs_images": [],
+    "cumulative_summary": "",
     "react_log": [],
-    "stats_verificacao": [],
-    "status": "iniciando",
+    "verification_stats": [],
+    "status": "starting",
 }
 
 os.makedirs("reviews", exist_ok=True)
@@ -238,7 +238,7 @@ else:
     print("❌ No log file found")
 
 # Stats from final state
-stats = final_state.get("stats_verificacao", [])
+stats = final_state.get("verification_stats", [])
 if stats:
     print(f"\n📊 Verification stats:")
     for s in stats:

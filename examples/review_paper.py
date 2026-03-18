@@ -14,7 +14,20 @@ from revisao_agents.graphs.review_graph import build_review_graph
 def main(tema: str):
     graph = build_review_graph(tipo="academico")
     config = {"configurable": {"thread_id": "example-run"}}
-    state = {"tema": tema, "tipo": "academico"}
+    state = {
+        "theme": tema,
+        "review_type": "academico",
+        "relevant_chunks": [],
+        "technical_snippets": [],
+        "technical_urls": [],
+        "current_plan": "",
+        "interview_history": [],
+        "questions_asked": 0,
+        "max_questions": 1,
+        "final_plan": "",
+        "final_plan_path": "",
+        "status": "starting",
+    }
 
     print(f"Starting academic review for: {tema!r}\n")
 

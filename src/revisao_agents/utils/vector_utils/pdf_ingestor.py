@@ -1,15 +1,15 @@
 # src/revisao_agents/utils/pdf_ingestor.py
 """
-PDF Ingestor — processa uma pasta de PDFs, extrai texto com pdfplumber
-e indexa os chunks no MongoDB via CorpusMongoDB.build().
+PDF ingestor that processes a folder of PDFs, extracts text with pdfplumber,
+and indexes chunks in MongoDB via CorpusMongoDB.build().
 
-O campo `url` de cada chunk é preenchido com o caminho absoluto do PDF,
-mantendo compatibilidade total com todo o pipeline de busca e verificação.
+The `url` field of each extracted document is filled with the absolute PDF
+path so it remains compatible with the existing search and verification
+pipeline.
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import List
 
@@ -19,106 +19,110 @@ from ...config import EXTRACT_MIN_CHARS
 from .mongodb_corpus import CorpusMongoDB
 
 
-# ── Extração de texto ─────────────────────────────────────────────────────────
+# ── Text Extraction ─────────────────────────────────────────────────────────
 
-def _extrair_texto_pdf(pdf_path: Path) -> str:
+def _extract_pdf_text(pdf_path: Path) -> str:
     """
-    Extrai todo o texto de um PDF usando pdfplumber.
+    Extracts all text from a PDF using pdfplumber.
 
-    Páginas sem texto extraível são silenciosamente ignoradas.
-    Retorna string vazia se o arquivo não puder ser lido.
+    Pages without extractable text are silently ignored.
+    Returns an empty string if the file cannot be read.
+
+    Args:
+        pdf_path: Path to the PDF file.
+    Returns:
+        Extracted text from all pages, concatenated with double newlines.
     """
-    paginas: List[str] = []
+    pages: List[str] = []
     try:
         with pdfplumber.open(pdf_path) as pdf:
             for page in pdf.pages:
-                texto = page.extract_text()
-                if texto:
-                    paginas.append(texto.strip())
+                text = page.extract_text()
+                if text:
+                    pages.append(text.strip())
     except Exception as e:
-        print(f"   ⚠️  Erro ao ler {pdf_path.name}: {e}")
+        print(f"   ⚠️  Error reading {pdf_path.name}: {e}")
         return ""
-    return "\n\n".join(paginas)
+    return "\n\n".join(pages)
 
 
-# ── Função principal ──────────────────────────────────────────────────────────
+# ── Main Function ──────────────────────────────────────────────────────────
 
 def ingest_pdf_folder(folder_path: str) -> dict:
     """
-    Processa todos os PDFs em uma pasta (recursivamente) e os indexa no MongoDB.
+    Processes all PDFs in a folder (recursively) and indexes them in MongoDB.
 
-    O campo `url` de cada chunk é o caminho absoluto do PDF, mantendo
-    compatibilidade com o pipeline existente (busca vetorial, citações,
-    referências). Arquivos já indexados são detectados por url_exists()
-    e pulados automaticamente.
+    The `url` field of each chunk is the absolute path of the PDF, maintaining
+    compatibility with the existing pipeline (vector search, citations,
+    references). Already indexed files are detected by url_exists() and skipped automatically.
 
     Args:
-        folder_path: Caminho para a pasta contendo os PDFs.
+        folder_path: Path to the folder containing the PDFs.
 
     Returns:
         {
-            "indexed"     : int,  # novos PDFs indexados nesta execução
-            "skipped"     : int,  # PDFs com texto insuficiente (< EXTRACT_MIN_CHARS)
-            "already"     : int,  # PDFs já presentes no MongoDB
-            "total_chunks": int,  # chunks inseridos no total desta sessão
-            "errors"      : int,  # PDFs que falharam na leitura
+            "indexed"     : int,  # new PDFs indexed in this run
+            "skipped"     : int,  # PDFs with insufficient text (< EXTRACT_MIN_CHARS)
+            "already"     : int,  # PDFs already present in MongoDB
+            "total_chunks": int,  # chunks inserted in this session
+            "errors"      : int,  # PDFs that failed to read
         }
     """
-    pasta = Path(folder_path).resolve()
+    folder_path = Path(folder_path).resolve()
 
-    pdfs = sorted(pasta.rglob("*.pdf"))
-    if not pdfs:
-        print(f"   ℹ️  Nenhum PDF encontrado em: {pasta}")
+    pdf_files = sorted(folder_path.rglob("*.pdf"))
+    if not pdf_files:
+        print(f"   ℹ️  No PDFs found in: {folder_path}")
         return {"indexed": 0, "skipped": 0, "already": 0, "total_chunks": 0, "errors": 0}
 
-    print(f"\n📂 Pasta: {pasta}")
-    print(f"   {len(pdfs)} PDF(s) encontrado(s)\n")
+    print(f"\n📂 Folder: {folder_path}")
+    print(f"   {len(pdf_files)} PDF(s) found\n")
 
     corpus = CorpusMongoDB()
-    extraidos: List[dict] = []
+    extracted_documents: List[dict] = []
 
     counts = {"indexed": 0, "skipped": 0, "already": 0, "errors": 0}
 
-    for pdf_path in pdfs:
+    for pdf_path in pdf_files:
         abs_path = str(pdf_path)
-        nome = pdf_path.stem  # filename sem extensão
+        filename = pdf_path.stem  # filename without extension
 
-        # Verifica se já indexado (url = caminho absoluto do PDF)
+        # Check if already indexed (url = absolute path of the PDF)
         if corpus.url_exists(abs_path):
-            print(f"   ⏭️  Já indexado: {pdf_path.name}")
+            print(f"   ⏭️  Already indexed: {pdf_path.name}")
             counts["already"] += 1
             continue
 
-        print(f"   📄 Extraindo: {pdf_path.name}")
-        texto = _extrair_texto_pdf(pdf_path)
+        print(f"   📄 Extracting: {pdf_path.name}")
+        text = _extract_pdf_text(pdf_path)
 
-        if not texto:
-            print(f"      ❌ Texto vazio — arquivo inválido ou protegido")
+        if not text:
+            print(f"      ❌ Empty text — invalid or protected file")
             counts["errors"] += 1
             continue
 
-        if len(texto) < EXTRACT_MIN_CHARS:
-            print(f"      ⚠️  Texto muito curto ({len(texto)} chars < {EXTRACT_MIN_CHARS}) — ignorado")
+        if len(text) < EXTRACT_MIN_CHARS:
+            print(f"      ⚠️  Text too short ({len(text)} chars < {EXTRACT_MIN_CHARS}) — ignored")
             counts["skipped"] += 1
             continue
 
-        print(f"      ✅ {len(texto):,} chars extraídos")
-        extraidos.append({
-            "url":      abs_path,    # filepath como identificador único
-            "conteudo": texto,
-            "titulo":   nome,
+        print(f"      ✅ {len(text):,} chars extracted")
+        extracted_documents.append({
+            "url": abs_path,
+            "content": text,
+            "title": filename,
         })
         counts["indexed"] += 1
 
-    if not extraidos:
+    if not extracted_documents:
         total_chunks = 0
-        print("\n   ℹ️  Nenhum novo PDF para indexar.")
+        print("\n   ℹ️  No new PDFs to index.")
     else:
-        print(f"\n🔷 Indexando {len(extraidos)} PDF(s) no MongoDB…")
+        print(f"\n🔷 Indexing {len(extracted_documents)} PDF(s) in MongoDB…")
         before = corpus._total_chunks
-        corpus.build(extraidos, snippets=[], prefixo="pdf")
+        corpus.build(extracted_documents, snippets=[], prefix="pdf")
         total_chunks = corpus._total_chunks - before
-        print(f"   ✅ {total_chunks} chunk(s) inserido(s)")
+        print(f"   ✅ {total_chunks} chunk(s) inserted into MongoDB.")
 
     counts["total_chunks"] = total_chunks
     return counts

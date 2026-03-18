@@ -2,38 +2,45 @@ from typing import TypedDict, Annotated, List
 import operator
 
 
-class RevisaoState(TypedDict):
-    """Estado compartilhado para workflows de revisão acadêmica e técnica."""
-    tema: str
-    tipo_revisao: str
-    chunks_relevantes: List[str]
-    snippets_tecnicos: List[dict]
-    urls_tecnicos: List[str]
-    plano_atual: str
-    historico_entrevista: Annotated[List[tuple], operator.add]
-    perguntas_feitas: int
-    max_perguntas: int
-    plano_final: str
-    plano_final_path: str
+class ReviewState(TypedDict):
+    """State shared across academic and technical review workflows."""
+    theme: str
+    review_type: str
+    relevant_chunks: List[str]
+    technical_snippets: List[dict]
+    technical_urls: List[str]
+    current_plan: str
+    interview_history: Annotated[List[tuple], operator.add]
+    questions_asked: int
+    max_questions: int
+    final_plan: str
+    final_plan_path: str
     status: str
 
 
-class EscritaTecnicaState(TypedDict):
-    """Estado específico para o workflow de escrita técnica e acadêmica."""
-    tema: str
-    resumo_plano: str
-    secoes: List[dict]
-    caminho_plano: str
-    secoes_escritas: List[dict]
+class TechnicalWriterState(TypedDict):
+    """State specific to the technical and academic writing workflow."""
+    theme: str
+    plan_summary: str
+    sections: List[dict]
+    plan_path: str
+    written_sections: List[dict]
     refs_urls: List[str]
-    refs_imagens: List[dict]
-    resumo_acumulado: str
+    refs_images: List[dict]
+    cumulative_summary: str
     react_log: List[str]
-    stats_verificacao: List[dict]
+    verification_stats: List[dict]
     status: str
     writer_config: dict  # WriterConfig.to_dict() — empty dict means technical defaults
     tavily_enabled: bool  # If False, disables all Tavily web/image search and extraction
 
 
-# Alias para compatibilidade com código legado
-ReviewState = RevisaoState
+class ReviewChatState(TypedDict):
+    """State specific to the interactive review chatbot session."""
+    original_file_path: str
+    working_copy_path: str
+    chat_history: List[dict]
+    pending_edit: dict
+    last_target_resolution: dict
+    retrieval_trace: List[dict]
+    status: str

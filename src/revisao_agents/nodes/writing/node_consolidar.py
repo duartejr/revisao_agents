@@ -12,15 +12,14 @@ from typing import List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
-from ...state import EscritaTecnicaState
+from ...state import TechnicalWriterState
 from ...config import (
     llm_call, parse_json_safe,
     TECHNICAL_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
-    MAX_URLS_EXTRACT, CTX_RESUMO_CHARS, SECAO_MIN_PARAGRAFOS,
-    DELAY_ENTRE_SECOES, MAX_REACT_ITERATIONS, TOP_K_OBSERVACAO,
+    MAX_URLS_EXTRACT, CTX_ABSTRACT_CHARS, MIN_SECTION_PARAGRAPHS,
+    DELAY_BETWEEN_SECTIONS, MAX_REACT_ITERATIONS, TOP_K_OBSERVATION,
 )
 from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
-from ...utils.file_utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
 from ...core.schemas.writer_config import WriterConfig
 from ...utils.llm_utils.prompt_loader import load_prompt
 from .text_filters import _strip_justification_blocks, _strip_meta_sentences, _strip_figure_table_refs
@@ -33,16 +32,16 @@ from .verification import (
     _verificar_paragrafo_com_anchor, _verificar_e_corrigir_secao_com_anchor,
 )
 
-def consolidar_node(state: EscritaTecnicaState) -> dict:
+def consolidar_node(state: TechnicalWriterState) -> dict:
     """Consolidates written sections into a final document."""
     config = WriterConfig.from_dict(state.get("writer_config", {}))
-    tema = state["tema"]
-    secoes = sorted(state["secoes_escritas"], key=lambda s: s["indice"])
+    theme = state["theme"]
+    secoes = sorted(state["written_sections"], key=lambda s: s["index"])
     all_urls = list(dict.fromkeys(state.get("refs_urls", [])))
-    all_imagens = state.get("refs_imagens", [])
+    all_imagens = state.get("refs_images", [])
     react_log = state.get("react_log", [])
-    stats_global = state.get("stats_verificacao", [])
-    resumo_final = state.get("resumo_acumulado", "")[:1000]
+    stats_global = state.get("verification_stats", [])
+    resumo_final = state.get("cumulative_summary", "")[:1000]
 
     print(f"\n📚 Consolidando {len(secoes)} seções...")
 
@@ -57,24 +56,24 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
           f"— ✅{total_aprov} aprovados  🔵{total_ajust} ajustados  "
           f"🔧{total_corr} corrigidos | {len(all_urls)} fontes")
 
-    titulos = [s["titulo"] for s in secoes]
+    titulos = [s["title"] for s in secoes]
     p_intro = load_prompt(
         f"{config.prompt_dir}/consolidar_intro",
-        tema=tema,
+        tema=theme,
         titulos=", ".join(titulos),
         language=config.language,
     )
     resp_intro = llm_call(p_intro.text, temperature=p_intro.temperature)
     p_concl = load_prompt(
         f"{config.prompt_dir}/consolidar_conclusao",
-        tema=tema,
+        tema=theme,
         resumo_final=resumo_final,
         language=config.language,
     )
     resp_concl = llm_call(p_concl.text, temperature=p_concl.temperature)
 
     partes = [
-        f"# {tema}\n",
+        f"# {theme}\n",
         f"> **Tipo:** {config.review_type_label}\n",
         f"> **Verificação por parágrafo:** {total_verif}/{total_par} verificados "
         f"({taxa_global:.0f}%) — {total_aprov} aprovados, {total_ajust} ajustados, "
@@ -83,13 +82,13 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
         "\n---\n", "## Sumário\n", "- Introdução",
     ]
     for s in secoes:
-        partes.append(f"- {s['titulo']}")
+        partes.append(f"- {s['title']}")
     partes += ["- Conclusão", "\n\n---\n",
                "## Introdução\n", resp_intro.strip(), "\n\n---\n"]
 
     for s in secoes:
         stats_s = next(
-            (x for x in stats_global if x.get("secao") == s["titulo"]), {}
+            (x for x in stats_global if x.get("secao") == s["title"]), {}
         )
         t_s = stats_s.get("total", 0)
         a_s = stats_s.get("aprovados", 0) + stats_s.get("ajustados", 0)
@@ -101,7 +100,7 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
             f"| {stats_s.get('aprovados', 0)} aprovados, {aj_s} ajustados, "
             f"{r_s} corrigidos -->\n"
         )
-        partes.append(s["texto"].strip())
+        partes.append(s["text"].strip())
         partes.append("\n\n---\n")
 
     partes += ["## Conclusão\n", resp_concl.strip(), "\n\n"]
@@ -249,7 +248,7 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
         "      YAML/JSON. Consulte references/README.md para detalhes."
     )
 
-    slug = re.sub(r"[^\w\s-]", "", tema[:40]).strip().replace(" ", "_").lower()
+    slug = re.sub(r"[^\w\s-]", "", theme[:40]).strip().replace(" ", "_").lower()
     output_path = f"reviews/{config.output_prefix}_{slug}.md"
     log_path = f"reviews/{config.output_prefix}_{slug}.log"
 
@@ -263,7 +262,7 @@ def consolidar_node(state: EscritaTecnicaState) -> dict:
 
     try:
         cabecalho = [
-            "=" * 70, f"REACT AUDIT LOG — {tema}",
+            "=" * 70, f"REACT AUDIT LOG — {theme}",
             f"Gerado: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             f"Seções: {len(secoes)} | Fontes: {len(all_urls)}",
             f"Verificados: {total_verif}/{total_par} ({taxa_global:.0f}%) "

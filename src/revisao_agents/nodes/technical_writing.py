@@ -42,11 +42,19 @@ from .writing import (
 # ---------------------------------------------------------------------------
 # Graph nodes (implementations in node_parsear, node_escrever, node_consolidar)
 # ---------------------------------------------------------------------------
-from .writing.node_parsear   import parsear_plano_node
-from .writing.node_escrever  import escrever_secoes_node
+from .writing.node_parsear import parsear_plano_node
+from .writing.node_escrever import escrever_secoes_node
 from .writing.node_consolidar import consolidar_node
 
+# Canonical English aliases (Portuguese names kept for backward compatibility)
+parse_plan_node = parsear_plano_node
+write_sections_node = escrever_secoes_node
+consolidate_node = consolidar_node
+
 __all__ = [
+    "parse_plan_node",
+    "write_sections_node",
+    "consolidate_node",
     "parsear_plano_node",
     "escrever_secoes_node",
     "consolidar_node",

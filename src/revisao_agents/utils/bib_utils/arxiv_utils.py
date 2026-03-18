@@ -11,7 +11,6 @@ get_bibtex_from_arxiv : fetch metadata from the ArXiv API & build minimal BibTeX
 import re
 import logging
 import urllib.request
-import urllib.error
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -24,7 +23,14 @@ _USER_AGENT = "ReviewAgent/1.0"
 # ---------------------------------------------------------------------------
 
 def extract_arxiv_id(file_path: str) -> Optional[str]:
-    """Return the ArXiv identifier embedded in *file_path*, or ``None``."""
+    """Return the ArXiv identifier embedded in *file_path*, or ``None``.
+    
+    Args:
+        file_path: a URL or file path that may contain an ArXiv ID.
+    
+    Returns:
+        The ArXiv ID as a string, or ``None`` if not found.
+    """
     if not file_path:
         return None
 
@@ -42,7 +48,15 @@ def extract_arxiv_id(file_path: str) -> Optional[str]:
 
 
 def get_bibtex_from_arxiv(arxiv_id: str, timeout: int = 10) -> Optional[str]:
-    """Query the ArXiv Atom API and return a minimal BibTeX entry, or ``None``."""
+    """Query the ArXiv Atom API and return a minimal BibTeX entry, or ``None``.
+
+    Args:
+        arxiv_id: The ArXiv identifier of the paper.
+        timeout: The timeout for the API request in seconds.
+
+    Returns:
+        A string containing the BibTeX entry, or ``None`` if the request fails.
+    """
     if not arxiv_id:
         return None
 

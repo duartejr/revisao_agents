@@ -31,6 +31,12 @@ def extract_doi_from_url(file_path: str) -> Optional[str]:
     """Extract a DOI from a URL or file path string.
 
     Handles ``doi.org`` URL patterns and embedded ``10.XXXX/...`` patterns.
+
+    Args:
+        file_path: A URL or file path that may contain a DOI.
+    
+    Returns:
+        The extracted DOI as a string, or ``None`` if no DOI is found.
     """
     if not file_path:
         return None
@@ -47,7 +53,14 @@ def extract_doi_from_url(file_path: str) -> Optional[str]:
 
 
 def search_doi_in_text(text: str) -> Optional[str]:
-    """Find a DOI pattern inside raw text (useful for PDF first pages)."""
+    """Find a DOI pattern inside raw text (useful for PDF first pages).
+    
+    Args:
+        text: A string containing the text to search for a DOI.
+    
+    Returns:
+        The extracted DOI as a string, or ``None`` if no DOI is found.
+    """
     if not text:
         return None
 
@@ -73,6 +86,13 @@ def get_bibtex_from_doi(doi: str, timeout: int = 10) -> Optional[str]:
 
     Tries the primary ``/transform`` endpoint first; falls back to
     ``dx.doi.org`` on HTTP 400.
+
+    Args:
+        doi: The DOI string to query (with or without "https://doi.org/").
+        timeout: The timeout for the API request in seconds.
+    
+    Returns:
+        A string containing the BibTeX entry, or ``None`` if retrieval fails.
     """
     if not doi:
         return None
@@ -118,7 +138,15 @@ def get_bibtex_from_doi(doi: str, timeout: int = 10) -> Optional[str]:
 
 
 def search_crossref_by_title(title: str, timeout: int = 10) -> Optional[str]:
-    """Query Crossref by title to obtain a DOI."""
+    """Query Crossref by title to obtain a DOI.
+
+    Args:
+        title: The title of the paper to search for.
+        timeout: The timeout for the API request in seconds.
+
+    Returns:
+        The DOI as a string if found, or ``None`` if not found.
+    """
     if not title or len(title) < 5:
         return None
 

@@ -3,7 +3,7 @@ Core utilities: constants, logging, and common objects.
 Shared infrastructure for other modules.
 """
 
-from .constants import *
+from ...core.constants import *
 from .logging import *
 from .commons import *
 

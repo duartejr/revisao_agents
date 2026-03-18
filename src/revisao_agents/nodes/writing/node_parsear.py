@@ -12,15 +12,15 @@ from typing import List, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
-from ...state import EscritaTecnicaState
+from ...state import TechnicalWriterState
 from ...config import (
     llm_call, parse_json_safe,
     TECHNICAL_MAX_RESULTS, MAX_CORPUS_PROMPT, EXTRACT_MIN_CHARS,
-    MAX_URLS_EXTRACT, CTX_RESUMO_CHARS, SECAO_MIN_PARAGRAFOS,
-    DELAY_ENTRE_SECOES, MAX_REACT_ITERATIONS, TOP_K_OBSERVACAO,
+    MAX_URLS_EXTRACT, CTX_ABSTRACT_CHARS, MIN_SECTION_PARAGRAPHS,
+    DELAY_BETWEEN_SECTIONS, MAX_REACT_ITERATIONS, TOP_K_OBSERVATION,
 )
 from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
-from ...utils.file_utils.helpers import resumir_secao, parse_plano_tecnico, parse_plano_academico
+from ...utils.file_utils.helpers import parse_technical_plan, parse_academic_plan
 from ...core.schemas.writer_config import WriterConfig
 from ...utils.search_utils.tavily_client import search_web, search_images, extract_urls, score_url
 from ...utils.llm_utils.prompt_loader import load_prompt
@@ -35,32 +35,32 @@ from .verification import (
     _verificar_paragrafo_com_anchor, _verificar_e_corrigir_secao_com_anchor,
 )
 
-def parsear_plano_node(state: EscritaTecnicaState) -> dict:
+def parsear_plano_node(state: TechnicalWriterState) -> dict:
     """Parses a plan file and extracts sections. Supports both technical and academic modes."""
     config = WriterConfig.from_dict(state.get("writer_config", {}))
-    caminho = state["caminho_plano"]
-    print(f"\n📖 Lendo plano: {caminho} (modo: {config.mode})")
-    with open(caminho, "r", encoding="utf-8") as f:
-        texto = f.read()
+    plan_path = state["plan_path"]
+    print(f"\n📖 Lendo plano: {plan_path} (modo: {config.mode})")
+    with open(plan_path, "r", encoding="utf-8") as f:
+        text = f.read()
     if config.mode == "academic":
-        tema, resumo, secoes = parse_plano_academico(texto)
+        theme, plan_summary, sections = parse_academic_plan(text)
     else:
-        tema, resumo, secoes = parse_plano_tecnico(texto)
-    print(f"   ✅ Tema: {tema} | {len(secoes)} seções")
-    for s in secoes:
-        print(f"      [{s['indice']+1}] {s['titulo']}")
+        theme, plan_summary, sections = parse_technical_plan(text)
+    print(f"   ✅ Tema: {theme} | {len(sections)} seções")
+    for s in sections:
+        print(f"      [{s['index']+1}] {s['title']}")
     return {
-        "tema": tema,
-        "resumo_plano": resumo,
-        "secoes": secoes,
-        "secoes_escritas": [],
+        "theme": theme,
+        "plan_summary": plan_summary,
+        "sections": sections,
+        "written_sections": [],
         "refs_urls": [],
-        "refs_imagens": [],
-        "resumo_acumulado": "",
+        "refs_images": [],
+        "cumulative_summary": "",
         "react_log": [],
-        "stats_verificacao": [],
+        "verification_stats": [],
         "status": "plano_parseado",
-        "caminho_plano": caminho,
+        "plan_path": plan_path,
         "writer_config": state.get("writer_config", {}),
     }
 

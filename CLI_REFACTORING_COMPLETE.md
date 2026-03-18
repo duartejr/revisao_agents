@@ -44,9 +44,8 @@ All core components verified working:
 
 ```
 ✓ State Definitions
-  - RevisaoState (11 fields)
+  - ReviewState (11 fields)
   - EscritaTecnicaState (12 fields)
-  - ReviewState (alias)
 
 ✓ Schemas
   - Chunk, Source, SectionAnswer
@@ -177,8 +176,8 @@ OPENAI_API_KEY=your-key-here
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 
 # Chunking
-CHUNK_SIZE=512
-CHUNK_OVERLAP=64
+CHUNK_SIZE=2400
+CHUNK_OVERLAP=480
 
 # Search
 TOP_K_WRITER=5

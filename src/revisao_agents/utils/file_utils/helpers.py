@@ -1,200 +1,320 @@
 import os
 import re
-import json
 import difflib
-from typing import List, Optional
+from typing import List
 from ...config import HIST_MAX_TURNS, PLAN_MAX_CHARS
 
 
 def fmt_chunks(chunks: List[str], max_chars: int = 1200) -> str:
-    bloco = ""
+    """Formats a list of text chunks into a single string, truncating if necessary.
+    
+    Args:
+        chunks: List of text chunks to format.
+        max_chars: Maximum total characters in the output string.
+
+    Returns:
+        A single string with numbered chunks, truncated to max_chars."""
+    block = ""
     for i, c in enumerate(chunks, 1):
-        linha = f"[{i}] {c}\n"
-        if len(bloco) + len(linha) > max_chars:
+        row = f"[{i}] {c}\n"
+        if len(block) + len(row) > max_chars:
             break
-        bloco += linha
-    return bloco.strip()
+        block += row
+    return block.strip()
 
-def fmt_snippets(resultados: List[dict], max_chars: int = 1200) -> str:
-    bloco = ""
-    for i, r in enumerate(resultados, 1):
-        titulo  = r.get("title",   "")[:60]
+def fmt_snippets(results: List[dict], max_chars: int = 1200) -> str:
+    """Formats search results with title, snippet, and URL into a single string.
+
+    Args:
+        results: List of search result dicts with 'title', 'snippet', and 'url' keys.
+        max_chars: Maximum total characters in the output string.
+    
+    Returns:
+        A formatted string with numbered search results, truncated to max_chars.
+    """
+    block = ""
+    for i, r in enumerate(results, 1):
+        title  = r.get("title",   "")[:60]
         snippet = r.get("snippet", "")[:250]
-        url     = r.get("url",     "")[:80]
-        linha   = f"[{i}] {titulo}\n    {snippet}\n    {url}\n\n"
-        if len(bloco) + len(linha) > max_chars:
+        url     = r.get("url",     "")[:120]
+        row     = f"[{i}] {title}\n    {snippet}\n    {url}\n\n"
+        if len(block) + len(row) > max_chars:
             break
-        bloco += linha
-    return bloco.strip()
+        block += row
+    return block.strip()
 
-def resumir_hist(historico: List[tuple], max_turns: int = HIST_MAX_TURNS) -> str:
-    if not historico:
-        return "(sem historico)"
-    recentes = historico[-(max_turns * 2):]
-    linhas = []
-    for role, c in recentes:
-        label  = "Agente" if role == "assistant" else "Usuario"
+def summarize_hist(history: List[tuple], max_turns: int = HIST_MAX_TURNS) -> str:
+    """Summarizes a conversation history into a concise string with recent turns.
+    
+    Args:
+        history: List of (role, content) tuples representing the conversation history.
+        max_turns: Maximum number of recent turns to include in the summary.
+    Returns:
+        A formatted string summarizing the recent conversation history."""
+    if not history:
+        return "(without conversation history)"
+    recent = history[-(max_turns * 2):]
+    lines = []
+    for role, c in recent:
+        label  = "Agent" if role == "assistant" else "User"
         resumo = c[:300] + "..." if len(c) > 300 else c
-        linhas.append(f"{label}: {resumo}")
-    return "\n".join(linhas)
+        lines.append(f"{label}: {resumo}")
+    return "\n".join(lines)
 
-def truncar(s: str, n: int = PLAN_MAX_CHARS) -> str:
-    return s if len(s) <= n else s[:n] + "\n...[truncado]"
+def truncate(s: str, n: int = PLAN_MAX_CHARS) -> str:
+    """Truncates a string to n characters, adding an ellipsis if truncated.
+    
+    Args:
+        s: The input string to truncate.
+        n: The maximum number of characters allowed in the output string.
+    
+    Returns:
+        The original string if its length is less than or equal to n, otherwise a truncated version with an ellipsis."""
+    return s if len(s) <= n else s[:n] + "\n...[truncated]"
 
-def salvar_md(conteudo: str, prefixo: str, tema: str) -> str:
-    slug = re.sub(r"[^\w\s-]", "", tema[:40]).strip().replace(" ", "_").lower()
-    path = f"{prefixo}_{slug}.md"
+def save_md(content: str, prefix: str, theme: str) -> str:
+    """Saves content to a Markdown file with a name based on the theme.
+
+    Args:
+        content: The content to save in the Markdown file.
+        prefix: The prefix for the file name.
+        theme: The theme to include in the file name.
+
+    Returns:
+        The path to the saved Markdown file.
+    """
+    slug = re.sub(r"[^\w\s-]", "", theme[:40]).strip().replace(" ", "_").lower()
+    path = f"{prefix}_{slug}.md"
     try:
         parent = os.path.dirname(path)
         if parent:
             os.makedirs(parent, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
-            f.write(conteudo)
-        print("\nSalvo em:", path)
+            f.write(content)
+        print("\nSaved in:", path)
     except Exception as e:
-        print("Nao foi possivel salvar:", str(e))
+        print("Could not save:", str(e))
     return path
 
 
-def normalizar(texto: str) -> str:
-    """Lowercase, sem pontuação, espaços simples."""
-    t = texto.lower()
+def normalize(text: str) -> str:
+    """Lowercase, no punctuation, simple spaces.
+    
+    Args:
+        text: The input text to normalize.
+    Returns:
+        A normalized version of the input text, with lowercase letters, no punctuation, and single spaces.
+    """
+    t = text.lower()
     t = re.sub(r"[^\w\s]", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
     return t
 
 def fuzzy_sim(a: str, b: str) -> float:
-    """SequenceMatcher ratio entre dois textos normalizados."""
+    """SequenceMatcher ratio of two strings, a simple fuzzy similarity score between 0 and 1.
+    
+    Args:
+        a: First string to compare.
+        b: Second string to compare.
+    
+    Returns:
+        A float between 0 and 1 representing the similarity between the two strings, where 1 means identical and 0 means completely different.
+    """
     return difflib.SequenceMatcher(None, a, b).ratio()
 
 def fuzzy_search_in_text(anchor_norm: str, corpus_norm: str) -> tuple:
     """
-    Desliza uma janela pelo corpus tentando encontrar a anchor por fuzzy.
-    Returns: (melhor_score, trecho_original[:120])
+    Slides a window over the corpus trying to find the anchor using fuzzy matching.
+    
+    Args:
+        anchor_norm: The normalized anchor string to search for.
+        corpus_norm: The normalized corpus string to search within.
+    
+    Returns:
+        A tuple containing the best similarity score and the corresponding snippet from the corpus (up to 120 characters).
     """
-    palavras_anchor = anchor_norm.split()
-    palavras_corpus = corpus_norm.split()
-    n = len(palavras_anchor)
+    anchor_words = anchor_norm.split()
+    corpus_words = corpus_norm.split()
+    n = len(anchor_words)
     if n == 0:
         return 0.0, ""
 
-    melhor = 0.0
-    melhor_trecho = ""
-    passo = max(1, n // 4)
+    best = 0.0
+    best_snippet = ""
+    step = max(1, n // 4)
 
-    for i in range(0, max(1, len(palavras_corpus) - n), passo):
-        janela = " ".join(palavras_corpus[i: i + n + n // 3])
-        score  = fuzzy_sim(anchor_norm, janela)
-        if score > melhor:
-            melhor = score
-            melhor_trecho = janela[:120]
+    for i in range(0, max(1, len(corpus_words) - n), step):
+        window  = " ".join(corpus_words[i: i + n + n // 3])
+        score  = fuzzy_sim(anchor_norm, window)
+        if score > best:
+            best = score
+            best_snippet = window[:120]
 
-    return melhor, melhor_trecho
+    return best, best_snippet
 
-def resumir_secao(titulo: str, texto: str) -> str:
-    """Gera um resumo curto de uma seção usando LLM."""
+def summarize_section(title: str, text: str) -> str:
+    """Generates a short summary of a section using LLM.
+
+    Args:
+        title: The title of the section.
+        text: The content of the section.
+
+    Returns:
+        A concise summary of the section, limited to 400 characters.
+    """
     from ...config import llm_call
     resp = llm_call(
-        f"Resuma em 3-4 frases CONCISAS os conceitos técnicos centrais de "
-        f"'{titulo}'. Destaque fundamentos, fórmulas-chave e conclusões.\n\n"
-        f"SEÇÃO:\n{texto[:2500]}",
+        f"Summarize the central technical concepts of in 3-4 concise sentences."
+        f"'{title}'. Highlight the fundamentals, key formulas, and conclusions.\n\n"
+        f"SECTION:\n{text[:2500]}",
         temperature=0.1,
     )
     return resp[:400]
 
-def parse_plano_tecnico(texto: str) -> tuple:
+def parse_technical_plan(text: str) -> tuple:
     """
-    Extrai tema, resumo e lista de seções do plano em Markdown.
-    Retorna (tema, resumo, secoes)
-    """
-    tema = "Revisao Tecnica"
-    m = re.search(r"\*\*Tema:\*\*\s*(.+)", texto)
-    if m:
-        tema = m.group(1).replace("*", "").strip()
-    resumo = texto[:1200].strip()
-    secoes = []
-    pattern = r"\|\s*([0-9\.]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]*)\s*\|"
-    for nivel, titulo, cont_esp, recursos in re.findall(pattern, texto):
-        nivel_clean = nivel.strip()
-        if not nivel_clean or "Nível" in nivel_clean or "---" in nivel_clean:
-            continue
-        secoes.append({
-            "indice":            len(secoes),
-            "titulo":            f"{nivel_clean} {titulo.strip().replace('**', '')}",
-            "conteudo_esperado": cont_esp.strip(),
-            "recursos":          recursos.strip(),
-        })
-    if not secoes:
-        for i, t in enumerate(re.findall(r"^##\s+([0-9]+\..+)$", texto, re.MULTILINE)):
-            secoes.append({"indice": i, "titulo": t,
-                           "conteudo_esperado": t, "recursos": ""})
-    if not secoes:
-        raise ValueError("❌ Nenhuma seção encontrada no plano.")
-    return tema, resumo, secoes
+    Extracts theme, summary, and section list from a technical plan in Markdown.
+    Returns (theme, summary, sections) where sections is a list of dicts with 'indice', 'titulo', 'conteudo_esperado', and 'recursos'.
 
-def parse_plano_academico(texto: str) -> tuple:
+    Args:
+        text: The input Markdown text of the technical plan.
+    
+    Returns:
+        A tuple containing the theme (str), summary (str), and a list of sections (list of dicts).
+    """
+    theme = "Technical Review"
+    m = re.search(r"\*\*Theme:\*\*\s*(.+)", text)
+    if m:
+        theme = m.group(1).replace("*", "").strip()
+    summary = text[:1200].strip()
+    sections = []
+    pattern = r"\|\s*([0-9\.]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]*)\s*\|"
+    for level, title, cont_esp, resources in re.findall(pattern, text):
+        level_clean = level.strip()
+        if not level_clean or "Level" in level_clean or "---" in level_clean:
+            continue
+        sections.append({
+            "index":            len(sections),
+            "title":            f"{level_clean} {title.strip().replace('**', '')}",
+            "expected_content": cont_esp.strip(),
+            "resources":          resources.strip(),
+        })
+    if not sections:
+        for i, t in enumerate(re.findall(r"^##\s+([0-9]+\..+)$", text, re.MULTILINE)):
+            sections.append({"index": i, "title": t,
+                           "expected_content": t, "resources": ""})
+    if not sections:
+        raise ValueError("❌ Nenhuma seção encontrada no plano.")
+    return theme, summary, sections
+
+def parse_academic_plan(text: str) -> tuple:
     """
     Extract theme, summary, and section list from an academic plan Markdown file.
 
     Academic plans use a 3-column table:
-      | N. Título | Objetivo | Tópicos |
+      | N. Title | Objective | Topics |
 
-    Returns (tema, resumo, secoes) in the same shape as parse_plano_tecnico so the
+    Returns (theme, summary, sections) in the same shape as parse_technical_plan so the
     entire downstream writer pipeline is unaffected.
+
+    Args:
+        text: The input Markdown text of the academic plan.
+    
+    Returns:
+        A tuple containing the theme (str), summary (str), and a list of sections (list of dicts).
     """
-    tema = "Revisão Acadêmica"
-    m = re.search(r"\*\*Tema:\*\*\s*(.+)", texto)
+    theme = "Academic Review"
+    m = re.search(r"\*\*Theme:\*\*\s*(.+)", text)
     if m:
-        tema = m.group(1).replace("*", "").strip()
+        theme = m.group(1).replace("*", "").strip()
 
     # Strip a fenced code block wrapper added by the planner (``` markdown ... ```)
-    inner = re.search(r"```(?:markdown)?\n([\s\S]+?)\n```", texto)
-    conteudo = inner.group(1) if inner else texto
+    inner = re.search(r"```(?:markdown)?\n([\s\S]+?)\n```", text)
+    content = inner.group(1) if inner else text
 
-    resumo = conteudo[:1200].strip()
-    secoes = []
+    summary = content[:1200].strip()
+    sections = []
 
-    # Primary: 3-column table  | N. Title | Objetivo | Tópicos |
+    # Primary: 3-column table  | N. Title | Objective | TTopics |
     pattern = r"\|\s*\*?\*?(\d[\d\.]*\.?\s+[^|*]+?)\*?\*?\s*\|\s*([^|]+)\s*\|\s*([^|]*)\s*\|"
-    for titulo_raw, objetivo, topicos in re.findall(pattern, conteudo):
-        titulo_clean = titulo_raw.strip().replace("**", "")
-        if not titulo_clean or "Título" in titulo_clean or "---" in titulo_clean:
+    for title_raw, objective, topics in re.findall(pattern, content):
+        title_clean = title_raw.strip().replace("**", "")
+        if not title_clean or "Title" in title_clean or "---" in title_clean:
             continue
-        secoes.append({
-            "indice": len(secoes),
-            "titulo": titulo_clean,
-            "conteudo_esperado": objetivo.strip(),
-            "recursos": topicos.strip(),
+        sections.append({
+            "index": len(sections),
+            "title": title_clean,
+            "expected_content": objective.strip(),
+            "resources": topics.strip(),
         })
 
     # Fallback: H2 / H3 numbered headings  (## 1. Title)
-    if not secoes:
-        for i, t in enumerate(re.findall(r"^#{2,3}\s+(\d[\d\.]*\s+.+)$", conteudo, re.MULTILINE)):
-            secoes.append({
-                "indice": i,
-                "titulo": t.strip(),
-                "conteudo_esperado": t.strip(),
-                "recursos": "",
+    if not sections:
+        for i, t in enumerate(re.findall(r"^#{2,3}\s+(\d[\d\.]*\s+.+)$", content, re.MULTILINE)):
+            sections.append({
+                "index": i,
+                "title": t.strip(),
+                "expected_content": t.strip(),
+                "resources": "",
             })
 
-    if not secoes:
-        raise ValueError("❌ Nenhuma seção encontrada no plano acadêmico.")
+    if not sections:
+        raise ValueError("❌ No section found in the academic plan..")
 
-    return tema, resumo, secoes
+    return theme, summary, sections
 
 
-def extrair_anchors(texto: str) -> list:
-    """Extracts anchor texts [ANCHOR: "..."] from a text block."""
+def extract_anchors(text: str) -> list:
+    """Extracts anchor texts [ANCHOR: "..."] from a text block.
+    
+    Args:
+        text: The input text containing anchor patterns.
+    
+    Returns:
+        A list of anchor texts extracted from the input text, where each anchor is the content inside the [ANCHOR: "..."] pattern, stripped of leading and trailing whitespace.
+    """
     pattern = re.compile(r'\[ANCHOR:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
-    return [m.strip() for m in pattern.findall(texto)]
+    return [m.strip() for m in pattern.findall(text)]
+
+import re
+
+def contains_assertion_verbs(text: str) -> bool:
+    """
+    Checks if a string contains common English or Portuguese narrative/assertive verbs.
+    
+    This is useful for filtering out titles, fragments, or non-sentential 
+    strings by ensuring the text contains at least one descriptive action.
+
+    Args:
+        text (str): The string or paragraph to analyze.
+
+    Returns:
+        bool: True if at least one tracked verb is found, False otherwise.
+    """
+    # Combined list of Portuguese and English assertive/descriptive verbs
+    # PT: foi, é, são, demonstra, prova, mostra, evidencia, encontrou, observou, descobriu, propôs, definiu
+    # EN: was, is, are, demonstrates, proves, shows, evidences, found, observed, discovered, proposed, defined
+    pattern = (
+        r'\b('
+        r'foi|é|são|demonstra|prova|mostra|evidencia|encontrou|observou|descobriu|propôs|definiu|'
+        r'was|is|are|demonstrates|proves|shows|evidences|found|observed|discovered|proposed|defined'
+        r')\b'
+    )
+    
+    return bool(re.search(pattern, text, re.IGNORECASE))
 
 
-def eh_paragrafo_verificavel(paragrafo: str) -> bool:
+def is_paragraph_verifiable(paragraph: str) -> bool:
     """
     Returns True if the paragraph contains verifiable claims
     that require anchor/source support.
+
+    Args:
+        paragraph: The input text paragraph to evaluate.
+    Returns:
+        A boolean indicating whether the paragraph is likely to contain verifiable claims, based on heuristics such as the presence of numbers, citations, anchors, or strong verbs.
     """
-    p = paragrafo.strip()
+    p = paragraph.strip()
     if len(p) < 60:
         return False
     if p.startswith("#"):
@@ -205,14 +325,11 @@ def eh_paragrafo_verificavel(paragrafo: str) -> bool:
         return False
     if p.startswith("$$") or re.match(r"^\s*\$[^$]+\$", p):
         return False
-    if p.startswith("*Figura") or p.startswith("!["):
+    if p.startswith("*Figur") or p.startswith("!["):
         return False
     # Has numbers, citations, or strong verbs → likely verifiable
     has_numbers = bool(re.search(r'\b\d+[\d.,]*\b', p))
     has_citations = bool(re.search(r'\[\d+\]', p))
     has_anchors = bool(re.search(r'\[ANCHOR:', p))
-    has_verbs = bool(re.search(
-        r'\b(foi|é|são|demonstra|prova|mostra|evidencia|encontrou|'
-        r'observou|descobriu|propôs|definiu)\b', p, re.IGNORECASE
-    ))
+    has_verbs = contains_assertion_verbs(p)
     return has_numbers or has_citations or has_anchors or has_verbs
