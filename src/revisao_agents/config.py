@@ -12,6 +12,7 @@ def _env_clean(name: str, default: str = "") -> str:
     Args:
         name: name of the environment variable to read
         default: default value if env var is not set
+    
     Returns:
         The cleaned value of the environment variable.
     """
@@ -101,6 +102,7 @@ def get_runtime_config_summary() -> dict:
     
     Args:
         None
+    
     Returns:
         Dict with keys:
             - llm_provider: normalized provider name (lowercase)
@@ -161,6 +163,7 @@ def validate_runtime_config(
         require_tavily: if True, TAVILY_API_KEY must be set
         require_openai_embeddings: if True, OPENAI_API_KEY must be set
         strict: if True, raise ValueError on any missing requirement; otherwise return list of issues
+    
     Returns:    
         List of strings describing any configuration issues found (empty if all good)
     """

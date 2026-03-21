@@ -1,7 +1,7 @@
 # src/revisao_agents/tools/__init__.py
 """
-Ferramentas LangChain que os agents podem chamar.
-Importe tudo daqui para ter acesso limpo.
+LangChain tools that agents can call.
+Import everything from here for clean access.
 """
 
 from .registry import get_all_tools

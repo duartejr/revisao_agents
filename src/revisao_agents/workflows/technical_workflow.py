@@ -10,11 +10,12 @@ from ..nodes import (
     refine_technical_search_node,
     refine_technical_plan_node,
     finalize_technical_plan_node,
-    route_interview,
+    interview_router,
 )
 
 
 def build_technical_workflow():
+    """Build the technical review workflow graph."""
     builder = StateGraph(ReviewState)
     builder.add_node("initial_technical_search", initial_technical_search_node)
     builder.add_node("initial_technical_plan", initial_technical_plan_node)
@@ -32,19 +33,10 @@ def build_technical_workflow():
     builder.add_edge("refine_technical_search", "refine_technical_plan")
     builder.add_conditional_edges(
         "refine_technical_plan",
-        route_interview,
+        interview_router,
         {"continue": "interview", "finalize": "finalize_technical_plan"},
     )
     builder.add_edge("finalize_technical_plan", END)
 
     return builder.compile(checkpointer=MemorySaver(), interrupt_before=["human_pause"])
 
-
-def build_tecnico_workflow():
-    """Backward-compatible alias for build_technical_workflow."""
-    return build_technical_workflow()
-
-
-def build_tecnical_workflow():
-    """Backward-compatible alias for build_technical_workflow."""
-    return build_technical_workflow()

@@ -20,6 +20,17 @@ _LANGUAGE_LABELS: dict = {
     "en": "English",
 }
 
+_REVIEW_TYPE_LABELS: dict = {
+    "technical": {
+        "pt": "Revisão Técnica",
+        "en": "Technical Review",
+    },
+    "academic": {
+        "pt": "Revisão Acadêmica da Literatura",
+        "en": "Academic Literature Review",
+    },
+}
+
 
 @dataclass
 class WriterConfig:
@@ -59,32 +70,56 @@ class WriterConfig:
         """Full language name for use in prompts."""
         return _LANGUAGE_LABELS.get(self.language, "Brazilian Portuguese (pt-BR)")
 
+    @staticmethod
+    def default_review_type_label(mode: str, language: str) -> str:
+        """Return the localized default review label for a mode/language pair."""
+        return _REVIEW_TYPE_LABELS.get(mode, _REVIEW_TYPE_LABELS["technical"]).get(
+            language,
+            _REVIEW_TYPE_LABELS["technical"]["pt"],
+        )
+
     # --------------------------------------------------------------------------
     # Factory helpers
     # --------------------------------------------------------------------------
 
     @classmethod
     def technical(cls, language: str = "pt", min_sources: int = 0) -> "WriterConfig":
-        """Default technical writing configuration."""
+        """Default technical writing configuration.
+        
+        Args:
+            language: Output language for the review. "pt" = Brazilian Portuguese, "en" = English.
+            min_sources: Minimum number of sources per section.
+        
+        Returns:
+            WriterConfig: Configured writer settings for technical writing.
+        """
         return cls(
             mode="technical",
             prompt_dir="technical_writing",
             corpus_strategy="web_first",
             output_prefix="revisao_tecnica",
-            review_type_label="Revisão Técnica",
+            review_type_label=cls.default_review_type_label("technical", language),
             language=language,
             min_sources_per_section=min_sources,
         )
 
     @classmethod
     def academic(cls, language: str = "pt", min_sources: int = 4) -> "WriterConfig":
-        """Academic systematic-review writing configuration."""
+        """Academic systematic-review writing configuration.
+
+        Args:
+            language: Output language for the review. "pt" = Brazilian Portuguese, "en" = English.
+            min_sources: Minimum number of sources per section.
+        
+        Returns:
+            WriterConfig: Configured writer settings for academic writing.
+        """
         return cls(
             mode="academic",
             prompt_dir="academic_writing",
             corpus_strategy="corpus_first",
             output_prefix="revisao_academica",
-            review_type_label="Revisão Acadêmica da Literatura",
+            review_type_label=cls.default_review_type_label("academic", language),
             language=language,
             min_sources_per_section=min_sources,
         )
@@ -101,19 +136,31 @@ class WriterConfig:
         """Reconstruct from a plain dict stored in LangGraph state.
 
         Falls back to technical defaults when data is empty or missing keys.
+
+        Args:
+            data: A dict with keys matching WriterConfig fields, typically loaded from LangGraph state.
+
+        Returns:
+            WriterConfig: Reconstructed writer configuration.
         """
         if not data:
             return cls.technical()
+        mode = data.get("mode", "technical")
+        language = data.get("language", "pt")
         return cls(
-            mode=data.get("mode", "technical"),
+            mode=mode,
             prompt_dir=data.get("prompt_dir", "technical_writing"),
             corpus_strategy=data.get("corpus_strategy", "web_first"),
             output_prefix=data.get("output_prefix", "revisao_tecnica"),
-            review_type_label=data.get("review_type_label", "Revisão Técnica"),
-            language=data.get("language", "pt"),
+            review_type_label=data.get(
+                "review_type_label",
+                cls.default_review_type_label(mode, language),
+            ),
+            language=language,
             min_sources_per_section=data.get("min_sources_per_section", 0),
         )
 
     @property
     def is_corpus_first(self) -> bool:
+        """Check if the corpus strategy is 'corpus_first'."""
         return self.corpus_strategy == "corpus_first"

@@ -183,7 +183,7 @@ def parse_technical_plan(text: str) -> tuple:
         A tuple containing the theme (str), summary (str), and a list of sections (list of dicts).
     """
     theme = "Technical Review"
-    m = re.search(r"\*\*Theme:\*\*\s*(.+)", text)
+    m = re.search(r"\*\*(?:Theme|Topic|Tema|T[óo]pico):\*\*\s*(.+)", text, re.IGNORECASE)
     if m:
         theme = m.group(1).replace("*", "").strip()
     summary = text[:1200].strip()
@@ -191,11 +191,21 @@ def parse_technical_plan(text: str) -> tuple:
     pattern = r"\|\s*([0-9\.]+)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|\s*([^|]*)\s*\|"
     for level, title, cont_esp, resources in re.findall(pattern, text):
         level_clean = level.strip()
-        if not level_clean or "Level" in level_clean or "---" in level_clean:
+        title_clean = title.strip().replace('**', '')
+        if (
+            not level_clean
+            or re.search(r"(?:^|\b)(Level|N[ií]vel)(?:\b|$)", level_clean, re.IGNORECASE)
+            or "---" in level_clean
+            or re.search(
+                r"(?:Title|T[ií]tulo|Expected\s+Content|Conte[uú]do\s+Esperado|Resources|Recursos)",
+                title_clean,
+                re.IGNORECASE,
+            )
+        ):
             continue
         sections.append({
             "index":            len(sections),
-            "title":            f"{level_clean} {title.strip().replace('**', '')}",
+            "title":            f"{level_clean} {title_clean}",
             "expected_content": cont_esp.strip(),
             "resources":          resources.strip(),
         })
@@ -224,7 +234,7 @@ def parse_academic_plan(text: str) -> tuple:
         A tuple containing the theme (str), summary (str), and a list of sections (list of dicts).
     """
     theme = "Academic Review"
-    m = re.search(r"\*\*Theme:\*\*\s*(.+)", text)
+    m = re.search(r"\*\*(?:Theme|Topic|Tema|T[óo]pico):\*\*\s*(.+)", text, re.IGNORECASE)
     if m:
         theme = m.group(1).replace("*", "").strip()
 
@@ -239,7 +249,11 @@ def parse_academic_plan(text: str) -> tuple:
     pattern = r"\|\s*\*?\*?(\d[\d\.]*\.?\s+[^|*]+?)\*?\*?\s*\|\s*([^|]+)\s*\|\s*([^|]*)\s*\|"
     for title_raw, objective, topics in re.findall(pattern, content):
         title_clean = title_raw.strip().replace("**", "")
-        if not title_clean or "Title" in title_clean or "---" in title_clean:
+        if (
+            not title_clean
+            or re.search(r"(?:Title|T[ií]tulo|Objective|Objetivo|Topics|T[óo]picos?)", title_clean, re.IGNORECASE)
+            or "---" in title_clean
+        ):
             continue
         sections.append({
             "index": len(sections),
@@ -325,7 +339,7 @@ def is_paragraph_verifiable(paragraph: str) -> bool:
         return False
     if p.startswith("$$") or re.match(r"^\s*\$[^$]+\$", p):
         return False
-    if p.startswith("*Figur") or p.startswith("!["):
+    if re.match(r"^\*?(?:Figur(?:a|e)|Quadro|Table|Tabela|Graph|Gr[áa]fico)", p, re.IGNORECASE) or p.startswith("!["):
         return False
     # Has numbers, citations, or strong verbs → likely verifiable
     has_numbers = bool(re.search(r'\b\d+[\d.,]*\b', p))

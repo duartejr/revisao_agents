@@ -11,7 +11,7 @@ class Source(BaseModel):
         description="Numeric index of the source as it appears in the corpus, e.g., 1, 2, 3"
     )
     url: str = Field(description="Full URL of the source extracted from the corpus")
-    titulo: str = Field(description="Title of the document or page of the source")
+    title: str = Field(description="Title of the document or page of the source")
 
 
 class SectionAnswer(BaseModel):

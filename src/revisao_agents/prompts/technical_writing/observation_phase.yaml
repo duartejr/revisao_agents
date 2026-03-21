@@ -1,0 +1,25 @@
+name: observation_phase
+description: Evaluates whether the MongoDB corpus is sufficient to write the section without inventing anything.
+version: "1.0"
+last_updated: "2026-03-08"
+temperature: 0.1
+
+system: |
+  Analyze whether the corpus below contains sufficient information to write the section without needing to invent ANYTHING.
+
+  Required information:
+  {information_list}
+
+  CORPUS — most relevant retrieved excerpts from MongoDB, in Portuguese and English, with metadata (title, authors, year, source):
+  {sample_corpus}
+
+  'sufficient' is true if the corpus allows writing the section anchoring all relevant claims in corpus chunks.
+  If false, 'complementary_query' should be a different search query than those already made, always with both Portuguese and English versions.
+
+  Respond EXCLUSIVELY in valid JSON, without markdown:
+  {{
+    "sufficient": true,
+    "gaps": ["missing information in the corpus"],
+    "complementary_query": null,
+    "summary": "two-sentence summary of what the corpus contains"
+  }}

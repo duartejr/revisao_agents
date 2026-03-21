@@ -18,10 +18,18 @@ OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 
 
 def _project_root() -> str:
+    """Returns the absolute path to the project root directory."""
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 
 
 def _resolve_chunk_path(file_path: str) -> str:
+    """Resolves the file path for a chunk's content, checking absolute path, project root, and cache directory.
+    
+    Args:
+        file_path: The original file path stored in MongoDB for the chunk content.
+    Returns:
+        The resolved file path if it exists, or an empty string if not found.
+    """
     if not file_path:
         return ""
     if os.path.isabs(file_path):
@@ -41,6 +49,13 @@ def _resolve_chunk_path(file_path: str) -> str:
 
 
 def _read_chunk_text(result: dict) -> str:
+    """Reads the chunk text from the MongoDB result, either directly or from the file path.
+
+    Args:
+        result: A dictionary representing a MongoDB document for a chunk, which may contain 'text' or 'file_path'.
+    Returns:
+        The text content of the chunk, or an empty string if it cannot be read.
+    """
     if result.get("text"):
         return str(result["text"])
 
@@ -129,7 +144,7 @@ def search_chunks(query: str, k: int = 16) -> List[str]:
     """
     collection = _get_mongo_collection()
     
-    # Gera embedding para a query
+    # Generates embedding for the query using OpenAI
     try:
         query_embedding = _generate_embedding(query)
     except Exception as e:

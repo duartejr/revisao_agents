@@ -12,20 +12,28 @@ Prompts are loaded from YAML files in prompts/technical/.
 
 from ..state import ReviewState
 from ..utils.llm_utils.llm_providers import get_llm
-from ..utils.search_utils.tavily_client import buscar_conteudo_tecnico
+from ..utils.search_utils.tavily_client import search_technical_content
 from ..utils.file_utils.helpers import fmt_snippets, truncate, save_md
 from ..utils.llm_utils.prompt_loader import load_prompt
 
 
-def busca_tecnica_inicial_node(state: ReviewState) -> dict:
-    """Busca inicial de conteúdo técnico via Tavily."""
+def initial_technical_search_node(state: ReviewState) -> dict:
+    """Initial search for technical content via Tavily.
+    
+    Args:
+        state (ReviewState): The current state of the review, expected to contain:
+            - "theme": str, the review topic/theme to search for.
+    
+    Returns:
+        dict: Updated state with retrieved technical URLs and snippets, and status.
+    """
     theme = state["theme"]
-    print("\n[Busca tecnica inicial] tema:", repr(theme))
-    res      = buscar_conteudo_tecnico(theme, [])
-    urls     = res.get("total_acumulado", [])
-    snippets = res.get("resultados", [])
+    print("\n[Initial technical search] theme:", repr(theme))
+    ans      = search_technical_content(theme, [])
+    urls     = ans.get("total_accumulated", [])
+    snippets = ans.get("results", [])
     print("\n" + "=" * 70)
-    print("FONTES TECNICAS ENCONTRADAS")
+    print("TECHNICAL SOURCES FOUND")
     print("=" * 70)
     for i, r in enumerate(snippets, 1):
         print("\n  [" + str(i).rjust(2) + "] " + r.get("title", "")[:70])
@@ -33,107 +41,126 @@ def busca_tecnica_inicial_node(state: ReviewState) -> dict:
         print("       " + r.get("snippet", "")[:120] + "...")
     print("=" * 70)
     return {"technical_urls": urls, "technical_snippets": snippets,
-            "status": "busca_tecnica_ok"}
+            "status": "initial_technical_search_ok"}
 
 
-def plano_inicial_tecnico_node(state: ReviewState) -> dict:
-    """Gera o rascunho inicial do plano técnico."""
+def initial_technical_plan_node(state: ReviewState) -> dict:
+    """Generates the initial draft of the technical plan.
+    
+    Args:
+        state (ReviewState): The current state of the review, expected to contain:
+            - "theme": str, the review topic/theme to search for.
+    
+    Returns:
+        dict: Updated state with the initial technical plan and status.
+    """
     theme     = state["theme"]
     snippets = fmt_snippets(state.get("technical_snippets", []), 1200)
-    prompt = load_prompt("technical/plano_inicial", tema=theme, snippets=snippets)
+    prompt = load_prompt("technical/initial_plan", theme=theme, snippets=snippets)
     resp  = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     plano = resp.content if hasattr(resp, "content") else str(resp)
-    print("\nPlano tecnico inicial elaborado.")
-    return {"current_plan": plano, "status": "plano_tecnico_inicial_pronto"}
+    print("\nInitial technical plan generated.")
+    return {"current_plan": plano, "status": "initial_technical_plan_ready"}
 
 
-def refinar_busca_tecnica_node(state: ReviewState) -> dict:
-    """Refaz busca técnica com base na última pergunta."""
+def refine_technical_search_node(state: ReviewState) -> dict:
+    """Refines the technical search based on the user's last question.
+    
+    Args:
+        state (ReviewState): The current state of the review, expected to contain:
+            - "theme": str, the review topic/theme to search for.
+            - "interview_history": list, the history of the interview.
+    
+    Returns:
+        dict: Updated state with refined technical URLs and snippets, and status.
+    """
     query = state["theme"]
     for role, c in reversed(state["interview_history"]):
         if role == "user":
             query = state["theme"] + " " + c[:100]
             break
     query = query.strip()
-    print("\n[Re-busca tecnica] query:", repr(query[:70]))
+    print("\n[Refined technical search] query:", repr(query[:70]))
     urls_ant = state.get("technical_urls", [])
-    res      = buscar_conteudo_tecnico(query, urls_ant)
-    novos    = res.get("urls_novos", [])
-    total    = res.get("total_acumulado", urls_ant)
-    snips_n  = res.get("resultados", [])
-    if novos:
-        print("\nNovas fontes (" + str(len(novos)) + "):")
+    ans      = search_technical_content(query, urls_ant)
+    news    = ans.get("new_urls", [])
+    total    = ans.get("total_accumulated", urls_ant)
+    snips_n  = ans.get("results", [])
+    if news:
+        print("\nNew sources (" + str(len(news)) + "):")
         for r in snips_n[:4]:
             print("  * " + r.get("title", "")[:60])
             print("    " + r.get("url",   "")[:70])
     snips_acum = (snips_n + state.get("technical_snippets", []))[:20]
     return {"technical_urls": total, "technical_snippets": snips_acum,
-            "status": "busca_tecnica_refinada"}
-
-
-def refinar_plano_tecnico_node(state: ReviewState) -> dict:
-    """Atualiza o plano técnico com novas fontes e feedback."""
-    theme       = state["theme"]
-    current_plan = truncate(state["current_plan"], 700)
-    ultima     = ""
-    for role, c in reversed(state["interview_history"]):
-        if role == "user":
-            ultima = c[:300]
-            break
-    snips = fmt_snippets(state.get("technical_snippets", [])[:5], 800)
-    prompt = load_prompt(
-        "technical/refinar_plano",
-        tema=theme,
-        plano_curr=current_plan,
-        ultima=ultima,
-        snips=snips,
-    )
-    resp  = get_llm(temperature=prompt.temperature).invoke(prompt.text)
-    plano = resp.content if hasattr(resp, "content") else str(resp)
-    print("   Plano tecnico atualizado.")
-    return {"current_plan": plano, "status": "plano_tecnico_refinado"}
-
-
-def finalizar_plano_tecnico_node(state: ReviewState) -> dict:
-    """Gera o plano técnico final e salva em Markdown."""
-    theme       = state["theme"]
-    current_plan = truncate(state["current_plan"], 1000)
-    snips      = fmt_snippets(state.get("technical_snippets", [])[:8], 800)
-    urls       = state.get("technical_urls", [])
-    prompt = load_prompt("technical/finalizar_plano", snips=snips)
-    resp        = get_llm(temperature=prompt.temperature).invoke(prompt.text)
-    plano_final = resp.content if hasattr(resp, "content") else str(resp)
-    print("\n" + "=" * 70)
-    print("PLANO FINAL — REVISAO TECNICA")
-    print("=" * 70)
-    print(plano_final)
-    print("=" * 70)
-    urls_md = "\n".join("- " + u for u in urls[:30])
-    md = (
-        "# Plano de Revisao Tecnica\n\n"
-        "**Tema:** " + theme + "\n\n"
-        + plano_final +
-        "\n\n## URLs Tecnicas Identificadas\n\n" + urls_md + "\n"
-    )
-    path = save_md(md, "plans/plano_revisao_tecnica", theme)
-    return {"final_plan": plano_final, "final_plan_path": path, "status": "concluido"}
-
-
-def initial_technical_search_node(state: ReviewState) -> dict:
-    return busca_tecnica_inicial_node(state)
-
-
-def initial_technical_plan_node(state: ReviewState) -> dict:
-    return plano_inicial_tecnico_node(state)
-
-
-def refine_technical_search_node(state: ReviewState) -> dict:
-    return refinar_busca_tecnica_node(state)
+            "status": "refined_technical_search"}
 
 
 def refine_technical_plan_node(state: ReviewState) -> dict:
-    return refinar_plano_tecnico_node(state)
+    """Updates the technical plan with new sources and feedback.
+    
+    Args:
+        state (ReviewState): The current state of the review, expected to contain:
+            - "theme": str, the review topic/theme to search for.
+            - "current_plan": str, the current version of the technical plan.
+            - "interview_history": list, the history of the interview.
+            - "technical_snippets": list, the current technical snippets collected. 
+    
+    Returns:
+        dict: Updated state with the refined technical plan and status.
+    """
+    theme       = state["theme"]
+    current_plan = truncate(state["current_plan"], 700)
+    last_msg     = ""
+    for role, c in reversed(state["interview_history"]):
+        if role == "user":
+            last_msg = c[:300]
+            break
+    snips = fmt_snippets(state.get("technical_snippets", [])[:5], 800)
+    prompt = load_prompt(
+        "technical/refine_plan",
+        theme=theme,
+        current_plan=current_plan,
+        last_msg=last_msg,
+        snips=snips,
+    )
+    ans  = get_llm(temperature=prompt.temperature).invoke(prompt.text)
+    plan = ans.content if hasattr(ans, "content") else str(ans)
+    print("   Updated technical plan.")
+    return {"current_plan": plan, "status": "refined_technical_plan"}
 
 
 def finalize_technical_plan_node(state: ReviewState) -> dict:
-    return finalizar_plano_tecnico_node(state)
+    """Generates the final technical plan and saves it in Markdown.
+    
+    Args:
+        state (ReviewState): The current state of the review, expected to contain:
+            - "theme": str, the review topic/theme to search for.
+            - "current_plan": str, the current version of the technical plan.
+            - "interview_history": list, the history of the interview.
+            - "technical_snippets": list, the current technical snippets collected.
+            - "technical_urls": list, the current technical URLs collected.
+    
+    Returns:
+        dict: Updated state with the final technical plan, its path, and status.
+    """
+    theme       = state["theme"]
+    snips      = fmt_snippets(state.get("technical_snippets", [])[:8], 800)
+    urls       = state.get("technical_urls", [])
+    prompt = load_prompt("technical/finalize_plan", snips=snips)
+    ans        = get_llm(temperature=prompt.temperature).invoke(prompt.text)
+    final_plan = ans.content if hasattr(ans, "content") else str(ans)
+    print("\n" + "=" * 70)
+    print("FINAL PLAN — TECHNICAL REVIEW")
+    print("=" * 70)
+    print(final_plan[:2000])
+    print("=" * 70)
+    urls_md = "\n".join("- " + u for u in urls[:30])
+    md = (
+        "# Technical Review Plan\n\n"
+        "**Theme:** " + theme + "\n\n"
+        + final_plan +
+        "\n\n## Identified Technical URLs\n\n" + urls_md + "\n"
+    )
+    path = save_md(md, "plans/technical_review_plan", theme)
+    return {"final_plan": final_plan, "final_plan_path": path, "status": "completed"}

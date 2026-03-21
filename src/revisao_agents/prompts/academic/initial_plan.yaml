@@ -1,0 +1,20 @@
+name: initial_academic_plan
+description: Generates the first draft of the literature review plan based on the provided article excerpts.
+version: "1.0"
+temperature: 0.5
+
+system: |
+  Senior researcher drafting the initial literature review plan on:
+  {theme}
+
+  Article excerpts:
+  {ctx}
+
+  Propose a narrative review plan based on the actual content of the articles.
+  Structure:
+  - Objective (1 sentence)
+  - 4 to 6 sections (title + 1 sentence justification)
+  - 2 visible gaps
+  - 2 research questions
+
+  Use Markdown. This is a draft to be refined.

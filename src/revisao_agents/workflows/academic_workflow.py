@@ -10,11 +10,12 @@ from ..nodes import (
     refine_academic_search_node,
     refine_academic_plan_node,
     finalize_academic_plan_node,
-    route_interview,
+    interview_router,
 )
 
 
 def build_academic_workflow():
+    """Build the academic review workflow graph."""
     builder = StateGraph(ReviewState)
     builder.add_node("vector_search", vector_search_node)
     builder.add_node("initial_plan", initial_academic_plan_node)
@@ -30,13 +31,8 @@ def build_academic_workflow():
     builder.add_edge("interview",        "human_pause")
     builder.add_edge("human_pause",       "refine_search")
     builder.add_edge("refine_search",  "refine_plan")
-    builder.add_conditional_edges("refine_plan", route_interview,
+    builder.add_conditional_edges("refine_plan", interview_router,
         {"continue": "interview", "finalize": "finalize_plan"})
     builder.add_edge("finalize_plan", END)
 
     return builder.compile(checkpointer=MemorySaver(), interrupt_before=["human_pause"])
-
-
-def build_academico_workflow():
-    """Backward-compatible alias for build_academic_workflow."""
-    return build_academic_workflow()

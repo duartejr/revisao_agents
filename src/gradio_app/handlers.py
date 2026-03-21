@@ -42,6 +42,7 @@ from revisao_agents.config import (
 )
 from revisao_agents.utils.vector_utils.pdf_ingestor import ingest_pdf_folder
 from revisao_agents.utils.vector_utils.vector_store import search_chunks
+from revisao_agents.utils.llm_utils.prompt_loader import load_prompt
 from revisao_agents.core.schemas.writer_config import WriterConfig
 from revisao_agents.tools.tavily_web_search import extract_tavily, search_tavily_incremental
 from revisao_agents.tools.reference_formatter import format_references_from_file
@@ -94,7 +95,7 @@ def set_llm_provider(provider: str) -> tuple[str, str]:
 
     status = get_llm_provider_status()
     if switched and "Model: <default>" in status:
-        status = status + " (modelo redefinido para padrão do provedor)"
+        status = status + " (model reset to provider default)"
     return normalized, status
 
 
@@ -253,7 +254,7 @@ def start_planning(
     rendered_plan is empty until the workflow fully completes.
     """
     if not tema.strip():
-        return [], {}, "❌ Por favor, informe o tema antes de iniciar.", ""
+        return [], {}, "❌ Please provide a topic before starting.", ""
 
     req_mongodb = tipo in ("academico", "ambos")
     req_openai_embeddings = tipo in ("academico", "ambos")
@@ -265,12 +266,12 @@ def start_planning(
         strict=False,
     )
     if cfg_issues:
-        msg = "❌ Configuração incompleta para este modo:\n- " + "\n- ".join(cfg_issues)
+        msg = "❌ Incomplete configuration for this mode:\n- " + "\n- ".join(cfg_issues)
         return [], {}, msg, ""
 
     tipos_list = ["academico", "tecnico"] if tipo == "ambos" else [tipo]
     tipo_atual = tipos_list[0]
-    label = "ACADÊMICA" if tipo_atual == "academico" else "TÉCNICA"
+    label = "ACADEMIC" if tipo_atual == "academico" else "TECHNICAL"
 
     state_init: ReviewState = {
         "theme": tema,
@@ -297,7 +298,7 @@ def start_planning(
             for _ in app.stream(state_init, config):
                 pass
         except Exception as exc:
-            return [], {}, f"❌ Erro ao iniciar: {exc}", ""
+            return [], {}, f"❌ Error starting: {exc}", ""
 
     history: list[dict] = []
     lines = []
@@ -311,8 +312,8 @@ def start_planning(
     if not graph_state.next:
         plan_path = graph_state.values.get("final_plan_path", "")
         rendered = _read_md(plan_path)
-        history.append({"role": "assistant", "content": f"✅ Planejamento {label} concluído! Plano salvo em `{plan_path}`"})
-        return history, {}, "✅ Concluído", rendered
+        history.append({"role": "assistant", "content": f"✅ {label} planning complete! Plan saved at `{plan_path}`"})
+        return history, {}, "✅ Done", rendered
 
     agent_question = ""
     for role, content in reversed(graph_state.values.get("interview_history", [])):
@@ -322,7 +323,7 @@ def start_planning(
 
     p  = graph_state.values.get("questions_asked", 0)
     mp = graph_state.values.get("max_questions", rodadas)
-    history.append({"role": "assistant", "content": f"[Rodada {p}/{mp} — {tipo_atual}]\n\n{agent_question}"})
+    history.append({"role": "assistant", "content": f"[Round {p}/{mp} — {tipo_atual}]\n\n{agent_question}"})
 
     session_state = {
         "app": app,
@@ -333,7 +334,7 @@ def start_planning(
         "rodadas": rodadas,
     }
 
-    return history, session_state, f"🔄 {label} em andamento — aguardando resposta…", ""
+    return history, session_state, f"🔄 {label} in progress — waiting for reply…", ""
 
 
 def continue_planning(
@@ -346,12 +347,12 @@ def continue_planning(
     Returns (history, session_state, status_msg, rendered_plan).
     """
     if not session_state or "app" not in session_state:
-        return history, session_state, "❌ Nenhuma sessão ativa.", ""
+        return history, session_state, "❌ No active session.", ""
 
     app    = session_state["app"]
     config = session_state["config"]
     tipo   = session_state["tipo"]
-    label  = "ACADÊMICA" if tipo == "academico" else "TÉCNICA"
+    label  = "ACADEMIC" if tipo == "academico" else "TECHNICAL"
 
     history = history + [{"role": "user", "content": user_msg}]
 
@@ -368,8 +369,8 @@ def continue_planning(
             for _ in app.stream(None, config):
                 pass
         except Exception as exc:
-            history = history + [{"role": "assistant", "content": f"❌ Erro: {exc}"}]
-            return history, session_state, f"❌ Erro: {exc}", ""
+            history = history + [{"role": "assistant", "content": f"❌ Error: {exc}"}]
+            return history, session_state, f"❌ Error: {exc}", ""
 
     lines = []
     while not log_q.empty():
@@ -383,8 +384,8 @@ def continue_planning(
         plan_path = graph_state.values.get("final_plan_path", "")
         rendered = _read_md(plan_path)
         finished_msg = (
-            f"✅ Planejamento {label} concluído! Plano salvo em `{plan_path}`"
-            if plan_path else f"✅ Planejamento {label} concluído!"
+            f"✅ {label} planning complete! Plan saved at `{plan_path}`"
+            if plan_path else f"✅ {label} planning complete!"
         )
         history = history + [{"role": "assistant", "content": finished_msg}]
 
@@ -398,7 +399,7 @@ def continue_planning(
             next_state["tipos_pendentes"] = tipos_pendentes[1:]
             return history + next_history, next_state, next_status, rendered
 
-        return history, {}, "✅ Todos os planejamentos concluídos!", rendered
+        return history, {}, "✅ All planning complete!", rendered
 
     agent_question = ""
     for role, content in reversed(graph_state.values.get("interview_history", [])):
@@ -408,9 +409,9 @@ def continue_planning(
 
     p  = graph_state.values.get("questions_asked", 0)
     mp = graph_state.values.get("max_questions", session_state.get("rodadas", 3))
-    history = history + [{"role": "assistant", "content": f"[Rodada {p}/{mp} — {tipo}]\n\n{agent_question}"}]
+    history = history + [{"role": "assistant", "content": f"[Round {p}/{mp} — {tipo}]\n\n{agent_question}"}]
 
-    return history, session_state, f"🔄 {label} em andamento — rodada {p}/{mp}", ""
+    return history, session_state, f"🔄 {label} in progress — round {p}/{mp}", ""
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -419,13 +420,13 @@ def continue_planning(
 
 def list_plan_files(mode: str) -> list[str]:
     os.makedirs("plans", exist_ok=True)
-    pattern = "plans/plano_revisao_tecnica_*.md" if mode == "Técnica" else "plans/plano_revisao_*.md"
+    pattern = "plans/plano_revisao_tecnica_*.md" if mode == "Technical" else "plans/plano_revisao_*.md"
     files = sorted(glob.glob(pattern))
     if not files:
         files = sorted(glob.glob("plans/plano_revisao_*.md"))
     if not files:
         files = sorted(glob.glob("plano_revisao_*.md"))
-    return files if files else ["(nenhum plano encontrado)"]
+    return files if files else ["(no plan files found)"]
 
 
 def start_writing(
@@ -471,7 +472,7 @@ def start_writing(
         )
         return
 
-    if mode == "Acadêmica":
+    if mode == "Academic":
         writer_config = WriterConfig.academic(language=language)
     else:
         writer_config = WriterConfig.technical(language=language)
@@ -694,7 +695,11 @@ def _split_sections(markdown: str) -> list[dict]:
 
         references_start_line: Optional[int] = None
         for i in range(start_line + 1, next_start_line):
-            if lines[i].strip().lower().startswith("### referências desta seção"):
+            if re.match(
+                r"^###\s+(?:References\s+for\s+this\s+section|Refer[êe]ncias\s+desta\s+se[çc][ãa]o)\s*$",
+                lines[i].strip(),
+                re.IGNORECASE,
+            ):
                 references_start_line = i
                 break
 
@@ -761,16 +766,16 @@ def _split_sections(markdown: str) -> list[dict]:
 
 def _resolve_section_index(user_text: str, sections: list[dict]) -> Optional[int]:
     text = user_text.lower()
-    sec_match = re.search(r"(?:section|sec|seção)\s*(\d+)", text)
+    sec_match = re.search(r"(?:section|sec|se[çc][ãa]o|chapter|cap[ií]tulo)\s*(\d+)", text)
     if sec_match:
         number = sec_match.group(1)
         for idx, section in enumerate(sections):
             if re.match(rf"^{number}[\.)\s]", section["title"], flags=re.IGNORECASE):
                 return idx
-    if "conclusion" in text or "conclusão" in text:
+    if re.search(r"\b(?:conclusion|conclus[ãa]o)\b", text):
         for idx, section in enumerate(sections):
             t = section["title"].lower()
-            if "conclusion" in t or "conclusão" in t:
+            if re.search(r"\b(?:conclusion|conclus[ãa]o)\b", t):
                 return idx
     return None
 
@@ -779,9 +784,9 @@ def _resolve_paragraph_index(user_text: str, paragraph_count: int) -> Optional[i
     if paragraph_count <= 0:
         return None
     text = user_text.lower()
-    if "last paragraph" in text or "último parágrafo" in text:
+    if re.search(r"\b(?:last\s+paragraph|[úu]ltimo\s+par[áa]grafo)\b", text):
         return paragraph_count - 1
-    para_match = re.search(r"(?:paragraph|parágrafo)\s*(\d+)", text)
+    para_match = re.search(r"(?:paragraph|par[áa]grafo)\s*(\d+)", text)
     if para_match:
         idx = int(para_match.group(1)) - 1
         return idx if 0 <= idx < paragraph_count else None
@@ -799,7 +804,7 @@ def _resolve_paragraph_index(user_text: str, paragraph_count: int) -> Optional[i
         "quinto": 4,
     }
     for token, idx in ordinals.items():
-        if token in text and ("paragraph" in text or "parágrafo" in text):
+        if token in text and re.search(r"\b(?:paragraph|par[áa]grafo)\b", text):
             return idx if idx < paragraph_count else None
     return None
 
@@ -871,31 +876,75 @@ def _resolve_target_hint(
     }
 
 
+def _detect_user_language(user_text: str, fallback: str = "pt") -> str:
+    padded = f" {user_text.lower()} "
+    pt_markers = [
+        " seção ", " parágrafo ", " referências ", " referência ", " citação ",
+        " fonte ", " internet ", " confirmar ", " confirme ", " cancelar ",
+        " edição ", " achados ", " frase ", " trecho ", " artigos ", " mais ",
+    ]
+    en_markers = [
+        " section ", " paragraph ", " references ", " reference ", " citation ",
+        " source ", " internet ", " confirm ", " cancel ", " edit ",
+        " findings ", " phrase ", " snippet ", " papers ", " more ",
+    ]
+    pt_score = sum(marker in padded for marker in pt_markers)
+    en_score = sum(marker in padded for marker in en_markers)
+    if en_score > pt_score:
+        return "en"
+    if pt_score > en_score:
+        return "pt"
+    return fallback
+
+
+def _localized_text(language: str, pt_text: str, en_text: str) -> str:
+    return en_text if language == "en" else pt_text
+
+
 def _intent(user_text: str) -> str:
     text = user_text.lower().strip()
-    if text in {"confirm", "confirm edit", "apply edit", "yes apply", "yes"}:
+    if text in {
+        "confirm", "confirm edit", "apply edit", "yes apply", "yes",
+        "confirmar", "confirmar edição", "aplicar edição", "aplicar edicao", "sim",
+    }:
         return "apply_pending_edit"
-    if text in {"cancel", "cancel edit", "discard edit", "no"}:
+    if text in {
+        "cancel", "cancel edit", "discard edit", "no",
+        "cancelar", "cancelar edição", "cancelar edicao", "descartar edição", "descartar edicao", "não", "nao",
+    }:
         return "cancel_pending_edit"
-    if "main finding" in text or "main findings" in text or "principais achados" in text:
+    if any(phrase in text for phrase in [
+        "main finding", "main findings", "key finding", "key findings",
+        "principais achados", "achado principal", "achados principais",
+    ]):
         return "summarize_main_findings"
-    if "cited in section" in text or "papers are cited" in text or "artigos citados" in text:
+    if any(phrase in text for phrase in [
+        "cited in section", "papers are cited", "references in section", "sources in section",
+        "artigos citados", "referências na seção", "referencias na secao", "fontes na seção", "fontes na secao",
+    ]):
         return "list_section_citations"
-    if "confirmed" in text and "paragraph" in text:
+    if (
+        ("confirmed" in text and "paragraph" in text)
+        or ("confirmado" in text and ("parágrafo" in text or "paragrafo" in text))
+    ):
         return "confirm_paragraph_by_authors"
-    if ("more documents" in text or "more sources" in text or "mais documentos" in text) and ("phrase" in text or "frase" in text):
+    if any(phrase in text for phrase in ["more documents", "more sources", "additional documents", "additional sources", "mais documentos", "mais fontes"]) and any(phrase in text for phrase in ["phrase", "excerpt", "snippet", "frase", "trecho"]):
         return "suggest_more_documents_for_phrase"
-    if any(word in text for word in ["edit", "fix", "add", "rewrite", "melhore", "corrija", "adicionar"]):
+    if any(word in text for word in ["edit", "fix", "add", "rewrite", "improve", "update", "modify", "replace", "remove", "melhore", "corrija", "adicionar", "reescreva", "atualize", "modifique", "substitua", "remova"]):
         return "propose_targeted_edit"
     return "summarize_main_findings"
 
 
 def _explicit_web_request(user_text: str) -> bool:
     text = user_text.lower()
-    return any(k in text for k in ["internet", "web", "online", "tavily", "search on internet", "busque na internet"])
+    return any(k in text for k in [
+        "internet", "web", "online", "tavily", "search on internet", "search the web",
+        "busque na internet", "pesquise na internet", "busque online",
+    ])
 
 
 def _summarize_findings(markdown: str) -> str:
+    language = _detect_user_language(markdown)
     sections = _split_sections(markdown)
     bullets = []
     for sec in sections[:6]:
@@ -906,19 +955,33 @@ def _summarize_findings(markdown: str) -> str:
         if first_sentence:
             bullets.append(f"- **{sec['title']}**: {first_sentence}.")
     if not bullets:
-        return "Não encontrei conteúdo suficiente para sintetizar os principais achados."
+        return _localized_text(
+            language,
+            "Não encontrei conteúdo suficiente para sintetizar os principais achados.",
+            "I couldn't find enough content to summarize the main findings.",
+        )
     return "\n".join(bullets)
 
 
 def _list_section_citations(markdown: str, user_text: str) -> str:
+    language = _detect_user_language(user_text)
     sections = _split_sections(markdown)
     sec_idx = _resolve_section_index(user_text, sections)
     if sec_idx is None:
-        return "Não consegui identificar a seção pedida. Use, por exemplo, 'section 2'."
+        return _localized_text(
+            language,
+            "Não consegui identificar a seção pedida. Use, por exemplo, 'section 2'.",
+            "I couldn't identify the requested section. Use, for example, 'section 2'.",
+        )
     refs = sections[sec_idx].get("references", [])
     if not refs:
-        return f"A seção **{sections[sec_idx]['title']}** não tem bloco de referências detectado."
-    return f"### Referências da seção {sections[sec_idx]['title']}\n\n" + "\n".join(refs)
+        return _localized_text(
+            language,
+            f"A seção **{sections[sec_idx]['title']}** não tem bloco de referências detectado.",
+            f"The section **{sections[sec_idx]['title']}** has no detected references block.",
+        )
+    heading = _localized_text(language, "Referências da seção", "Section references")
+    return f"### {heading} {sections[sec_idx]['title']}\n\n" + "\n".join(refs)
 
 
 def _extract_citation_number(user_text: str) -> Optional[int]:
@@ -927,7 +990,7 @@ def _extract_citation_number(user_text: str) -> Optional[int]:
         return int(match.group(1))
 
     text = user_text.lower()
-    match = re.search(r"(?:source|citation|refer(?:e|ê)ncia|fonte)\s*#?\s*(\d+)", text)
+    match = re.search(r"(?:source|citation|reference|refer(?:e|ê)ncia|fonte)\s*#?\s*(\d+)", text)
     if match:
         return int(match.group(1))
     return None
@@ -951,6 +1014,19 @@ def _is_citation_usage_query(user_text: str) -> bool:
         "not yet used", "not used yet", "haven't been used",
         "can be used to", "could replace", "suggest", "recommend",
         "look for", "related with", "related to",
+        # Portuguese source-search / rewrite intents
+        "procurar", "buscar", "busque", "pesquise", "pesquisar",
+        "ainda não usada", "ainda nao usada",
+        "não usada ainda", "nao usada ainda",
+        "fontes não usadas", "fontes nao usadas",
+        "novas fontes", "nova fonte",
+        "sugerir", "recomendar",
+        "substituir", "alternativa", "relacionado com", "relacionado a",
+        # Rewrite / improve intents (Portuguese)
+        "reescreva", "reescrever", "melhore", "melhorar", "melhorar o",
+        "adicionando", "adicione", "adicionar",
+        # Rewrite / improve intents (English)
+        "rewrite", "improve", "add new", "new references", "abnt",
     ]
     if any(kw in text for kw in exclusions):
         return False
@@ -959,19 +1035,27 @@ def _is_citation_usage_query(user_text: str) -> bool:
     # positives such as "what would be a good source for [2]?".
     listing_words = [
         "paragraph", "paragraphs", "parágrafo", "parágrafos",
-        "where", "which", "what", "list", "show",
+        "paragrafo", "paragrafos", "where", "which", "what", "list", "show",
+        "onde", "qual", "quais", "listar", "mostre", "mostrar",
     ]
     usage_words = [
         "using", "uses", "used", "cite", "cites", "cited",
-        "referência", "referencia", "mention", "mentions",
+        "referência", "referencia", "referências", "referencias",
+        "mention", "mentions", "mentioned", "menciona", "mencionado",
+        "usando", r"\busa\b", "usado", "citado", "citam",
     ]
-    return any(w in text for w in listing_words) and any(w in text for w in usage_words)
+    return any(w in text for w in listing_words) and any(re.search(w, text) for w in usage_words)
 
 
 def _list_paragraphs_using_citation(markdown: str, user_text: str) -> str:
+    language = _detect_user_language(user_text)
     citation_number = _extract_citation_number(user_text)
     if citation_number is None:
-        return "Não consegui identificar a citação pedida. Use algo como [2]."
+        return _localized_text(
+            language,
+            "Não consegui identificar a citação pedida. Use algo como [2].",
+            "I couldn't identify the requested citation. Use something like [2].",
+        )
 
     sections = _split_sections(markdown)
     token = f"[{citation_number}]"
@@ -992,23 +1076,37 @@ def _list_paragraphs_using_citation(markdown: str, user_text: str) -> str:
             if len(snippet) > 280:
                 snippet = snippet[:277].rstrip() + "..."
             matches.append(
-                f"- **{section['title']}**, parágrafo **{paragraph_index}**: {snippet}"
+                _localized_text(
+                    language,
+                    f"- **{section['title']}**, parágrafo **{paragraph_index}**: {snippet}",
+                    f"- **{section['title']}**, paragraph **{paragraph_index}**: {snippet}",
+                )
             )
 
     if not matches:
-        return f"Nenhum parágrafo na cópia de trabalho usa a citação **{token}**."
+        return _localized_text(
+            language,
+            f"Nenhum parágrafo na cópia de trabalho usa a citação **{token}**.",
+            f"No paragraph in the working copy uses citation **{token}**.",
+        )
 
     lines = [
-        f"### Parágrafos que usam {token}",
+        _localized_text(language, f"### Parágrafos que usam {token}", f"### Paragraphs using {token}"),
         "",
         *matches,
     ]
     if reference_hits:
-        lines += ["", "### Referência detectada", "", *reference_hits[:8]]
+        lines += [
+            "",
+            _localized_text(language, "### Referência detectada", "### Detected reference"),
+            "",
+            *reference_hits[:8],
+        ]
     return "\n".join(lines)
 
 
 def _confirm_paragraph(markdown: str, user_text: str) -> tuple[str, dict]:
+    language = _detect_user_language(user_text)
     sections = _split_sections(markdown)
     snippet = _extract_quoted_snippet(user_text)
 
@@ -1034,7 +1132,11 @@ def _confirm_paragraph(markdown: str, user_text: str) -> tuple[str, dict]:
 
     if target_para is None:
         return (
-            "Não consegui resolver o parágrafo alvo. Informe seção + parágrafo ou envie o trecho entre aspas.",
+            _localized_text(
+                language,
+                "Não consegui resolver o parágrafo alvo. Informe seção + parágrafo ou envie o trecho entre aspas.",
+                "I couldn't resolve the target paragraph. Provide section + paragraph or send the excerpt in quotes.",
+            ),
             {},
         )
 
@@ -1042,15 +1144,23 @@ def _confirm_paragraph(markdown: str, user_text: str) -> tuple[str, dict]:
     refs = target_sec.get("references", []) if target_sec else []
     ref_labels = [re.sub(r"^\[(\d+)\]\s*", "", r) for r in refs[:5]]
     authors_hint = [os.path.basename(r).replace(".pdf", "") for r in ref_labels]
-    evidence = "\n\n".join(chunks[:3]) if chunks else "Sem chunks relevantes retornados no momento."
+    evidence = "\n\n".join(chunks[:3]) if chunks else _localized_text(
+        language,
+        "Sem chunks relevantes retornados no momento.",
+        "No relevant chunks were returned at the moment.",
+    )
 
     msg = (
-        "### Verificação do parágrafo\n"
-        f"- Seção: **{target_sec['title'] if target_sec else 'N/A'}**\n"
-        f"- Evidências MongoDB: **{len(chunks)} chunks**\n"
-        f"- Fontes/autores (aproximação pelos arquivos/links citados): {', '.join(authors_hint[:6]) if authors_hint else 'não identificado'}\n\n"
-        f"**Trecho alvo:**\n{target_para['text'][:700]}\n\n"
-        f"**Evidência principal:**\n{evidence[:1800]}"
+        _localized_text(language, "### Verificação do parágrafo\n", "### Paragraph verification\n")
+        + _localized_text(language, f"- Seção: **{target_sec['title'] if target_sec else 'N/A'}**\n", f"- Section: **{target_sec['title'] if target_sec else 'N/A'}**\n")
+        + _localized_text(language, f"- Evidências MongoDB: **{len(chunks)} chunks**\n", f"- MongoDB evidence: **{len(chunks)} chunks**\n")
+        + _localized_text(
+            language,
+            f"- Fontes/autores (aproximação pelos arquivos/links citados): {', '.join(authors_hint[:6]) if authors_hint else 'não identificado'}\n\n",
+            f"- Sources/authors (approximated from cited files/links): {', '.join(authors_hint[:6]) if authors_hint else 'not identified'}\n\n",
+        )
+        + _localized_text(language, f"**Trecho alvo:**\n{target_para['text'][:700]}\n\n", f"**Target excerpt:**\n{target_para['text'][:700]}\n\n")
+        + _localized_text(language, f"**Evidência principal:**\n{evidence[:1800]}", f"**Primary evidence:**\n{evidence[:1800]}")
     )
     return msg, {
         "section": target_sec["title"] if target_sec else "",
@@ -1060,6 +1170,7 @@ def _confirm_paragraph(markdown: str, user_text: str) -> tuple[str, dict]:
 
 
 def _suggest_more_documents(user_text: str, allow_web: bool) -> tuple[str, dict]:
+    language = _detect_user_language(user_text)
     snippet = _extract_quoted_snippet(user_text)
     query = snippet or user_text
 
@@ -1068,25 +1179,25 @@ def _suggest_more_documents(user_text: str, allow_web: bool) -> tuple[str, dict]
 
     if not allow_web:
         msg = (
-            "### Documentos relacionados (modo local)\n"
-            "Use 'search on internet' na pergunta para incluir documentos web.\n\n"
-            f"{local_msg or '- Sem evidência local retornada.'}"
+            _localized_text(language, "### Documentos relacionados (modo local)\n", "### Related documents (local mode)\n")
+            + _localized_text(language, "Use 'search on internet' na pergunta para incluir documentos web.\n\n", "Use 'search on internet' in your request to include web documents.\n\n")
+            + f"{local_msg or _localized_text(language, '- Sem evidência local retornada.', '- No local evidence returned.')}"
         )
         return msg, {"source": "mongo", "chunks": len(local_chunks)}
 
-    web = search_tavily_incremental(query=query[:400], urls_anteriores=[], max_results=5)
-    urls = web.get("urls_novos", [])[:3]
-    extracted = extract_tavily(urls, incluir_imagens=False) if urls else {"extraidos": []}
+    web = search_tavily_incremental(query=query[:400], previous_urls=[], max_results=5)
+    urls = web.get("new_urls", [])[:3]
+    extracted = extract_tavily(urls, include_images=False) if urls else {"extracted": []}
 
-    lines = ["### Documentos relacionados (local + web)"]
+    lines = [_localized_text(language, "### Documentos relacionados (local + web)", "### Related documents (local + web)")]
     if local_msg:
         lines += ["**MongoDB**", local_msg]
     if urls:
         lines += ["\n**Web (Tavily)**"]
-        for idx, item in enumerate(extracted.get("extraidos", [])[:3], start=1):
+        for idx, item in enumerate(extracted.get("extracted", [])[:3], start=1):
             lines.append(f"- [{idx}] {item.get('title','(sem título)')} — {item.get('url','')}")
     else:
-        lines.append("- Nenhum novo URL web encontrado.")
+        lines.append(_localized_text(language, "- Nenhum novo URL web encontrado.", "- No new web URL was found."))
 
     return "\n".join(lines), {
         "source": "mongo+web",
@@ -1096,44 +1207,44 @@ def _suggest_more_documents(user_text: str, allow_web: bool) -> tuple[str, dict]
 
 
 def _build_edit_proposal(markdown: str, user_text: str, allow_web: bool) -> tuple[str, dict]:
+    language = _detect_user_language(user_text)
     sections = _split_sections(markdown)
     sec_idx = _resolve_section_index(user_text, sections)
     if sec_idx is None:
-        return "Não consegui identificar a seção alvo para edição.", {}
+        return _localized_text(language, "Não consegui identificar a seção alvo para edição.", "I couldn't identify the target section for editing."), {}
 
     section = sections[sec_idx]
     p_idx = _resolve_paragraph_index(user_text, len(section.get("paragraphs", [])))
     if p_idx is None:
         p_idx = 0 if section.get("paragraphs") else None
     if p_idx is None:
-        return "A seção alvo não possui parágrafos editáveis.", {}
+        return _localized_text(language, "A seção alvo não possui parágrafos editáveis.", "The target section has no editable paragraphs."), {}
 
     paragraph = section["paragraphs"][p_idx]
     evidence_chunks = search_chunks(paragraph["text"][:600], k=5)
 
     web_context = ""
     if allow_web:
-        web = search_tavily_incremental(query=paragraph["text"][:350], urls_anteriores=[], max_results=3)
-        urls = web.get("urls_novos", [])[:2]
+        web = search_tavily_incremental(query=paragraph["text"][:350], previous_urls=[], max_results=3)
+        urls = web.get("new_urls", [])[:2]
         if urls:
-            ext = extract_tavily(urls, incluir_imagens=False)
+            ext = extract_tavily(urls, include_images=False)
             web_context = "\n\nWEB SOURCES:\n" + "\n\n".join(
                 f"URL: {item.get('url','')}\nTITLE: {item.get('title','')}\nCONTENT: {str(item.get('content',''))[:1200]}"
-                for item in ext.get("extraidos", [])
+                for item in ext.get("extracted", [])
             )
 
-    prompt = (
-        "You are editing a scientific review paragraph. "
-        "Return only the revised paragraph text, no extra commentary.\n\n"
-        f"USER INSTRUCTION:\n{user_text}\n\n"
-        f"CURRENT YEAR: {datetime.now().year}\n\n"
-        f"ORIGINAL PARAGRAPH:\n{paragraph['text']}\n\n"
-        f"MONGODB EVIDENCE:\n{chr(10).join(evidence_chunks[:3])}\n"
-        f"{web_context}"
+    prompt_obj = load_prompt(
+        "academic/edit_paragraph_suggestions",
+        user_instruction=user_text,
+        current_year=datetime.now().year,
+        original_paragraph=paragraph['text'],
+        evidence_chunks="\n".join(evidence_chunks[:3]),
+        web_context=web_context,
     )
 
     try:
-        proposed = str(llm_call(prompt=prompt, temperature=0.2)).strip()
+        proposed = str(llm_call(prompt=prompt_obj.text, temperature=0.2)).strip()
     except Exception:
         proposed = paragraph["text"]
 
@@ -1148,11 +1259,11 @@ def _build_edit_proposal(markdown: str, user_text: str, allow_web: bool) -> tupl
     }
 
     preview = (
-        "### Proposta de edição (pendente)\n"
-        f"- Alvo: **{section['title']}**, parágrafo **{p_idx+1}**\n"
-        "- Ação necessária: clique em **Confirm Edit** para aplicar.\n\n"
-        f"**Antes**\n{proposal['before'][:1200]}\n\n"
-        f"**Depois (proposto)**\n{proposal['after'][:1200]}"
+        _localized_text(language, "### Proposta de edição (pendente)\n", "### Edit proposal (pending)\n")
+        + _localized_text(language, f"- Alvo: **{section['title']}**, parágrafo **{p_idx+1}**\n", f"- Target: **{section['title']}**, paragraph **{p_idx+1}**\n")
+        + _localized_text(language, "- Ação necessária: clique em **Confirm Edit** para aplicar.\n\n", "- Required action: click **Confirm Edit** to apply it.\n\n")
+        + _localized_text(language, f"**Antes**\n{proposal['before'][:1200]}\n\n", f"**Before**\n{proposal['before'][:1200]}\n\n")
+        + _localized_text(language, f"**Depois (proposto)**\n{proposal['after'][:1200]}", f"**After (proposed)**\n{proposal['after'][:1200]}")
     )
     return preview, proposal
 
@@ -1162,12 +1273,15 @@ def start_review_session(
     history: list,
     session_state: dict,
 ) -> tuple[list, dict, str, str]:
+    language = _detect_user_language(" ".join(
+        str(msg.get("content", "")) for msg in (history or [])[-3:] if isinstance(msg, dict)
+    ))
     if not review_file or not os.path.exists(review_file):
-        return history, session_state, "❌ Arquivo não encontrado.", ""
+        return history, session_state, _localized_text(language, "❌ Arquivo não encontrado.", "❌ File not found."), ""
 
     normalized = os.path.normpath(review_file)
     if not normalized.startswith("reviews/"):
-        return history, session_state, "❌ Apenas arquivos em reviews/ são permitidos.", ""
+        return history, session_state, _localized_text(language, "❌ Apenas arquivos em reviews/ são permitidos.", "❌ Only files inside reviews/ are allowed."), ""
 
     working_copy = _working_copy_path(normalized)
     shutil.copyfile(normalized, working_copy)
@@ -1187,15 +1301,20 @@ def start_review_session(
     history = history + [
         {
             "role": "assistant",
-            "content": (
+            "content": _localized_text(
+                language,
                 "✅ Sessão de revisão iniciada.\n"
                 f"- Original: `{normalized}`\n"
                 f"- Cópia editável: `{working_copy}`\n"
-                "Pergunte sobre achados, referências, confirmação de parágrafos ou peça propostas de edição."
+                "Pergunte sobre achados, referências, confirmação de parágrafos ou peça propostas de edição.",
+                "✅ Review session started.\n"
+                f"- Original: `{normalized}`\n"
+                f"- Editable copy: `{working_copy}`\n"
+                "Ask about findings, references, paragraph confirmation, or request edit proposals.",
             ),
         }
     ]
-    return history, state, "✅ Sessão pronta", content
+    return history, state, _localized_text(language, "✅ Sessão pronta", "✅ Session ready"), content
 
 
 def review_chat_turn(
@@ -1204,10 +1323,12 @@ def review_chat_turn(
     session_state: dict,
     web_enabled: bool = False,
 ) -> tuple[list, dict, str, str]:
+    language = _detect_user_language(user_msg)
+    session_state["last_language"] = language
     if not session_state or not session_state.get("working_copy_path"):
-        return history, session_state, "❌ Inicie uma sessão selecionando um arquivo.", ""
+        return history, session_state, _localized_text(language, "❌ Inicie uma sessão selecionando um arquivo.", "❌ Start a session by selecting a file."), ""
     if not user_msg.strip():
-        return history, session_state, "⚠️ Mensagem vazia.", _read_md(session_state.get("working_copy_path"))
+        return history, session_state, _localized_text(language, "⚠️ Mensagem vazia.", "⚠️ Empty message."), _read_md(session_state.get("working_copy_path"))
 
     working_copy = session_state["working_copy_path"]
     markdown = _read_md(working_copy)
@@ -1234,7 +1355,7 @@ def review_chat_turn(
             "at": datetime.now().isoformat(timespec="seconds"),
             "tool_calls": [],
         })
-        return history, session_state, "✅ Sessão ativa", _read_md(working_copy)
+        return history, session_state, _localized_text(language, "✅ Sessão ativa", "✅ Session active"), _read_md(working_copy)
 
     # ── Run the ReAct review agent ────────────────────────────────────
     try:
@@ -1254,7 +1375,7 @@ def review_chat_turn(
             {"role": "assistant", "content": reply},
         ]
         session_state["chat_history"] = history
-        return history, session_state, "❌ Erro no agente", _read_md(working_copy)
+        return history, session_state, _localized_text(language, "❌ Erro no agente", "❌ Agent error"), _read_md(working_copy)
 
     action = result.get("action", "answer")
     reply = result.get("reply", "")
@@ -1263,7 +1384,7 @@ def review_chat_turn(
     if action == "apply_edit":
         proposal = session_state.get("pending_edit") or {}
         if not proposal:
-            reply = "Não há edição pendente para confirmar."
+            reply = _localized_text(language, "Não há edição pendente para confirmar.", "There is no pending edit to confirm.")
         else:
             start = int(proposal["start"])
             end = int(proposal["end"])
@@ -1276,17 +1397,26 @@ def review_chat_turn(
                 "section": proposal.get("section_title", ""),
                 "paragraph_index": proposal.get("paragraph_index", -1),
             }
-            reply = (
+            reply = _localized_text(
+                language,
                 "✅ Edição aplicada na cópia de trabalho.\n"
                 f"- Seção: **{proposal.get('section_title', '')}**\n"
                 f"- Parágrafo: **{int(proposal.get('paragraph_index', 0)) + 1}**\n"
-                f"- Arquivo: `{working_copy}`"
+                f"- Arquivo: `{working_copy}`",
+                "✅ Edit applied to the working copy.\n"
+                f"- Section: **{proposal.get('section_title', '')}**\n"
+                f"- Paragraph: **{int(proposal.get('paragraph_index', 0)) + 1}**\n"
+                f"- File: `{working_copy}`",
             )
 
     elif action == "cancel_edit":
         has_pending = bool(session_state.get("pending_edit"))
         session_state["pending_edit"] = {}
-        reply = "🗑️ Edição pendente cancelada." if has_pending else "Não havia edição pendente para cancelar."
+        reply = _localized_text(
+            language,
+            "🗑️ Edição pendente cancelada." if has_pending else "Não havia edição pendente para cancelar.",
+            "🗑️ Pending edit canceled." if has_pending else "There was no pending edit to cancel.",
+        )
 
     elif action == "edit_proposal":
         proposal = result.get("edit_proposal")
@@ -1296,14 +1426,22 @@ def review_chat_turn(
                 "section": proposal.get("section_title", ""),
                 "paragraph_index": proposal.get("paragraph_index", -1),
             }
-            reply = (
+            reply = _localized_text(
+                language,
                 "### Proposta de edição (pendente)\n"
                 f"- Alvo: **{proposal.get('section_title', '')}**, "
                 f"parágrafo **{int(proposal.get('paragraph_index', 0)) + 1}**\n"
                 "- Ação necessária: clique em **Confirm Edit** ou diga "
                 "'confirmar' para aplicar.\n\n"
                 f"**Antes**\n{proposal['before'][:1200]}\n\n"
-                f"**Depois (proposto)**\n{proposal['after'][:1200]}"
+                f"**Depois (proposto)**\n{proposal['after'][:1200]}",
+                "### Edit proposal (pending)\n"
+                f"- Target: **{proposal.get('section_title', '')}**, "
+                f"paragraph **{int(proposal.get('paragraph_index', 0)) + 1}**\n"
+                "- Required action: click **Confirm Edit** or say "
+                "'confirm' to apply it.\n\n"
+                f"**Before**\n{proposal['before'][:1200]}\n\n"
+                f"**After (proposed)**\n{proposal['after'][:1200]}",
             )
     # else: action == "answer" → reply already set by agent
 
@@ -1323,7 +1461,11 @@ def review_chat_turn(
     session_state["chat_history"] = history
 
     pending = session_state.get("pending_edit")
-    status = "🟡 Edição pendente — confirme ou cancele" if pending else "✅ Sessão ativa"
+    status = _localized_text(
+        language,
+        "🟡 Edição pendente — confirme ou cancele" if pending else "✅ Sessão ativa",
+        "🟡 Pending edit — confirm or cancel" if pending else "✅ Session active",
+    )
     return history, session_state, status, _read_md(working_copy)
 
 
@@ -1331,14 +1473,18 @@ def confirm_review_edit(
     history: list,
     session_state: dict,
 ) -> tuple[list, dict, str, str]:
-    return review_chat_turn("confirm edit", history, session_state)
+    language = (session_state or {}).get("last_language", "pt")
+    msg = "confirm edit" if language == "en" else "confirmar edição"
+    return review_chat_turn(msg, history, session_state)
 
 
 def cancel_review_edit(
     history: list,
     session_state: dict,
 ) -> tuple[list, dict, str, str]:
-    return review_chat_turn("cancel edit", history, session_state)
+    language = (session_state or {}).get("last_language", "pt")
+    msg = "cancel edit" if language == "en" else "cancelar edição"
+    return review_chat_turn(msg, history, session_state)
 
 
 def save_review_manual_edit(
@@ -1347,10 +1493,11 @@ def save_review_manual_edit(
     session_state: dict,
 ) -> tuple[list, dict, str, str]:
     """Save manual edits made directly in the text editor."""
+    language = (session_state or {}).get("last_language", "pt")
     if not session_state or not session_state.get("working_copy_path"):
-        return history, session_state, "❌ Nenhuma sessão ativa.", ""
+        return history, session_state, _localized_text(language, "❌ Nenhuma sessão ativa.", "❌ No active session."), ""
     if not edited_text.strip():
-        return history, session_state, "⚠️ Texto vazio — nada salvo.", _read_md(session_state.get("working_copy_path"))
+        return history, session_state, _localized_text(language, "⚠️ Texto vazio — nada salvo.", "⚠️ Empty text — nothing was saved."), _read_md(session_state.get("working_copy_path"))
 
     working_copy = session_state["working_copy_path"]
     _atomic_write(working_copy, edited_text)
@@ -1359,7 +1506,14 @@ def save_review_manual_edit(
     session_state["pending_edit"] = {}
 
     history = history + [
-        {"role": "assistant", "content": f"💾 Edição manual salva em `{working_copy}`."},
+        {
+            "role": "assistant",
+            "content": _localized_text(
+                language,
+                f"💾 Edição manual salva em `{working_copy}`.",
+                f"💾 Manual edit saved to `{working_copy}`.",
+            ),
+        },
     ]
     session_state["chat_history"] = history
-    return history, session_state, "✅ Edição manual salva", refreshed
+    return history, session_state, _localized_text(language, "✅ Edição manual salva", "✅ Manual edit saved"), refreshed

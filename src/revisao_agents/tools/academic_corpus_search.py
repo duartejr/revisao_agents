@@ -1,13 +1,12 @@
 # src/revisao_agents/tools/academic_corpus_search.py
 """
-Tool oficial de busca no corpus MongoDB.
-Wrapper simples e performático para uso direto pelos agents.
+Official search tool for the MongoDB corpus.
+Simple and high-performance wrapper for direct use by agents.
 """
 
 from langchain_core.tools import tool
-from typing import Optional
 
-# Import da classe original (ainda na pasta utils por enquanto)
+# Import the original class (still in the utils folder for now)
 from ..utils.vector_utils.mongodb_corpus import CorpusMongoDB
 
 
@@ -18,36 +17,45 @@ def search_academic_corpus(
     section_title: str = "",
 ) -> str:
     """
-    Busca no corpus MongoDB por conteúdo acadêmico relevante usando vector search.
+    Searches the MongoDB corpus for relevant academic content using vector search.
 
     Args:
-        query: Texto ou anchor a ser pesquisada (ex: "modelo de difusão estável").
-        limit: Número máximo de fontes/chunks a retornar (padrão 5).
-        section_title: Título da seção atual (usado apenas para log interno).
+        query: Text or anchor to search for (e.g., "stable diffusion model").
+        limit: Maximum number of sources/chunks to return (default 5).
+        section_title: Title of the current section (used only for internal logging).
 
     Returns:
-        String formatada pronta para colar no prompt do agent (com cabeçalhos de fontes).
-        Inclui as fontes mais relevantes + contexto completo.
+        Formatted string ready to be pasted into the agent's prompt (with source headers).
+        Includes the most relevant sources + full context.
     """
     try:
         corpus = CorpusMongoDB()
-        # Usa o render_prompt (melhor saída formatada do seu código original)
-        contexto, urls_usadas, fonte_map = corpus.render_prompt(
-            query=query,
-            max_chars=8000,  # limite seguro para contexto de LLM
-        )
+        # Use render_prompt but honour the caller's limit by restricting top_k
+        # before the call so only `limit` chunks are retrieved.
+        corpus._top_k_override = limit  # stored temporarily
+        _original_query = corpus.query
 
-        if not contexto.strip():
-            return f"Nenhuma fonte relevante encontrada para: '{query}'"
+        def _limited_query(texto_query: str, top_k: int = limit) -> list:
+            return _original_query(texto_query, top_k=limit)
+
+        corpus.query = _limited_query
+        context, used_urls, _ = corpus.render_prompt(
+            query=query,
+            max_chars=8000,  # safe limit for LLM context
+        )
+        corpus.query = _original_query  # restore
+
+        if not context.strip():
+            return f"No relevant sources found for: '{query}'"
 
         header = (
-            f"=== FONTES ENCONTRADAS PARA: '{query}' ===\n"
-            f"Seção: {section_title or 'Não informada'}\n"
-            f"Total de chunks usados: {len(urls_usadas)}\n"
+            f"=== SOURCES FOUND FOR: '{query}' ===\n"
+            f"Section: {section_title or 'Not provided'}\n"
+            f"Total chunks used: {len(used_urls)}\n"
             f"{'='*60}\n\n"
         )
 
-        return header + contexto
+        return header + context
 
     except Exception as e:
-        return f"Erro na busca do corpus: {str(e)}"
+        return f"Error searching the corpus: {str(e)}"

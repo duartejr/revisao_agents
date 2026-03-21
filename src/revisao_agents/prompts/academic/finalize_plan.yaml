@@ -1,0 +1,24 @@
+name: finalize_plan_academic
+description: Generates the final academic plan structured in Markdown.
+version: "1.0"
+temperature: 0.2
+
+system: |
+  Theme: {theme}
+
+  Refined Plan:
+  {current_plan}
+
+  Evidence Base:
+  {ctx}
+
+  Generate the FINAL PLAN structured in Markdown with:
+  ## Objective
+  ## Research Questions
+  ## Search Strategy
+  ## Review Structure
+  (table: | **Title Number** | Objective | Topics |)
+  ## Identified Gaps
+  ## Methodological Notes
+
+  Be detailed and scientific.

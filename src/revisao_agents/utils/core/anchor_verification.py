@@ -95,17 +95,21 @@ def judge_paragraph(clean_paragraph: str, sources: str) -> Tuple[str, str, str]:
     final_text = clean_paragraph
 
     m_dec = re.search(
-        r"DECISION\s*:\s*(APPROVED|ADJUSTED|CORRECTED)",
+        r"(?:DECISION|DECIS(?:[ÃA]O|AO))\s*:\s*(APPROVED|ADJUSTED|CORRECTED|APROVADO|AJUSTADO|CORRIGIDO)",
         resp_text, re.IGNORECASE
     )
     if m_dec:
-        level = m_dec.group(1).upper()
+        level = {
+            "APROVADO": "APPROVED",
+            "AJUSTADO": "ADJUSTED",
+            "CORRIGIDO": "CORRECTED",
+        }.get(m_dec.group(1).upper(), m_dec.group(1).upper())
 
-    m_txt = re.search(r"TEXT\s*:\s*([\s\S]+)", resp_text, re.IGNORECASE)
+    m_txt = re.search(r"(?:TEXT|TEXTO)\s*:\s*([\s\S]+)", resp_text, re.IGNORECASE)
     if m_txt:
         candidate = m_txt.group(1).strip()
         candidate = re.sub(
-            r"^DECISION\s*:.*\n?", "", candidate, flags=re.IGNORECASE
+            r"^(?:DECISION|DECIS(?:[ÃA]O|AO))\s*:.*\n?", "", candidate, flags=re.IGNORECASE
         ).strip()
         if candidate:
             final_text = candidate  

@@ -33,7 +33,6 @@ import logging
 import os
 import re
 import urllib.request
-import urllib.error
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -44,15 +43,9 @@ logger = logging.getLogger(__name__)
 
 # ── Imports from existing codebase ────────────────────────────────────────────
 from ..config import llm_call
-from ..utils.bib_utils.crossref_bibtex import (
-    get_reference_data_react,
-    bibtex_to_abnt,
-)
-from ..utils.bib_utils.doi_utils import (
-    get_bibtex_from_doi,
-    search_crossref_by_title,
-)
-from ..utils.bib_utils.abnt_utils import generate_fallback_abnt
+from ..utils.llm_utils.prompt_loader import load_prompt
+from ..utils.bib_utils.crossref_bibtex import get_reference_data_react
+from ..utils.bib_utils.doi_utils import get_bibtex_from_doi
 from ..utils.vector_utils.mongodb_corpus import CorpusMongoDB
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -64,7 +57,18 @@ BUILTIN_PATTERNS = {"abnt", "apa", "ieee", "vancouver", "mla", "chicago"}
 
 
 def _format_abnt(fields: Dict[str, Any]) -> str:
-    """ABNT NBR 6023 formatting from a field dict."""
+    """ABNT NBR 6023 formatting from a field dict.
+    
+    Args:
+        fields: Dictionary containing bibliographic information.
+
+    Returns:
+        Formatted citation string.
+    Example:
+        >>> fields = {"author": "Silva, J.", "title": "Exemplo", "year": "2020"}
+        >>> _format_abnt(fields)
+        'Silva, J.. **Exemplo**, 2020.'
+    """
     author = fields.get("author", "")
     title  = fields.get("title", "Sem título")
     journal = fields.get("journal", "")
@@ -106,7 +110,14 @@ def _format_abnt(fields: Dict[str, Any]) -> str:
 
 
 def _format_apa(fields: Dict[str, Any]) -> str:
-    """APA 7th Edition formatting."""
+    """APA 7th Edition formatting.
+    
+    Args:
+        fields: Dictionary containing bibliographic information.
+
+    Returns:
+        Formatted citation string.
+    """
     author = fields.get("author", "")
     title  = fields.get("title", "Sem título")
     journal = fields.get("journal", "")
@@ -143,7 +154,14 @@ def _format_apa(fields: Dict[str, Any]) -> str:
 
 
 def _format_ieee(fields: Dict[str, Any]) -> str:
-    """IEEE reference style formatting."""
+    """IEEE reference style formatting.
+
+    Args:
+        fields: Dictionary containing bibliographic information.
+
+    Returns:
+        Formatted citation string.
+    """
     author = fields.get("author", "")
     title  = fields.get("title", "Untitled")
     journal = fields.get("journal", "")
@@ -183,7 +201,14 @@ def _format_ieee(fields: Dict[str, Any]) -> str:
 
 
 def _format_vancouver(fields: Dict[str, Any]) -> str:
-    """Vancouver / NLM formatting."""
+    """Vancouver / NLM formatting.
+
+    Args:
+        fields: Dictionary containing bibliographic information.
+
+    Returns:
+        Formatted citation string.
+    """
     author = fields.get("author", "")
     title  = fields.get("title", "Untitled")
     journal = fields.get("journal", "")
@@ -220,7 +245,14 @@ def _format_vancouver(fields: Dict[str, Any]) -> str:
 
 
 def _format_mla(fields: Dict[str, Any]) -> str:
-    """MLA 9th edition formatting."""
+    """MLA 9th edition formatting.
+
+    Args:
+        fields: Dictionary containing bibliographic information.
+
+    Returns:
+        Formatted citation string.
+    """
     author = fields.get("author", "")
     title  = fields.get("title", "Untitled")
     journal = fields.get("journal", "")
@@ -259,7 +291,14 @@ def _format_mla(fields: Dict[str, Any]) -> str:
 
 
 def _format_chicago(fields: Dict[str, Any]) -> str:
-    """Chicago Author-Date formatting."""
+    """Chicago Author-Date formatting.
+
+    Args:
+        fields: Dictionary containing bibliographic information.
+
+    Returns:
+        Formatted citation string.
+    """
     author = fields.get("author", "")
     title  = fields.get("title", "Untitled")
     journal = fields.get("journal", "")
@@ -315,7 +354,13 @@ _BIBTEX_FIELD_RE = re.compile(r'(\w+)\s*=\s*["{]([^"}]+)["}]', re.IGNORECASE)
 
 
 def _parse_bibtex_fields(bibtex: str) -> Dict[str, str]:
-    """Extract key=value fields from a BibTeX string into a plain dict."""
+    """Extract key=value fields from a BibTeX string into a plain dict.
+    
+    Args:
+        bibtex: Raw BibTeX entry as a string.
+    
+    Returns:
+        Dictionary of fields extracted from the BibTeX entry."""
     return {m.group(1).lower(): m.group(2).strip()
             for m in _BIBTEX_FIELD_RE.finditer(bibtex)}
 
@@ -325,7 +370,14 @@ def _parse_bibtex_fields(bibtex: str) -> Dict[str, str]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _fetch_pattern_rules(pattern_url: str) -> str:
-    """Fetch the text content of a pattern-rules page (best-effort)."""
+    """Fetch the text content of a pattern-rules page (best-effort).
+    
+    Args:
+        pattern_url: URL of the page containing the formatting rules for a custom pattern.
+    
+    Returns:
+        Text content of the page, stripped of HTML tags, to be used as context for LLM formatting.
+    """
     try:
         req = urllib.request.Request(
             pattern_url,
@@ -343,7 +395,17 @@ def _fetch_pattern_rules(pattern_url: str) -> str:
 
 
 def _format_with_llm(fields: Dict[str, Any], pattern: str, rules_text: str) -> str:
-    """Use the LLM to format a reference when no built-in formatter exists."""
+    """Use the LLM to format a reference when no built-in formatter exists.
+    The prompt includes the fields and the rules text to guide the LLM in formatting.
+
+    Args:
+        fields: Dictionary containing bibliographic information.
+        pattern: The citation style pattern to use.
+        rules_text: Text content of the formatting rules for the custom pattern.
+
+    Returns:
+        Formatted citation string.
+    """
     fields_str = "\n".join(f"  {k}: {v}" for k, v in fields.items() if v)
 
     rules_section = (
@@ -351,16 +413,15 @@ def _format_with_llm(fields: Dict[str, Any], pattern: str, rules_text: str) -> s
         if rules_text else ""
     )
 
-    prompt = (
-        f"Format the following bibliographic reference in {pattern.upper()} style."
-        f"{rules_section}\n\n"
-        f"Reference fields:\n{fields_str}\n\n"
-        "Return ONLY the formatted reference string, nothing else. "
-        "Do not add numbering or bullet points."
+    prompt_obj = load_prompt(
+        "common/format_reference_bibtex",
+        citation_style=pattern.upper(),
+        rules_section=rules_section,
+        fields_text=fields_str,
     )
 
     try:
-        result = llm_call(prompt, temperature=0.0)
+        result = llm_call(prompt_obj.text, temperature=0.0)
         return result.strip()
     except Exception as exc:
         logger.warning(f"LLM formatting failed: {exc}")
@@ -383,6 +444,14 @@ def _resolve_reference(
     2.  DOI provided → Crossref fetch.
     3.  URL/file provided → REACT agent (all strategies).
     4.  Fallback: use whatever is in the entry.
+
+    Args:
+        entry: The raw reference entry from the input file.
+        mongo_corpus: Optional MongoDB corpus instance for REACT agent.
+        tavily_enabled: Whether to allow Tavily web searches in the REACT agent.
+    
+    Returns:
+        A dictionary of resolved fields for this reference, ready for formatting.
     """
     doi  = entry.get("doi", "").strip() if entry.get("doi") else ""
     url  = entry.get("url", "").strip() if entry.get("url") else ""
@@ -460,15 +529,13 @@ def format_references_from_file(
 ) -> str:
     """Format references from a YAML or JSON input file.
 
-    Parameters
-    ----------
-    input_path    : Path to the user-supplied YAML or JSON file.
-    tavily_enabled: Whether to allow Tavily web searches.
-    output_path   : If provided, write the formatted markdown to this path.
+    Args:
+        input_path    : Path to the user-supplied YAML or JSON file.
+        tavily_enabled: Whether to allow Tavily web searches.
+        output_path   : If provided, write the formatted markdown to this path.
 
-    Returns
-    -------
-    Formatted markdown string (the content of "## Referências").
+    Returns:
+        Formatted markdown string (the content of "## Referências").
     """
     path = Path(input_path)
     if not path.exists():
@@ -569,11 +636,11 @@ def format_references_from_file(
     # ── Build markdown output ─────────────────────────────────────────────
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     header = (
-        f"# Referências\n\n"
-        f"> **Padrão:** {pattern.upper()} | "
-        f"**Arquivo:** {path.name} | "
-        f"**Gerado:** {now} | "
-        f"**Total:** {len(formatted_refs)} referências\n\n"
+        f"# References\n\n"
+        f"> **Pattern:** {pattern.upper()} | "
+        f"**File:** {path.name} | "
+        f"**Generated:** {now} | "
+        f"**Total:** {len(formatted_refs)} references\n\n"
         "---\n\n"
     )
     body = "\n\n".join(formatted_refs)
@@ -601,7 +668,14 @@ def format_references_from_file(
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_reference_formatter() -> None:
-    """Interactive menu for the Reference Formatting Agent."""
+    """Interactive menu for the Reference Formatting Agent.
+    
+    Args:
+        None (all input is via prompts)
+    
+    Returns:
+        None (prints formatted references and saves to file)
+    """
     print("\n" + "=" * 70)
     print("AGENTE DE FORMATAÇÃO DE REFERÊNCIAS")
     print("=" * 70)

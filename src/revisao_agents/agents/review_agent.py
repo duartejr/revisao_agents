@@ -13,7 +13,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.messages import (
     AIMessage,
@@ -24,10 +24,40 @@ from langchain_core.messages import (
 
 from ..tools.review_tools import get_review_tools
 from ..utils.llm_utils.llm_providers import get_llm as get_raw_llm
+from ..utils.llm_utils.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)
 
 MAX_AGENT_ITERATIONS = 6
+
+
+def _clip_text(text: str, limit: int) -> str:
+    cleaned = (text or "").strip()
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[:limit] + "... [truncated]"
+
+
+def _normalize_tool_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Normalize common tool-arg typing issues from provider tool calls.
+
+    Some providers may emit numeric args as strings (e.g. ``{"k": "3"}``),
+    which can fail provider-side schema validation on retries.
+    """
+    normalized = dict(args or {})
+    int_like_keys = {"k", "n", "max_results", "top_k", "limit"}
+
+    for key in int_like_keys:
+        value = normalized.get(key)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if re.fullmatch(r"[-+]?\d+", stripped):
+                try:
+                    normalized[key] = int(stripped)
+                except Exception:
+                    pass
+
+    return normalized
 
 
 def _recover_tool_call_from_exception(exc: Exception) -> dict[str, Any] | None:
@@ -37,6 +67,12 @@ def _recover_tool_call_from_exception(exc: Exception) -> dict[str, Any] | None:
     ``tool_use_failed`` and return the raw attempted call as text, e.g.:
     ``<function=tool_name({"arg": "value"})</function>``.
     This parser extracts the tool name and JSON args so the agent can continue.
+
+    Args:
+        exc: The exception raised by the LLM provider, which may contain a failed_generation payload
+    
+    Returns:
+        A dict with 'name' and 'args' keys if a tool call was successfully recovered, or None otherwise.
     """
     text = str(exc)
     if "tool_use_failed" not in text and "failed_generation" not in text:
@@ -47,11 +83,31 @@ def _recover_tool_call_from_exception(exc: Exception) -> dict[str, Any] | None:
         text,
         flags=re.DOTALL,
     )
-    if not match:
-        return None
+    if match:
+        tool_name = match.group(1)
+        raw_args = match.group(2)
+    else:
+        match = re.search(
+            r"<function=([a-zA-Z_][a-zA-Z0-9_]*)>(\{.*?\})</function>",
+            text,
+            flags=re.DOTALL,
+        )
+        if not match:
+            match = re.search(
+                r'"failed_generation"\s*:\s*"<function=([a-zA-Z_][a-zA-Z0-9_]*)>(\{.*?\})</function>',
+                text,
+                flags=re.DOTALL,
+            )
+        if not match:
+            return None
+        tool_name = match.group(1)
+        raw_args = match.group(2)
 
-    tool_name = match.group(1)
-    raw_args = match.group(2)
+    raw_args = raw_args.replace("\\\"", '"')
+    raw_args = raw_args.replace("\\n", " ").strip()
+
+    if not raw_args.startswith("{"):
+        return None
 
     try:
         tool_args = json.loads(raw_args)
@@ -60,6 +116,8 @@ def _recover_tool_call_from_exception(exc: Exception) -> dict[str, Any] | None:
 
     if not isinstance(tool_args, dict):
         return None
+
+    tool_args = _normalize_tool_args(tool_name, tool_args)
 
     return {"name": tool_name, "args": tool_args}
 
@@ -135,8 +193,11 @@ def run_review_agent(
     trace: list[dict] = []
 
     # ── ReAct loop ────────────────────────────────────────────────────
+    effective_max_iterations = min(max_iterations, 4) if is_groq else max_iterations
+    tool_result_limit = 1200 if is_groq else 5000
+
     response: Any = None
-    for iteration in range(max_iterations):
+    for iteration in range(effective_max_iterations):
         try:
             response = llm_with_tools.invoke(messages)
         except Exception as exc:
@@ -164,7 +225,7 @@ def run_review_agent(
 
         for tc in response.tool_calls:
             tool_name = tc["name"]
-            tool_args = tc["args"]
+            tool_args = _normalize_tool_args(tool_name, tc["args"])
             tool_fn = tool_map.get(tool_name)
 
             if tool_fn is None:
@@ -174,6 +235,8 @@ def run_review_agent(
                     result_str = str(tool_fn.invoke(tool_args))
                 except Exception as exc:
                     result_str = f"Error executing {tool_name}: {exc}"
+
+            result_str = _clip_text(result_str, tool_result_limit)
 
             trace.append({
                 "iteration": iteration,
@@ -185,41 +248,29 @@ def run_review_agent(
                 ToolMessage(content=result_str, tool_call_id=tc["id"]),
             )
 
-    # ── Gemini empty-stop fallback ────────────────────────────────────
-    # Gemini 2.5 Flash with bind_tools sometimes returns content='' and
-    # output_tokens=0 when the final answer requires plain text (no tool call).
-    # In that case, retry once with a plain (tool-free) LLM so the model is
-    # no longer in "tool-call mode" and is forced to generate text.
+    # ── Empty-content fallback ────────────────────────────────────────
+    # Some providers can return empty content after tool execution.
+    # Retry once with a plain (tool-free) LLM to force a user-facing text.
     if response is not None:
-        raw_check = getattr(response, "content", None)
-        if isinstance(raw_check, list):
-            raw_check = "".join(
-                p.get("text", "") if isinstance(p, dict) else str(p)
-                for p in raw_check
-            )
-        if not (raw_check or "").strip() and not getattr(response, "tool_calls", None):
+        raw_check = _extract_message_text(response)
+        if not raw_check:
             logger.warning(
-                "Provider returned empty content with no tool calls "
-                "(likely Gemini bind_tools empty-stop). Retrying without tools."
+                "Provider returned empty content after tool loop. "
+                "Retrying once without tools for final text output."
             )
-            plain_llm = get_raw_llm(temperature=0.2)
-            response = plain_llm.invoke(messages)
+            try:
+                plain_llm = get_raw_llm(temperature=0.2)
+                response = plain_llm.invoke(messages)
+            except Exception as exc:
+                logger.warning("Plain-LLM fallback failed: %s", exc)
 
     # ── Parse response ────────────────────────────────────────────────
-    reply_text = ""
-    if response is not None:
-        raw_content = getattr(response, "content", None)
-        # Gemini (and some other providers) return content as a list of parts
-        # e.g. [{"type": "text", "text": "..."}, ...] — flatten to plain str.
-        if isinstance(raw_content, list):
-            parts = []
-            for part in raw_content:
-                if isinstance(part, dict):
-                    parts.append(part.get("text", "") or str(part))
-                else:
-                    parts.append(str(part))
-            raw_content = "".join(parts)
-        reply_text = raw_content or str(response)
+    reply_text = _extract_message_text(response)
+    if not reply_text:
+        reply_text = (
+            "I executed the requested analysis steps, but the model returned "
+            "an empty final message. Please retry the same instruction once."
+        )
 
     parsed = _parse_agent_response(reply_text, document_sections, pending_edit, target_hint)
     parsed["trace"] = trace
@@ -236,6 +287,18 @@ def _build_system_prompt(
     pending_edit: dict | None,
     include_full_document: bool = True,
 ) -> str:
+    """Load and render the system prompt from YAML with contextualized placeholders.
+    
+    Args:
+        document_content: Full markdown text of the document under review.
+        sections: List of section dicts with titles and paragraph counts.
+        allow_web: Whether web search tools are available in this turn.
+        pending_edit: Dict with pending edit details, or None if no pending edit.
+        include_full_document: Whether to include the full document content in the prompt (defaults to True).
+    
+    Returns:
+        Rendered system prompt string ready to send to the LLM.
+    """
     structure = _structure_summary(sections)
     year = datetime.now().year
 
@@ -275,96 +338,16 @@ def _build_system_prompt(
             doc_text += "\n\n[...document truncated for context window...]"
         doc_block = f"─── FULL DOCUMENT ───\n{doc_text}\n"
 
-    return f"""\
-You are a review assistant. You help the user analyse, verify, and edit an
-academic review document written in Markdown. Today is {year}.
-
-─── DOCUMENT STRUCTURE ───
-{structure}
-{doc_block}
-{pending_block}
-─── AVAILABLE TOOLS ───
-- `search_evidence(query, k)` – search the MongoDB academic corpus for
-  evidence chunks.  Use it to verify claims, find sources, or expand a topic.
-- `search_evidence_sources(query, k)` – search corpus evidence with source
-    metadata (title, URL, DOI, file path). Use it to suggest new sources and
-    check whether source names appear in the current review references.
-- `search_near_chunks(query, n)` – retrieve anchor chunk + neighboring chunks
-    from the same source when one chunk is not enough context.
-- `fetch_reference_metadata(title, doi, url)` – **always available** – resolve
-    full bibliographic metadata (DOI, BibTeX) for an article. Call this FIRST
-    when the user asks for reference formatting.
-{web_block}
-
-─── RULES ───
-1. When the user asks to **list all references**, extract every citation from
-   ALL "### Referências desta seção" blocks in the document and list them.
-   Do NOT summarise findings.
-2. When asked about citations in a **specific section**, list only that
-   section's references.
-3. For **paragraph verification / confirmation**, use `search_evidence` to
-   find corpus chunks that support or contradict the paragraph, then report
-   your findings with source labels.
-4. For **edit requests**, reply ONLY with the revised paragraph using the
-    `REVISED_TEXT_START` / `REVISED_TEXT_END` block (see FORMAT below).
-    Do NOT include section numbers, paragraph numbers, or EDIT_PROPOSAL header.
-    NEVER apply edits silently.
-5. If you need more context from the academic corpus, call `search_evidence`.
-6. When users ask for "more sources not yet cited", call
-    `search_evidence_sources` and compare returned source titles against
-    references already present in the document.
-7. If user asks for "context around this chunk", use `search_near_chunks`.
-8. Use `extract_web_text_from_url` when user provides specific URLs and
-    asks for validation/summarization from page text.
-9. Respond in the **same language** as the user's message.
-10. If the question is ambiguous (missing section/paragraph number, unclear
-   target), ask a clarifying question instead of guessing.
-
-
-─── REFERENCE FORMATTING WORKFLOW ───
-When the user asks for ABNT, APA, or any citation format, follow these steps
-exactly — do NOT skip to formatting from a filename or URL alone.
-
-⚠️  CRITICAL — Understanding source metadata fields:
-    • "Title"     → this is the ARTICLE TITLE — use it for Crossref/web search
-    • "File"      → local file path (NOT the article title, NOT a URL to cite)
-    • "URL"       → web URL when the source is a web article; may be empty for locals
-    • "DOI"       → DOI string when already indexed; may be empty
-
-STEP 1 — Call `fetch_reference_metadata(title=<article title>, doi=<doi or "">, url=<url or "">)`.
-    • NEVER pass a file path as `title`. From a filename like
-        "A-parallel-attention_2026_Journal-of-Hydro.pdf", reconstruct the title:
-        remove extension (".pdf"), year token ("_2026"), journal token ("_Journal-of-Hydro"),
-        replace dashes/underscores with spaces → "A parallel attention framework..."
-    • If the record already has a DOI, pass it in `doi=`.
-    • This step also tries Crossref automatically.
-
-STEP 2 (if web available and Step 1 found no DOI) — Call
-    `search_article_online(title=<article title>)` to search Tavily.
-    Inspect results for a DOI. Then call `get_bibtex_for_reference(<doi>)`.
-
-STEP 3 (if still no DOI and a web URL is available) — Call
-    `extract_web_text_from_url(<url>)` and extract authors, year, journal,
-    title, and URL from the first ~1000 characters of the page.
-
-STEP 4 — Format the reference using the collected data. For ABNT:
-    SOBRENOME, Nome. Título. Periódico, v. X, n. Y, p. ZZ, ano. DOI/URL. Acesso em: DD mês AAAA.
-    Fill every field you found. Only mark [?] for a field if it is truly absent
-    after all lookup steps. NEVER use the file path as the reference URL.
-─── RESPONSE FORMAT ───
-For a normal answer, just write your response text.
-
-For an edit proposal, use EXACTLY this format at the START of your reply:
-
-REVISED_TEXT_START
-<complete revised paragraph text>
-REVISED_TEXT_END
-
-Then optionally add explanation text after the block.
-
-For confirming a pending edit, start your reply with: ACTION: APPLY_EDIT
-For cancelling a pending edit, start your reply with: ACTION: CANCEL_EDIT
-"""
+    # Load the prompt from YAML and render with placeholders
+    prompt = load_prompt(
+        "common/review_agent_system",
+        year=year,
+        structure=structure,
+        doc_block=doc_block,
+        pending_block=pending_block,
+        web_block=web_block,
+    )
+    return prompt.text
 
 
 def _compact_chat_history(
@@ -372,6 +355,10 @@ def _compact_chat_history(
     provider_name: str,
 ) -> tuple[list[dict], str]:
     """Reduce chat payload size while preserving recent conversational context.
+
+    Args:
+        chat_history: List of message dicts with 'role' and 'content'.
+        provider_name: Name of the LLM provider (e.g., "gemini", "groq") to adjust limits.
 
     Returns:
         (recent_messages, summary_text)
@@ -387,10 +374,7 @@ def _compact_chat_history(
     older_summary_items = 8 if is_groq else 12
 
     def _clip(text: str, limit: int) -> str:
-        cleaned = (text or "").strip()
-        if len(cleaned) <= limit:
-            return cleaned
-        return cleaned[:limit] + "... [truncated]"
+        return _clip_text(text, limit)
 
     recent = chat_history[-max_recent_turns:]
     clipped_recent: list[dict] = []
@@ -423,7 +407,14 @@ def _compact_chat_history(
 
 
 def _structure_summary(sections: list[dict]) -> str:
-    """One-line-per-section summary with paragraph counts and reference counts."""
+    """One-line-per-section summary with paragraph counts and reference counts.
+    
+    Args:
+        sections: List of section dicts, each with 'title', 'paragraphs', and 'references' keys.
+        
+    Returns:
+        A formatted string summarizing the document structure, or "(empty document)" if no sections.
+    """
     if not sections:
         return "(empty document)"
     lines = []
@@ -438,13 +429,53 @@ def _structure_summary(sections: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _extract_message_text(message: Any) -> str:
+    """Extract human-readable text from a provider message.
+
+    Avoids falling back to ``str(message)``, which may dump internal
+    provider metadata (tool calls, thought signatures, token details).
+    """
+    if message is None:
+        return ""
+
+    raw_content = getattr(message, "content", None)
+    if isinstance(raw_content, list):
+        parts: list[str] = []
+        for part in raw_content:
+            if isinstance(part, dict):
+                text_part = part.get("text", "")
+                if text_part:
+                    parts.append(str(text_part))
+            elif isinstance(part, str):
+                parts.append(part)
+        return "".join(parts).strip()
+
+    if isinstance(raw_content, str):
+        return raw_content.strip()
+
+    return ""
+
+
 def _parse_agent_response(
     text: str,
     sections: list[dict],
     pending_edit: dict | None,
     target_hint: dict | None = None,
 ) -> dict:
-    """Parse the LLM reply text into a structured result dict."""
+    """Parse the LLM reply text into a structured result dict.
+    
+    Args:
+        text: The raw text content of the LLM's reply.
+        sections: List of document sections for context in parsing edit proposals.
+        pending_edit: Current pending edit dict, or None if no pending edit.
+        target_hint: Optional dict with hints about the target section/paragraph for edit proposals.
+    
+    Returns:
+        A dict with keys:
+        - 'reply': the original text reply from the LLM
+        - 'edit_proposal': a dict with edit proposal details if an edit was proposed, or None
+        - 'action': one of "answer", "edit_proposal", "apply_edit", "cancel_edit"
+    """
 
     # ── Check for apply / cancel actions ──────────────────────────────
     first_line = text.strip().split("\n", 1)[0].strip().upper()
@@ -466,12 +497,12 @@ def _parse_agent_response(
     stripped = text.strip().lower()
     if pending_edit and stripped in {
         "confirm", "yes", "apply", "apply edit", "confirm edit",
-        "confirmar", "sim", "aplicar",
+        "confirmar", "confirmar edição", "confirmar edicao", "sim", "aplicar", "aplicar edição", "aplicar edicao",
     }:
         return {"reply": text, "edit_proposal": None, "action": "apply_edit"}
     if pending_edit and stripped in {
         "cancel", "no", "discard", "cancel edit",
-        "cancelar", "não", "descartar",
+        "cancelar", "cancelar edição", "cancelar edicao", "não", "nao", "descartar", "descartar edição", "descartar edicao",
     }:
         return {"reply": text, "edit_proposal": None, "action": "cancel_edit"}
 
@@ -501,13 +532,21 @@ def _extract_edit_proposal(
 
     Preferred format is a plain REVISED_TEXT block. Legacy EDIT_PROPOSAL
     format is still accepted for compatibility.
+
+    Args:
+        text: The raw text content of the LLM's reply.
+        sections: List of document sections for context in parsing edit proposals.
+        target_hint: Optional dict with hints about the target section/paragraph for edit proposals.
+    
+    Returns:
+        A dict with edit proposal details if an edit was proposed, or None if no valid proposal was found.
     """
     normalized = text.replace("\r\n", "\n")
     normalized = re.sub(r"```(?:markdown|md)?\s*", "", normalized, flags=re.IGNORECASE)
     normalized = normalized.replace("```", "")
 
     revised_block = re.search(
-        r"REVISED_TEXT_START\s*\n(.*?)\nREVISED_TEXT_END",
+        r"(?:REVISED_TEXT_START|TEXTO_REVISADO_IN[ÍI]CIO)\s*\n(.*?)\n(?:REVISED_TEXT_END|TEXTO_REVISADO_FIM)",
         normalized,
         re.DOTALL | re.IGNORECASE,
     )
@@ -526,13 +565,13 @@ def _extract_edit_proposal(
         }
 
     m = re.search(
-        r"EDIT_PROPOSAL\s*\n"
-        r"(?:SECTION_NUMBER\s*:\s*(\d+)\s*\n)?"
-        r"(?:SECTION_TITLE\s*:\s*(.*?)\s*\n)?"
-        r"PARAGRAPH_NUMBER\s*:\s*(\d+)\s*\n"
-        r"REVISED_TEXT_START\s*\n"
+        r"(?:EDIT_PROPOSAL|PROPOSTA_DE_EDI[CÇ][AÃ]O)\s*\n"
+        r"(?:(?:SECTION_NUMBER|N[ÚU]MERO_DA?_SE[ÇC][AÃ]O)\s*:\s*(\d+)\s*\n)?"
+        r"(?:(?:SECTION_TITLE|T[ÍI]TULO_DA?_SE[ÇC][AÃ]O)\s*:\s*(.*?)\s*\n)?"
+        r"(?:PARAGRAPH_NUMBER|N[ÚU]MERO_D[EO]_PAR[ÁA]GRAFO)\s*:\s*(\d+)\s*\n"
+        r"(?:REVISED_TEXT_START|TEXTO_REVISADO_IN[ÍI]CIO)\s*\n"
         r"(.*?)\n"
-        r"REVISED_TEXT_END",
+        r"(?:REVISED_TEXT_END|TEXTO_REVISADO_FIM)",
         normalized,
         re.DOTALL | re.IGNORECASE,
     )

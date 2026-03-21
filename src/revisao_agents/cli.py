@@ -34,7 +34,7 @@ def resolve_topic(input_value: str) -> str:
         content = path.read_text(encoding="utf-8")
         
         # Look for a common header pattern (Case-insensitive 'Topic' or 'Tema')
-        match = re.search(r"\*\*(?:Topic|Tema):\*\*\s*(.+)", content, re.IGNORECASE)
+        match = re.search(r"\*\*(?:Topic|Theme|Tema|T[óo]pico):\*\*\s*(.+)", content, re.IGNORECASE)
         if match:
             return match.group(1).strip()
 
@@ -64,6 +64,7 @@ def _run_planning_until_complete(
         rounds: number of refinement rounds for HITL steps
         auto_response: the response to use for all HITL prompts
         debug: whether to print intermediate events
+    
     Returns:
         the final state dict after graph execution completes
     """
@@ -125,6 +126,7 @@ def main(
         model: optional LLM model name to set via environment variable
         auto_response: response to use for all HITL prompts (default: "Keep the current plan.")
         debug: whether to print intermediate events during execution
+    
     Returns:
         None (prints final plan and optionally saves to file)
     """

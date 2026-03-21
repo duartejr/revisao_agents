@@ -1,18 +1,16 @@
 # src/revisao_agents/tools/tavily_web_search.py
 """
-Tavily Web Search Tools — versão migrada para o novo pacote.
-Mantém todas as funcionalidades originais (rastreabilidade, idioma, filtros acadêmicos).
+Tavily Web Search Tools — version migrated to the new package.
+Retains all original functionalities (crawlability, language, academic filters).
 """
 
-from langchain_core.tools import tool   # ← atualizado (melhor prática 2026)
-from typing import List, Optional, Dict
+from langchain_core.tools import tool
+from typing import List, Optional
 import os
 import re
-import json
 from datetime import datetime
 
-# Imports relativos ao novo pacote (serão ajustados quando migrarmos utils/)
-from ..utils.core.commons import get_clean_key   # ← ajuste automático na próxima etapa
+from ..utils.core.commons import get_clean_key
 from tavily import TavilyClient
 
 
@@ -23,189 +21,216 @@ from tavily import TavilyClient
 _SEARCH_LOG_DIR = "tavily_searchs"
 
 
-def _garantir_pasta_log():
-    """Cria a pasta tavily_searchs se não existir."""
+def _guarantee_log_folder():
+    """Create the tavily_searches folder if it doesn't already exist.
+    
+    Args:
+        None (no input parameters)
+    
+    Returns:
+        None (creates directory if needed)
+    """
     os.makedirs(_SEARCH_LOG_DIR, exist_ok=True)
 
 
-def _slug(texto: str, max_chars: int = 50) -> str:
-    """Gera slug seguro para usar como nome de arquivo."""
-    s = re.sub(r"[^\w\s-]", "", texto[:max_chars]).strip()
+def _slug(text: str, max_chars: int = 50) -> str:
+    """Generate a safe slug for use as a filename.
+    
+    Args:
+        texto: the input string to slugify (e.g. a search query)
+        max_chars: the maximum number of characters to include in the slug
+
+    Returns:
+        A slugified version of the input string.
+    """
+    s = re.sub(r"[^\w\s-]", "", text[:max_chars]).strip()
     s = re.sub(r"[\s]+", "_", s).lower()
-    return s or "busca"
+    return s or "search"
 
 
-def _salvar_pesquisa_md(
-    tipo: str,
+def _save_search_md(
+    type: str,
     query: str,
-    resultados: List[dict],
+    results: List[dict],
     extra: Optional[dict] = None,
 ) -> str:
     """
-    Salva os resultados de uma busca Tavily em arquivo Markdown.
+    Saves the results of a Tavily search to a Markdown file.
 
     Args:
-        tipo       : tipo da busca (academica, tecnica, imagens, extract)
-        query      : query ou URL pesquisada
-        resultados : lista de resultados (cada item é um dict)
-        extra      : informações adicionais opcionais (ex: urls_encontrados)
+        type       : type of the search (academic, technical, images, extract)
+        query      : the query or URL searched
+        results    : list of results (each item is a dict)
+        extra      : optional additional information (e.g., found URLs) to include in the log
 
     Returns:
-        Caminho do arquivo salvo.
+        The path to the saved file.
     """
-    _garantir_pasta_log()
+    _guarantee_log_folder()
 
     ts       = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # ms precision
     slug_q   = _slug(query)
-    filename = f"{_SEARCH_LOG_DIR}/{ts}_{tipo}_{slug_q}.md"
+    filename = f"{_SEARCH_LOG_DIR}/{ts}_{type}_{slug_q}.md"
 
-    linhas = [
-        f"# Pesquisa Tavily — {tipo.upper()}",
+    lines = [
+        f"# Tavily Search — {type.upper()}",
         f"",
-        f"- **Data/Hora:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        f"- **Tipo:** {tipo}",
+        f"- **Date/Time:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"- **Type:** {type}",
         f"- **Query:** `{query}`",
-        f"- **Total de resultados:** {len(resultados)}",
+        f"- **Total Results:** {len(results)}",
     ]
 
     if extra:
         for k, v in extra.items():
-            linhas.append(f"- **{k}:** {v}")
+            lines.append(f"- **{k}:** {v}")
 
-    linhas += ["", "---", ""]
+    lines += ["", "---", ""]
 
-    for i, r in enumerate(resultados, 1):
+    for i, r in enumerate(results, 1):
         if isinstance(r, dict):
             url      = r.get("url", r.get("source", ""))
-            titulo   = r.get("title", r.get("titulo", ""))
+            title   = r.get("title", r.get("titulo", ""))
             snippet  = r.get("snippet", r.get("content", r.get("conteudo", "")))
             score    = r.get("score", "")
-            idioma   = r.get("language", r.get("idioma", ""))
-            imagens  = r.get("imagens", r.get("images", []))
+            language   = r.get("language", r.get("idioma", ""))
+            images  = r.get("imagens", r.get("images", []))
             descr    = r.get("image_descriptions", {})
 
-            linhas.append(f"## [{i}] {titulo or url}")
-            linhas.append(f"")
+            lines.append(f"## [{i}] {title or url}")
+            lines.append(f"")
             if url:
-                linhas.append(f"**URL:** {url}")
+                lines.append(f"**URL:** {url}")
             if score:
-                linhas.append(f"**Score:** {score:.4f}" if isinstance(score, float) else f"**Score:** {score}")
-            if idioma:
-                linhas.append(f"**Idioma:** {idioma}")
+                lines.append(f"**Score:** {score:.4f}" if isinstance(score, float) else f"**Score:** {score}")
+            if language:
+                lines.append(f"**Language:** {language}")
             if snippet:
-                linhas.append(f"")
-                linhas.append(f"**Conteúdo:**")
-                linhas.append(f"")
-                linhas.append(snippet[:2000])
-            if imagens:
-                linhas.append(f"")
-                linhas.append(f"**Imagens encontradas ({len(imagens)}):**")
-                for img in imagens:
+                lines.append(f"")
+                lines.append(f"**Content:**")
+                lines.append(f"")
+                lines.append(snippet[:2000])
+            if images:
+                lines.append(f"")
+                lines.append(f"**Images Found ({len(images)}):**")
+                for img in images:
                     desc = descr.get(img, "") if isinstance(descr, dict) else ""
                     if desc:
-                        linhas.append(f"- `{img}` — {desc}")
+                        lines.append(f"- `{img}` — {desc}")
                     else:
-                        linhas.append(f"- `{img}`")
-            linhas.append(f"")
-            linhas.append(f"---")
-            linhas.append(f"")
+                        lines.append(f"- `{img}`")
+            lines.append(f"")
+            lines.append(f"---")
+            lines.append(f"")
         else:
-            # fallback para strings (ex: lista de URLs)
-            linhas.append(f"- {r}")
+            # fallback for strings (e.g., list of URLs)
+            lines.append(f"- {r}")
 
     try:
         with open(filename, "w", encoding="utf-8") as f:
-            f.write("\n".join(linhas))
-        print(f"   📝 Log salvo: {filename}")
+            f.write("\n".join(lines))
+        print(f"   📝 Log saved: {filename}")
     except Exception as e:
-        print(f"   ⚠️  Não foi possível salvar log: {e}")
+        print(f"   ⚠️  Could not save log: {e}")
 
     return filename
 
 
 # ============================================================================
-# DETECÇÃO DE IDIOMA
+# LANGUAGE DETECTION AND PRIORITIZATION
 # ============================================================================
 
-def _detectar_idioma(texto: str) -> str:
+def _detect_language(text: str) -> str:
     """
-    Detecta se o texto é predominantemente em inglês ou português.
-    Retorna 'en' ou 'pt'.
+    Detects whether the text is predominantly in English or Portuguese.
+
+    Args:
+        text: the input text to analyze
+    
+    Returns:
+        'en' if English is predominant, 'pt' if Portuguese is predominant
     """
-    if not texto:
+    if not text:
         return 'en'
     
-    texto_lower = texto.lower()
+    text_lower = text.lower()
     
-    # Palavras comuns em português
-    palavras_pt = ['para', 'como', 'que', 'com', 'mais', 'dos', 'das', 'pela', 'pelo', 
-                   'são', 'foi', 'está', 'sobre', 'entre', 'através', 'também', 'ser',
-                   'por', 'uma', 'seus', 'suas', 'este', 'esta', 'pode', 'podem']
+    # Common words in Portuguese
+    pt_words = ['para', 'como', 'que', 'com', 'mais', 'dos', 'das', 'pela', 'pelo', 
+                'são', 'foi', 'está', 'sobre', 'entre', 'através', 'também', 'ser',
+                'por', 'uma', 'seus', 'suas', 'este', 'esta', 'pode', 'podem']
     
-    # Palavras comuns em inglês
-    palavras_en = ['the', 'and', 'for', 'with', 'this', 'from', 'that', 'have',
-                   'was', 'are', 'been', 'their', 'which', 'were', 'when', 'through',
-                   'where', 'using', 'can', 'these', 'those', 'such', 'would', 'should']
+    # Common words in English
+    en_words = ['the', 'and', 'for', 'with', 'this', 'from', 'that', 'have',
+                'was', 'are', 'been', 'their', 'which', 'were', 'when', 'through',
+                'where', 'using', 'can', 'these', 'those', 'such', 'would', 'should']
     
-    # Conta ocorrências
-    count_pt = sum(1 for p in palavras_pt if f' {p} ' in f' {texto_lower} ')
-    count_en = sum(1 for p in palavras_en if f' {p} ' in f' {texto_lower} ')
+    # Count occurrences of common words for each language
+    count_pt = sum(1 for p in pt_words if f' {p} ' in f' {text_lower} ')
+    count_en = sum(1 for p in en_words if f' {p} ' in f' {text_lower} ')
     
-    # Também verifica caracteres especiais do português
-    if 'ã' in texto_lower or 'ç' in texto_lower or 'õ' in texto_lower:
+    # Also checks for special Portuguese characters
+    if 'ã' in text_lower or 'ç' in text_lower or 'õ' in text_lower:
         count_pt += 3
     
     return 'en' if count_en >= count_pt else 'pt'
 
 
-def _priorizar_por_idioma(resultados: List[dict], boost_en: float = 0.3) -> List[dict]:
+def _prioritize_by_language(results: List[dict], boost_en: float = 0.3) -> List[dict]:
     """
-    Reordena resultados priorizando inglês.
-    Adiciona boost ao score de resultados em inglês.
+    Reorders results prioritizing English.
+    Adds a boost to the score of English results.
     
     Args:
-        resultados: lista de resultados com 'score', 'title', 'snippet'
-        boost_en: boost adicional para resultados em inglês (0.0 a 1.0)
+        results: list of results with 'score', 'title', 'snippet'
+        boost_en: additional boost for English results (0.0 to 1.0)
     
     Returns:
-        Lista de resultados reordenada e enriquecida com campo 'language'
+        List of reordered results enriched with 'language' field
     """
-    for r in resultados:
-        # Detecta idioma baseado no título + snippet
-        texto_detectar = f"{r.get('title', '')} {r.get('snippet', r.get('content', ''))}"
-        idioma = _detectar_idioma(texto_detectar)
-        r['language'] = idioma
+    for r in results:
+        # Detects language based on title + snippet
+        text_to_detect = f"{r.get('title', '')} {r.get('snippet', r.get('content', ''))}"
+        language = _detect_language(text_to_detect)
+        r['language'] = language
         
-        # Adiciona boost para inglês
-        if idioma == 'en':
+        # Adds boost for English results
+        if language == 'en':
             r['score'] = min(1.0, r.get('score', 0) + boost_en)
     
-    # Reordena: inglês primeiro, depois por score
-    resultados_ordenados = sorted(
-        resultados,
+    # Reorders: English first, then by score
+    sorted_results = sorted(
+        results,
         key=lambda x: (x.get('language', 'en') != 'en', -x.get('score', 0))
     )
     
-    return resultados_ordenados
+    return sorted_results
 
 
-def _print_language_totals(resultados: List[dict]) -> None:
-    """Print aggregate language stats safely for a result list."""
-    total = len(resultados)
+def _print_language_totals(results: List[dict]) -> None:
+    """Print aggregate language stats safely for a result list.
+    
+    Args:
+        results: list of result dicts, each with a 'language' key
+    
+    Returns:
+        None (prints totals to console) 
+    """
+    total = len(results)
     if total == 0:
-        print("   📊 TOTAL: 0 resultados")
+        print("   📊 TOTAL: 0 results")
         return
 
-    total_en = sum(1 for r in resultados if r.get("language") == "en")
-    total_pt = sum(1 for r in resultados if r.get("language") == "pt")
+    total_en = sum(1 for r in results if r.get("language") == "en")
+    total_pt = sum(1 for r in results if r.get("language") == "pt")
     print(
-        f"   📊 TOTAL: {total_en} inglês ({total_en/total*100:.0f}%), "
-        f"{total_pt} português ({total_pt/total*100:.0f}%)"
+        f"   📊 TOTAL: {total_en} English ({total_en/total*100:.0f}%), "
+        f"{total_pt} Portuguese ({total_pt/total*100:.0f}%)"
     )
 
 
 # ============================================================================
-# DOMÍNIOS BLOQUEADOS
+# BLOCKED DOMAINS
 # ============================================================================
 
 BLOCKED_DOMAINS = [
@@ -242,21 +267,38 @@ BLOCKED_DOMAINS = [
 # ============================================================================
 
 def _get_client() -> TavilyClient:
+    """Initialize and return a TavilyClient instance using the API key from environment variables."""
     return TavilyClient(api_key=get_clean_key("TAVILY_API_KEY"))
 
 
-def filtrar_urls_academicas(urls: List[str]) -> List[str]:
-    filtradas = [
+def filter_academic_urls(urls: List[str]) -> List[str]:
+    """Filter out URLs from non-academic domains.
+
+    Args:
+        urls: List of URLs to filter
+    
+    Returns:
+        List of URLs that do not belong to blocked domains.
+    """
+    filtered = [
         url for url in urls
         if not any(b.lower() in url.lower() for b in BLOCKED_DOMAINS)
     ]
-    removidos = len(urls) - len(filtradas)
-    if removidos:
-        print(f"   🚫 Removidas {removidos} URLs de fontes não acadêmicas")
-    return filtradas
+    removed = len(urls) - len(filtered)
+    if removed:
+        print(f"   🚫 Removed {removed} URLs from non-academic sources")
+    return filtered
 
 
-def filtrar_urls_tecnicas(urls: List[str]) -> List[str]:
+def filter_technical_urls(urls: List[str]) -> List[str]:
+    """Filter out URLs from non-technical domains.
+    
+    Args:
+        urls: List of URLs to filter
+    
+    Returns:
+        List of URLs that do not belong to blocked domains.
+    """
     return [
         url for url in urls
         if not any(b.lower() in url.lower() for b in BLOCKED_DOMAINS)
@@ -264,36 +306,37 @@ def filtrar_urls_tecnicas(urls: List[str]) -> List[str]:
 
 
 # ============================================================================
-# BUSCA ACADÊMICA COM PRIORIZAÇÃO DE INGLÊS
+# ACADEMIC SEARCH WITH ENGLISH PRIORITIZATION
 # ============================================================================
 
 @tool
 def search_tavily(queries: List[str], max_results: int = 5) -> dict:
-    """
-    Busca artigos acadêmicos no Tavily.
-    PRIORIZA conteúdo em INGLÊS, mas permite português.
-    Filtra domínios não científicos automaticamente.
-    Salva cada busca em ./tavily_searchs/ para rastreabilidade.
+    """Search for academic articles on Tavily, prioritizing English content.
+    
+    Search for academic articles on Tavily.
+    Prioritizes content in ENGLISH, but allows Portuguese.
+    Automatically filters out non-scientific domains.
+    Save each search in ./tavily_searches/ for traceability.
 
     Args:
-        queries: lista de queries de busca
-        max_results: resultados por query (padrão 5)
+        queries: list of search queries
+        max_results: results per query (default 5)
 
     Returns:
-        {"urls_encontrados": [...], "resultados": [...]}
+        {"urls_found": [...], "results": [...]} 
     """
     client = _get_client()
     all_urls: List[str] = []
     all_results: List[dict] = []
 
     for q in queries:
-        print(f"🔎 Buscando (acadêmico, EN priorizado): {q}")
+        print(f"🔎 Searching (academic, EN prioritized): {q}")
         
-        # ESTRATÉGIA: Busca dupla - primeiro inglês, depois complementa
-        resultados_batch = []
+        # STRATEGY: Dual search - first English, then complement with Portuguese if needed
+        batch_results = []
         
         try:
-            # FASE 1: Busca prioritária em inglês
+            # PHASE 1: English-priority search
             res_en = client.search(
                 query=q,
                 search_depth="advanced",
@@ -311,65 +354,70 @@ def search_tavily(queries: List[str], max_results: int = 5) -> dict:
                     "snippet": r.get("content", "")[:300],
                     "score":   r.get("score", 0),
                 }
-                resultados_batch.append(item)
+                batch_results.append(item)
             
-            # Prioriza por idioma (detecta e dá boost para inglês)
-            resultados_batch = _priorizar_por_idioma(resultados_batch, boost_en=0.3)
+            # Prioritizes by language (detects and boosts English)
+            batch_results = _prioritize_by_language(batch_results, boost_en=0.3)
             
-            # Adiciona aos resultados globais
-            for item in resultados_batch:
+            # Adds to global results
+            for item in batch_results:
                 all_urls.append(item["url"])
                 all_results.append(item)
             
-            # Log estatísticas de idioma
-            n_en = sum(1 for r in resultados_batch if r.get('language') == 'en')
-            n_pt = sum(1 for r in resultados_batch if r.get('language') == 'pt')
-            print(f"   📊 Idiomas: {n_en} inglês, {n_pt} português")
+            # Log language statistics
+            n_en = sum(1 for r in batch_results if r.get('language') == 'en')
+            n_pt = sum(1 for r in batch_results if r.get('language') == 'pt')
+            print(f"   📊 Languages: {n_en} English, {n_pt} Portuguese")
             
-            # ── Salva log desta query ────────────────────────────────────────
-            _salvar_pesquisa_md("academica", q, resultados_batch, 
+            # ── Save log for this query ────────────────────────────────────────
+            _save_search_md("academic", q, batch_results, 
                                extra={"idioma_en": n_en, "idioma_pt": n_pt})
 
         except Exception as e:
-            print(f"   ⚠️  Erro na query '{q[:50]}': {e}")
+            print(f"   ⚠️  Error in query '{q[:50]}': {e}")
 
-    urls_unicos = list(dict.fromkeys(all_urls))
+    unique_urls = list(dict.fromkeys(all_urls))
     
-    # Estatísticas finais
+    # Final statistics
     _print_language_totals(all_results)
     
-    return {"urls_encontrados": urls_unicos, "resultados": all_results}
+    return {"urls_found": unique_urls, "results": all_results}
 
 
 # ============================================================================
-# BUSCA ACADÊMICA INCREMENTAL
+# INCREMENTAL ACADEMIC SEARCH
 # ============================================================================
 
 def search_tavily_incremental(
     query: str,
-    urls_anteriores: List[str],
+    previous_urls: List[str],
     max_results: int = 5,
 ) -> dict:
     """
-    Busca acadêmica incremental — acumula URLs sem duplicatas.
-    PRIORIZA conteúdo em INGLÊS.
-    Salva log de cada busca em ./tavily_searchs/.
+    Incremental academic search — accumulates URLs without duplicates.
+    PRIORITIZES English content.
+    Saves log of each search in ./tavily_searches/.
+
+    Args:
+        query: the search query
+        previous_urls: list of previously found URLs to avoid duplicates
+        max_results: number of results to return for this incremental search (default 5)
 
     Returns:
-        {"urls_novos": [...], "total_acumulado": [...]}
+        {"new_urls": [...], "total_accumulated": [...]} 
     """
     try:
         client = _get_client()
-        print(f"\n🔎 Busca Incremental (EN priorizado): '{query}'")
+        print(f"\n🔎 Incremental Search (EN prioritized): '{query}'")
 
-        res = client.search(
+        ans = client.search(
             query=query,
             search_depth="advanced",
             max_results=max_results,
             exclude_domains=BLOCKED_DOMAINS,
         )
         
-        # Prepara resultados
+        # Prepare results with language prioritization
         batch_results = [
             {
                 "url":     r["url"],
@@ -377,83 +425,83 @@ def search_tavily_incremental(
                 "snippet": r.get("content", "")[:2000],
                 "score":   r.get("score", 0),
             }
-            for r in res.get("results", []) if r.get("score", 0) >= 0.7
+            for r in ans.get("results", []) if r.get("score", 0) >= 0.7
         ]
         
-        # Prioriza por idioma
-        batch_results = _priorizar_por_idioma(batch_results, boost_en=0.3)
+        # Prioritizes by language
+        batch_results = _prioritize_by_language(batch_results, boost_en=0.3)
         
-        urls_encontrados = [r["url"] for r in batch_results]
-        urls_encontrados = filtrar_urls_academicas(urls_encontrados)
+        urls_found = [r["url"] for r in batch_results]
+        urls_found = filter_academic_urls(urls_found)
 
-        urls_novos      = [u for u in urls_encontrados if u not in urls_anteriores]
-        total_acumulado = list(dict.fromkeys(urls_anteriores + urls_encontrados))
+        urls_new      = [u for u in urls_found if u not in previous_urls]
+        total_accumulated = list(dict.fromkeys(previous_urls + urls_found))
 
-        # Estatísticas
+        # Statistics
         n_en = sum(1 for r in batch_results if r.get('language') == 'en')
         n_pt = sum(1 for r in batch_results if r.get('language') == 'pt')
         
-        print(f"   ✔ Encontrados : {len(urls_encontrados)} URLs")
-        print(f"   ✔ Novos       : {len(urls_novos)} URLs")
-        print(f"   ✔ Total acum. : {len(total_acumulado)} URLs")
-        print(f"   📊 Idiomas    : {n_en} inglês, {n_pt} português")
+        print(f"   ✔ Found      : {len(urls_found)} URLs")
+        print(f"   ✔ New        : {len(urls_new)} URLs")
+        print(f"   ✔ Total acum. : {len(total_accumulated)} URLs")
+        print(f"   📊 Languages : {n_en} English, {n_pt} Portuguese")
 
         # ── Log ──────────────────────────────────────────────────────────────
-        _salvar_pesquisa_md(
-            "academica_incremental",
+        _save_search_md(
+            "academic_incremental",
             query,
             batch_results,
             extra={
-                "urls_novos": len(urls_novos), 
-                "total_acumulado": len(total_acumulado),
+                "new_urls": len(urls_new), 
+                "total_accumulated": len(total_accumulated),
                 "idioma_en": n_en,
                 "idioma_pt": n_pt,
             },
         )
 
         return {
-            "urls_novos": urls_novos,
-            "total_acumulado": total_acumulado,
-            "resultados": batch_results,
+            "new_urls": urls_new,
+            "total_accumulated": total_accumulated,
+            "results": batch_results,
         }
 
     except Exception as e:
-        print(f"   ⚠️  Erro na busca Tavily: {e}")
+        print(f"   ⚠️  Error in Tavily search: {e}")
         return {
-            "urls_novos": [],
-            "total_acumulado": urls_anteriores,
-            "resultados": [],
+            "new_urls": [],
+            "total_accumulated": previous_urls,
+            "results": [],
         }
 
 
 # ============================================================================
-# BUSCA TÉCNICA COM PRIORIZAÇÃO DE INGLÊS
+# Technical search with emphasis on English
 # ============================================================================
 
 @tool
-def search_tavily_tecnico(queries: List[str], max_results: int = 5) -> dict:
+def search_tavily_technical(queries: List[str], max_results: int = 5) -> dict:
     """
-    Busca técnica no Tavily — permite documentações, tutoriais,
-    Wikipedia em inglês, livros online, páginas de referência, etc.
-    PRIORIZA conteúdo em INGLÊS.
-    Salva cada busca em ./tavily_searchs/ para rastreabilidade.
+    Technical search on Tavily — allows documentation, tutorials,
+    English Wikipedia, online books, reference pages, etc.
+    PRIORITIZES English content.
+    Saves each search in ./tavily_searches/ for traceability.
 
     Args:
-        queries: lista de queries de busca
-        max_results: resultados por query (padrão 5)
+        queries: list of search queries
+        max_results: results per query (default 5)
 
     Returns:
-        {"urls_encontrados": [...], "resultados": [...]}
+        {"found_urls": [...], "results": [...]}
     """
     client = _get_client()
     all_urls: List[str] = []
     all_results: List[dict] = []
 
     for q in queries:
-        print(f"🔎 Buscando (técnico, EN priorizado): {q}")
+        print(f"🔎 Searching (technical, EN prioritized): {q}")
         
         try:
-            res = client.search(
+            ans = client.search(
                 query=q[:400],
                 search_depth="advanced",
                 max_results=max_results,
@@ -461,7 +509,7 @@ def search_tavily_tecnico(queries: List[str], max_results: int = 5) -> dict:
             )
             
             batch_results = []
-            for r in res.get("results", []):
+            for r in ans.get("results", []):
                 if r.get("score", 0) < 0.7:
                     continue
                 
@@ -473,36 +521,36 @@ def search_tavily_tecnico(queries: List[str], max_results: int = 5) -> dict:
                 }
                 batch_results.append(item)
             
-            # Prioriza por idioma
-            batch_results = _priorizar_por_idioma(batch_results, boost_en=0.3)
+            # Prioritizes by language (detects and boosts English)
+            batch_results = _prioritize_by_language(batch_results, boost_en=0.3)
             
             for item in batch_results:
                 all_urls.append(item["url"])
                 all_results.append(item)
             
-            # Estatísticas
+            # Statistics
             n_en = sum(1 for r in batch_results if r.get('language') == 'en')
             n_pt = sum(1 for r in batch_results if r.get('language') == 'pt')
-            print(f"   📊 Idiomas: {n_en} inglês, {n_pt} português")
+            print(f"   📊 Languages: {n_en} English, {n_pt} Portuguese")
 
             # ── Log ──────────────────────────────────────────────────────────
-            _salvar_pesquisa_md("tecnica", q, batch_results,
+            _save_search_md("technical", q, batch_results,
                                extra={"idioma_en": n_en, "idioma_pt": n_pt})
 
         except Exception as e:
-            print(f"   ⚠️  Erro na query '{q[:50]}': {e}")
+            print(f"   ⚠️  Error in query '{q[:50]}': {e}")
 
-    urls_unicos = list(dict.fromkeys(all_urls))
-    urls_filtrados = filtrar_urls_tecnicas(urls_unicos)
+    unique_urls = list(dict.fromkeys(all_urls))
+    filtered_academic_urls = filter_technical_urls(unique_urls)
     
-    # Estatísticas finais
+    # Final statistics
     _print_language_totals(all_results)
     
-    return {"urls_encontrados": urls_filtrados, "resultados": all_results}
+    return {"found_urls": filtered_academic_urls, "results": all_results}
 
 
 # ============================================================================
-# BUSCA COM IMAGENS — tool dedicada
+# IMAGE SEARCH — dedicated tool for finding technical/academic images
 # ============================================================================
 
 @tool
@@ -511,41 +559,41 @@ def search_tavily_images(
     max_results: int = 8,
 ) -> dict:
     """
-    Busca imagens relacionadas a um tema via Tavily.
-    Retorna URLs de imagens com suas descrições quando disponíveis.
-    Salva log completo em ./tavily_searchs/.
+    Search for images related to a topic via Tavily.
+    Returns image URLs with their descriptions when available.
+    Saves complete log in ./tavily_searches/.
 
-    Ideal para:
-      - Figuras de algoritmos, arquiteturas, diagramas de fluxo
-      - Gráficos comparativos de métricas
-      - Visualizações de séries temporais / hidrologia
-      - Ilustrações técnicas ou científicas
+    Ideal for:
+      - Algorithm figures, architectures, flow diagrams
+      - Comparative metric charts
+      - Time series / hydrology visualizations
+      - Technical or scientific illustrations
 
     Args:
-        queries    : lista de queries de busca orientadas a imagens
-        max_results: resultados por query (padrão 8)
+        queries    : list of image-oriented search queries
+        max_results: results per query (default 8)
 
     Returns:
         {
-          "imagens": [
+          "images": [
             {
-              "url_imagem"  : str,   # URL direta da imagem
-              "descricao"   : str,   # descrição gerada pelo Tavily (se disponível)
-              "url_origem"  : str,   # página onde a imagem foi encontrada
-              "titulo_pagina": str,
+              "image_url"  : str,   # direct image URL
+              "description": str,   # description generated by Tavily (if available)
+              "source_url" : str,   # page where the image was found
+              "page_title" : str,
             }, ...
           ],
           "total": int,
         }
     """
     client = _get_client()
-    todas_imagens: List[dict] = []
-    vistas: set = set()
+    all_images: List[dict] = []
+    viewed: set = set()
 
     for q in queries:
-        print(f"🖼️  Buscando imagens: {q}")
+        print(f"🖼️  Searching images: {q}")
         try:
-            res = client.search(
+            ans = client.search(
                 query=q[:400],
                 search_depth="advanced",
                 max_results=max_results,
@@ -554,20 +602,20 @@ def search_tavily_images(
                 exclude_domains=BLOCKED_DOMAINS,
             )
 
-            # ── Imagens diretas retornadas pelo Tavily ───────────────────────
-            imagens_raw   = res.get("images", [])
-            descricoes_raw = res.get("image_descriptions", {})
+            # ── Direct images returned by Tavily ───────────────────────────
+            raw_images   = ans.get("images", [])
+            raw_descriptions = ans.get("image_descriptions", {})
 
-            # Normaliza: pode ser lista de strings ou lista de dicts
-            for item in imagens_raw:
+            # Normalize: this can be a list of strings or a list of dicts.
+            for item in raw_images:
                 if isinstance(item, dict):
                     url_img = item.get("url", "")
                     desc    = item.get("description", "")
                 else:
                     url_img = str(item)
-                    desc    = descricoes_raw.get(url_img, "") if isinstance(descricoes_raw, dict) else ""
+                    desc    = raw_descriptions.get(url_img, "") if isinstance(raw_descriptions, dict) else ""
 
-                if not url_img or url_img in vistas:
+                if not url_img or url_img in viewed:
                     continue
                 if not any(url_img.lower().endswith(ext)
                            for ext in (".jpg", ".jpeg", ".png", ".svg", ".gif", ".webp")):
@@ -575,99 +623,99 @@ def search_tavily_images(
                     if "image" not in url_img.lower() and not re.search(r"\.(jpg|jpeg|png|svg|gif|webp)", url_img, re.I):
                         continue
 
-                vistas.add(url_img)
-                todas_imagens.append({
-                    "url_imagem":    url_img,
-                    "descricao":     desc,
-                    "url_origem":    "",
-                    "titulo_pagina": "",
+                viewed.add(url_img)
+                all_images.append({
+                    "image_url":    url_img,
+                    "description":     desc,
+                    "source_url":    "",
+                    "page_title": "",
                 })
 
-            # ── Imagens dos snippets de resultado ────────────────────────────
-            for r in res.get("results", []):
+            # ── Images from result snippets ────────────────────────────────
+            for r in ans.get("results", []):
                 url_pag   = r.get("url", "")
-                titulo_pag = r.get("title", "")
+                title_pag = r.get("title", "")
                 for img_url in r.get("images", []):
-                    if img_url and img_url not in vistas:
-                        vistas.add(img_url)
-                        todas_imagens.append({
-                            "url_imagem":    img_url,
-                            "descricao":     "",
-                            "url_origem":    url_pag,
-                            "titulo_pagina": titulo_pag,
+                    if img_url and img_url not in viewed:
+                        viewed.add(img_url)
+                        all_images.append({
+                            "image_url":    img_url,
+                            "description":     "",
+                            "source_url":    url_pag,
+                            "page_title": title_pag,
                         })
 
             # ── Log ──────────────────────────────────────────────────────────
-            _salvar_pesquisa_md(
-                "imagens",
+            _save_search_md(
+                "images",
                 q,
                 [
                     {
-                        "url":     img["url_imagem"],
-                        "title":   img["titulo_pagina"],
-                        "snippet": img["descricao"],
-                        "imagens": [img["url_imagem"]],
+                        "url":     img["image_url"],
+                        "title":   img["page_title"],
+                        "snippet": img["description"],
+                        "images": [img["image_url"]],
                     }
-                    for img in todas_imagens
+                    for img in all_images
                 ],
-                extra={"total_imagens": len(todas_imagens)},
+                extra={"total_images": len(all_images)},
             )
 
         except Exception as e:
-            print(f"   ⚠️  Erro na query de imagens '{q[:50]}': {e}")
+            print(f"   ⚠️  Error in images query '{q[:50]}': {e}")
 
-    print(f"   🖼️  Total de imagens encontradas: {len(todas_imagens)}")
-    return {"imagens": todas_imagens, "total": len(todas_imagens)}
+    print(f"   🖼️  Total of founded images: {len(all_images)}")
+    return {"images": all_images, "total": len(all_images)}
 
 
 # ============================================================================
-# EXTRACT — extrai conteúdo completo de URLs
+# EXTRACT — extracts the complete content from URLs.
 # ============================================================================
 
 @tool
-def extract_tavily(urls: List[str], incluir_imagens: bool = True) -> dict:
+def extract_tavily(urls: List[str], include_images: bool = True) -> dict:
     """
-    Extrai conteúdo completo de páginas web via Tavily Extract API.
-    Salva log completo em ./tavily_searchs/.
+    Extracts full content from web pages via the Tavily Extract API.
+    Save the complete log to ./tavily_searches/.
 
     Args:
-        urls           : lista de URLs para extrair (máx. 20 por chamada)
-        incluir_imagens: se True, inclui URLs de imagens encontradas
+        urls           : list of URLs to extract (max. 20 per call)
+        include_images : if True, includes URLs of found images in the extracted content
 
     Returns:
         {
-          "extraidos": [
+          "extracted": [
             {
               "url"     : str,
               "title"   : str,
               "content" : str,
-              "imagens" : [str],
+              "images" : [str],
             }, ...
           ],
-          "falhos": [str],
+          "failed": [str],
         }
     """
     client = _get_client()
-    extraidos: List[dict] = []
-    falhos:    List[str]  = []
+    extracted: List[dict] = []
+    flawed:    List[str]  = []
 
-    lotes = [urls[i:i+20] for i in range(0, len(urls), 20)]
+    lots = [urls[i:i+20] for i in range(0, len(urls), 20)]
 
-    for lote in lotes:
-        print(f"📥 Extraindo {len(lote)} URL(s)...")
+    for lot in lots:
+        print(f"📥 Extracting {len(lot)} URL(s)...")
         try:
             res = client.extract(
-                urls=lote,
+                urls=lot,
                 extract_depth="advanced",
-                include_images=incluir_imagens,
+                include_images=include_images,
             )
 
             for item in res.get("results", []):
                 url      = item.get("url", "")
                 content = item.get("raw_content", item.get("content", ""))
-                images  = item.get("images", []) if incluir_imagens else []
+                images  = item.get("images", []) if include_images else []
 
-                extraidos.append({
+                extracted.append({
                     "url": url,
                     "title": item.get("title", ""),
                     "content": content,
@@ -677,16 +725,16 @@ def extract_tavily(urls: List[str], incluir_imagens: bool = True) -> dict:
                       f"{f', {len(images)} img(s)' if images else ''}")
 
             for item in res.get("failed_results", []):
-                falhos.append(item.get("url", ""))
-                print(f"   ✖ Falhou: {item.get('url','')[:60]}")
+                flawed.append(item.get("url", ""))
+                print(f"   ✖ Failed: {item.get('url','')[:60]}")
 
         except Exception as e:
-            print(f"   ⚠️  Erro no lote: {e}")
-            falhos.extend(lote)
+            print(f"   ⚠️  Error in lot: {e}")
+            flawed.extend(lot)
 
     # ── Log ──────────────────────────────────────────────────────────────────
     query_repr = urls[0] if urls else "extract"
-    _salvar_pesquisa_md(
+    _save_search_md(
         "extract",
         query_repr,
         [
@@ -694,95 +742,100 @@ def extract_tavily(urls: List[str], incluir_imagens: bool = True) -> dict:
                 "url": e["url"],
                 "title": e["title"],
                 "snippet": e["content"],
-                "imagens": e["images"],
+                "images": e["images"],
             }
-            for e in extraidos
+            for e in extracted
         ],
-        extra={"urls_solicitadas": len(urls), "extraidas": len(extraidos), "falhas": len(falhos)},
+        extra={"requested_urls": len(urls), "extracted": len(extracted), "failed": len(flawed)},
     )
 
-    return {"extraidos": extraidos, "falhos": falhos}
+    return {"extracted": extracted, "failed": flawed}
 
 
 # ============================================================================
-# BUSCA TÉCNICA INCREMENTAL (uso direto pelos nós do grafo)
+# Incremental technical search (direct use by graph nodes)
 # ============================================================================
 
-def search_tavily_tecnico_incremental(
+def search_tavily_incremental_technician(
     query: str,
-    urls_anteriores: List[str],
+    previous_urls: List[str],
     max_results: int = 8,
 ) -> dict:
     """
-    Busca técnica incremental — acumula URLs sem duplicatas.
-    PRIORIZA conteúdo em INGLÊS.
-    Salva log em ./tavily_searchs/.
+    Incremental technical search — accumulates URLs without duplicates.
+    Prioritizes content in ENGLISH.
+    Save log in ./tavily_searches/.
+
+    Args:
+        query: the search query
+        previous_urls: list of previously found URLs to avoid duplicates
+        max_results: number of results to return for this incremental search (default 8)
 
     Returns:
-        {"urls_novos": [...], "total_acumulado": [...], "resultados": [...]}
+        {"new_urls": [...], "total_accumulated": [...], "results": [...]}
     """
     try:
         client = _get_client()
-        print(f"\n🔎 Busca Técnica Incremental (EN priorizado): '{query}'")
+        print(f"\n🔎 Incremental Technical Search (EN prioritized): '{query}'")
 
-        res = client.search(
+        ans = client.search(
             query=query[:400],
             search_depth="advanced",
             max_results=max_results,
             exclude_domains=BLOCKED_DOMAINS,
         )
         
-        resultados = [
+        results = [
             {
                 "url":     r["url"],
                 "title":   r.get("title", ""),
                 "snippet": r.get("content", "")[:2000],
                 "score":   r.get("score", 0),
             }
-            for r in res.get("results", []) if r.get("score", 0) >= 0.7
+            for r in ans.get("results", []) if r.get("score", 0) >= 0.7
         ]
         
-        # Prioriza por idioma
-        resultados = _priorizar_por_idioma(resultados, boost_en=0.3)
+        # Prioritiza por idioma
+        results = _prioritize_by_language(results, boost_en=0.3)
         
-        todos = [r["url"] for r in resultados]
-        todos = filtrar_urls_tecnicas(todos)
+        all_urls = [r["url"] for r in results]
+        all_urls = filter_technical_urls(all_urls)
 
-        urls_novos      = [u for u in todos if u not in urls_anteriores]
-        total_acumulado = list(dict.fromkeys(urls_anteriores + todos))
+        new_urls      = [u for u in all_urls if u not in previous_urls]
+        total_accumulated = list(dict.fromkeys(previous_urls + all_urls))
         
-        # Estatísticas
-        n_en = sum(1 for r in resultados if r.get('language') == 'en')
-        n_pt = sum(1 for r in resultados if r.get('language') == 'pt')
+        # Estatístics
+        n_en = sum(1 for r in results if r.get('language') == 'en')
+        n_pt = sum(1 for r in results if r.get('language') == 'pt')
 
-        print(f"   ✔ Encontrados : {len(todos)} URLs")
-        print(f"   ✔ Novos       : {len(urls_novos)} URLs")
-        print(f"   ✔ Total acum. : {len(total_acumulado)} URLs")
-        print(f"   📊 Idiomas    : {n_en} inglês, {n_pt} português")
+        print(f"   ✔ Founded : {len(all_urls)} URLs")
+        print(f"   ✔ News       : {len(new_urls)} URLs")
+        print(f"   ✔ Total acum. : {len(total_accumulated)} URLs")
+        print(f"   📊 Languages    : {n_en} english, {n_pt} portuguese")
 
         # ── Log ──────────────────────────────────────────────────────────────
-        _salvar_pesquisa_md(
-            "tecnica_incremental",
+        _save_search_md(
+            "incremental_technical",
             query,
-            resultados,
+            results,
             extra={
-                "urls_novos": len(urls_novos), 
-                "total_acumulado": len(total_acumulado),
-                "idioma_en": n_en,
-                "idioma_pt": n_pt,
+                "new_urls": len(new_urls), 
+                "total_accumulated": len(total_accumulated),
+                "language_en": n_en,
+                "language_pt": n_pt,
             },
         )
 
         return {
-            "urls_novos":      urls_novos,
-            "total_acumulado": total_acumulado,
-            "resultados":      resultados,
+            "new_urls":      new_urls,
+            "total_accumulated": total_accumulated,
+            "results":      results,
         }
 
     except Exception as e:
-        print(f"   ⚠️  Erro na busca técnica: {e}")
+        print(f"   ⚠️  Error in techinical search: {e}")
         return {
-            "urls_novos":      [],
-            "total_acumulado": urls_anteriores,
-            "resultados":      [],
+            "new_urls":      [],
+            "total_accumulated": previous_urls,
+            "results":      [],
         }

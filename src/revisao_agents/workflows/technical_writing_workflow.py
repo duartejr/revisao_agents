@@ -5,6 +5,7 @@ from ..nodes.technical_writing import parse_plan_node, write_sections_node, cons
 
 
 def build_technical_writing_workflow():
+    """Build the technical writing workflow graph."""
     builder = StateGraph(TechnicalWriterState)
     builder.add_node("parse_plan", parse_plan_node)
     builder.add_node("write_sections", write_sections_node)
@@ -18,4 +19,5 @@ def build_technical_writing_workflow():
 
 # Backward compatibility alias
 def build_workflow():
+    """Backward-compatible alias for build_technical_writing_workflow."""
     return build_technical_writing_workflow()
