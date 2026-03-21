@@ -2,23 +2,37 @@ import time
 from typing import List, Dict
 from ...config import TECHNICAL_MAX_RESULTS, PRIORITY_DOMAINS, BLOCKED_DOMAINS_EXTRACT
 
-def buscar_conteudo_tecnico(query: str, urls_anteriores: List[str]) -> Dict:
+def search_technical_content(query: str, previous_urls: List[str]) -> Dict:
     """
-    Realiza busca técnica via Tavily (incremental).
-    Retorna dicionário com 'urls_novos', 'total_acumulado', 'resultados'.
+    Performs technical search via Tavily (incremental).
+
+    Args:
+        query: The technical query string.
+        previous_urls: List of URLs already retrieved in previous iterations (to avoid duplicates).
+    
+    Returns:
+        A dictionary with keys 'new_urls', 'total_accumulated', 'results'.
     """
     try:
-        from ...tools.tavily_web_search import search_tavily_tecnico_incremental
-        return search_tavily_tecnico_incremental(
-            query, urls_anteriores, max_results=TECHNICAL_MAX_RESULTS
+        from ...tools.tavily_web_search import search_tavily_incremental_technician
+        return search_tavily_incremental_technician(
+            query, previous_urls, max_results=TECHNICAL_MAX_RESULTS
         )
     except Exception as e:
-        print("   Busca tecnica falhou: " + str(e))
-        return {"urls_novos": [], "total_acumulado": urls_anteriores, "resultados": []}
+        print("   Technical search failed: " + str(e))
+        return {"new_urls": [], "total_accumulated": previous_urls, "results": []}
 
 def score_url(url: str, snippet: str = "", score_tavily: float = 0.0) -> float:
     """
-    Score de prioridade para extração. Critérios gerais de qualidade de fonte.
+    Priority score for extraction. General source quality criteria.
+
+    Args:
+        url: The URL to score.
+        snippet: The text snippet extracted from the URL (if any).
+        score_tavily: The relevance score returned by Tavily for this URL.
+    
+    Returns:
+        A float score where higher means more likely to be a good source.
     """
     ul = url.lower()
     pts = score_tavily * 2.0
@@ -41,38 +55,61 @@ def score_url(url: str, snippet: str = "", score_tavily: float = 0.0) -> float:
     return pts
 
 def search_web(query: str, max_results: int = TECHNICAL_MAX_RESULTS) -> List[dict]:
-    """Busca técnica no Tavily e retorna lista de resultados."""
+    """Technical search on Tavily and returns a list of results.
+    
+    Args:
+        query: The search query string.
+        max_results: Maximum number of results to return.
+    
+    Returns:
+        A list of dictionaries, each containing 'url', 'title', and 'snippet' keys.
+    """
     try:
-        from ...tools.tavily_web_search import search_tavily_tecnico_incremental
-        res = search_tavily_tecnico_incremental(query, [], max_results=max_results)
-        return res.get("resultados", [])
+        from ...tools.tavily_web_search import search_tavily_incremental_technician
+        res = search_tavily_incremental_technician(query, [], max_results=max_results)
+        return res.get("results", [])
     except Exception as e:
         print(f"   ⚠️  search_web('{query[:50]}'): {e}")
         return []
 
 def search_images(queries: List[str], max_results: int = 8) -> List[dict]:
-    """Busca imagens via tool dedicada."""
+    """Image search via dedicated tool.
+    
+    Args:
+        queries: A list of query strings to search for images.
+        max_results: Maximum number of image results to return.
+    
+    Returns:
+        A list of dictionaries, each containing 'url', 'title', and 'snippet' keys.
+    """
     try:
         from ...tools.tavily_web_search import search_tavily_images
         res = search_tavily_images.invoke({"queries": queries, "max_results": max_results})
-        return res.get("imagens", [])[:max_results]  # MAX_IMAGES_SECTION deve estar em config
+        return res.get("images", [])[:max_results] 
     except Exception as e:
         print(f"   ⚠️  search_images: {e}")
         return []
 
 def extract_urls(urls: List[str]) -> List[dict]:
-    """Extract full page text from URLs and normalize the payload shape."""
+    """Extract full page text from URLs and normalize the payload shape.
+    
+    Args:
+        urls: A list of URLs to extract content from.
+    
+    Returns:
+        A list of dictionaries, each containing 'url', 'title', and 'content' keys.
+    """
     if not urls:
         return []
     try:
         from ...tools.tavily_web_search import extract_tavily
-        res = extract_tavily.invoke({"urls": urls, "incluir_imagens": True})
+        res = extract_tavily.invoke({"urls": urls, "include_images": True})
         normalized = []
-        for item in res.get("extraidos", []):
+        for item in res.get("extracted", []):
             normalized.append({
                 "url": item.get("url", ""),
-                "title": item.get("title", item.get("titulo", "")),
-                "content": item.get("content", item.get("conteudo", "")),
+                "title": item.get("title", item.get("title", "")),
+                "content": item.get("content", item.get("content", "")),
             })
         return normalized
     except Exception as e:

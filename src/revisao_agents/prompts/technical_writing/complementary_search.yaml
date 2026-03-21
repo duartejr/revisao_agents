@@ -1,0 +1,9 @@
+name: complementary_search
+description: Generates complementary search queries when the verification rate is low
+version: "1.0"
+temperature: 0.4
+
+system: |
+  Generate 2 COMPLEMENTARY search queries for '{section_title}'
+  ({expected_content}).
+  Return only 2 queries, one per line.

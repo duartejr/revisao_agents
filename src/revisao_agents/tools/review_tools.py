@@ -64,14 +64,14 @@ def search_web_sources(query: str, max_results: int = 5) -> str:
         or a 'no results' message.
     """
     web = search_tavily_incremental(
-        query=query[:400], urls_anteriores=[], max_results=max_results,
+        query=query[:400], previous_urls=[], max_results=max_results,
     )
-    urls = web.get("urls_novos", [])[:3]
+    urls = web.get("new_urls", [])[:3]
     if not urls:
         return "No web results found."
-    extracted = extract_tavily.invoke({"urls": urls, "incluir_imagens": False})
+    extracted = extract_tavily.invoke({"urls": urls, "include_images": False})
     results: List[str] = []
-    for item in extracted.get("extraidos", [])[:3]:
+    for item in extracted.get("extracted", [])[:3]:
         results.append(
             f"Title: {item.get('title', '')}\n"
             f"URL: {item.get('url', '')}\n"
@@ -206,12 +206,21 @@ def search_near_chunks(query: str, n: int = 2) -> str:
 
 @tool
 def search_web_images(query: str, max_results: int = 8) -> str:
-    """Search images via Tavily and return image URLs with context."""
+    """Search images via Tavily and return image URLs with context.
+    
+    Args:
+        query: Search query for images (e.g., "stable diffusion architecture diagram").
+        max_results: Maximum number of image results to return (default 8).
+    
+    Returns:
+        Formatted string with image URLs, source page, title, and description,
+        or a 'no images found' message.
+    """
     result = search_tavily_images.invoke({
         "queries": [query[:400]],
         "max_results": max_results,
     })
-    images = result.get("imagens", []) if isinstance(result, dict) else []
+    images = result.get("images", []) if isinstance(result, dict) else []
     if not images:
         return "No web images found."
 
@@ -221,10 +230,10 @@ def search_web_images(query: str, max_results: int = 8) -> str:
             "\n".join(
                 [
                     f"[Image {idx}]",
-                    f"Image URL: {item.get('url_imagem', '')}",
-                    f"Source page: {item.get('url_origem', '') or '(not available)'}",
-                    f"Page title: {item.get('titulo_pagina', '') or '(not available)'}",
-                    f"Description: {item.get('descricao', '') or '(not available)'}",
+                    f"Image URL: {item.get('image_url', '')}",
+                    f"Source page: {item.get('source_url', '') or '(not available)'}",
+                    f"Page title: {item.get('page_title', '') or '(not available)'}",
+                    f"Description: {item.get('description', '') or '(not available)'}",
                 ]
             )
         )
@@ -233,16 +242,23 @@ def search_web_images(query: str, max_results: int = 8) -> str:
 
 @tool
 def extract_web_text_from_url(url: str) -> str:
-    """Extract main text from a single URL via Tavily Extract API."""
+    """Extract main text from a single URL via Tavily Extract API.
+    
+    Args:
+        url: The URL of the web page to extract text from.
+    
+    Returns:
+        Extracted text content from the URL, or an error message if extraction fails.
+    """
     cleaned = (url or "").strip()
     if not cleaned:
         return "Empty URL provided."
 
     result = extract_tavily.invoke({
         "urls": [cleaned],
-        "incluir_imagens": False,
+        "include_images": False,
     })
-    extracted = result.get("extraidos", []) if isinstance(result, dict) else []
+    extracted = result.get("extracted", []) if isinstance(result, dict) else []
     if not extracted:
         return "No extractable content found for the URL."
 
@@ -261,6 +277,12 @@ def get_bibtex_for_reference(query_or_doi: str) -> str:
     """Get BibTeX for a DOI or title-like query using Crossref.
 
     This tool is intended for reference formatting support.
+
+    Args:
+        query_or_doi: A DOI string, a URL containing a DOI, or an article title.
+    
+    Returns:
+        A string containing the resolved DOI and its BibTeX entry, or an error message if not found.
     """
     value = (query_or_doi or "").strip()
     if not value:
@@ -388,14 +410,14 @@ def search_article_online(title: str) -> str:
         List of web results (title, URL, snippet) for the article search.
     """
     query = f'"{title[:200]}" scholarly article DOI'
-    web = search_tavily_incremental(query=query, urls_anteriores=[], max_results=5)
-    urls = web.get("urls_novos", [])[:3]
+    web = search_tavily_incremental(query=query, previous_urls=[], max_results=5)
+    urls = web.get("new_urls", [])[:3]
     if not urls:
         return f"No web results found for title: {title}"
 
-    extracted = extract_tavily.invoke({"urls": urls, "incluir_imagens": False})
+    extracted = extract_tavily.invoke({"urls": urls, "include_images": False})
     results: List[str] = []
-    for item in extracted.get("extraidos", [])[:3]:
+    for item in extracted.get("extracted", [])[:3]:
         url_found = item.get("url", "")
         content = str(item.get("content", ""))
         # Try to find a DOI in the page content or URL
@@ -417,6 +439,9 @@ def get_review_tools(allow_web: bool = False) -> list:
 
     Args:
         allow_web: If True, include the web search tool.
+    
+    Returns:
+        List of tool functions to bind to the review agent.
     """
     tools = [search_evidence, search_evidence_sources, search_near_chunks,
              fetch_reference_metadata]

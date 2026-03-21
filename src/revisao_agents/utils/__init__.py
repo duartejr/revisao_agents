@@ -20,7 +20,7 @@ from .bib_utils import get_reference_data_react, bibtex_to_abnt, search_doi_in_t
 from .file_utils import summarize_section, parse_technical_plan, parse_academic_plan, fmt_chunks, fmt_snippets, summarize_hist, truncate, save_md
 
 # Legacy imports for backwards compatibility
-from .search_utils.tavily_client import buscar_conteudo_tecnico
+from .search_utils.tavily_client import search_technical_content
 
 __all__ = [
     # LLM
@@ -34,7 +34,7 @@ __all__ = [
     "search_images",
     "extract_urls",
     "score_url",
-    "buscar_conteudo_tecnico",
+    "search_technical_content",
     # Vector
     "CorpusMongoDB",
     "search_chunks",

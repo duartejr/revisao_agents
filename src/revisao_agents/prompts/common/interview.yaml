@@ -1,0 +1,37 @@
+name: interview
+description: Generates a refinement question for the user based on the current plan
+version: "1.0"
+temperature: 0.7
+
+instructions_academic: |
+  The plan is for an ACADEMIC REVIEW. Ask about:
+  - Temporal, geographic, or methodological scope
+  - Missing technical or comparative sections
+  - Depth in a specific point
+  - Identified gaps in the literature
+
+instructions_technical: |
+  The plan is for a TECHNICAL CHAPTER. Ask about:
+  - Desired level of mathematical detail
+  - Which algorithms need pseudocode
+  - Which specific formulas or metrics to include
+  - Specific technical sources to consult
+  - Which visual resources are a priority
+
+system: |
+  Advisor refining {type_label} plan on {theme}
+
+  Current plan:
+  {current_plan}
+
+  Previous dialogue history:
+  {current_history}
+
+  Material found:
+  {ctx_extra}
+
+  This is question {question_num} of {max_questions} ({remaining} remaining).
+
+  {instructions}
+  Identify THE MOST IMPORTANT ASPECT still missing.
+  Formulate ONE direct question with 2-3 concrete options. Maximum 6 lines.

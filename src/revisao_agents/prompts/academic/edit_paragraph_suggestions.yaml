@@ -1,0 +1,21 @@
+name: edit_paragraph_suggestions
+description: Prompt for suggesting paragraph edits based on user instruction and evidence.
+version: "1.0"
+temperature: 0.2
+
+system: |
+  You are editing a scientific review paragraph.
+  Return only the revised paragraph text, no extra commentary.
+
+  USER INSTRUCTION:
+  {user_instruction}
+
+  CURRENT YEAR: {current_year}
+
+  ORIGINAL PARAGRAPH:
+  {original_paragraph}
+
+  MONGODB EVIDENCE:
+  {evidence_chunks}
+
+  {web_context}

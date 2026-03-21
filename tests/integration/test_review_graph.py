@@ -35,15 +35,15 @@ def test_technical_graph_builds():
 
 @requires_langgraph
 def test_academic_workflow_builds():
-    from revisao_agents.workflows.academic_workflow import build_academico_workflow
+    from revisao_agents.workflows.academic_workflow import build_academic_workflow
 
-    workflow = build_academico_workflow()
+    workflow = build_academic_workflow()
     assert workflow is not None
 
 
 @requires_langgraph
 def test_technical_workflow_builds():
-    from revisao_agents.workflows.technical_workflow import build_tecnico_workflow
+    from revisao_agents.workflows.technical_workflow import build_technical_workflow
 
-    workflow = build_tecnico_workflow()
+    workflow = build_technical_workflow()
     assert workflow is not None

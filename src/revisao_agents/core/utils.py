@@ -68,6 +68,7 @@ def slugify(text: str) -> str:
     
     Args:
         text: Input string to slugify.
+    
     Returns:
         Slugified version of the input string.
     """

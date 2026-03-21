@@ -43,6 +43,7 @@ class CorpusMongoDB:
         
         Args:
             None
+        
         Returns:
             pymongo Collection object for the configured MongoDB Atlas collection."""
         if self._collection is not None:
@@ -77,8 +78,10 @@ class CorpusMongoDB:
         
         Args:
             None
+        
         Returns:
             OpenAI client instance configured with the API key.
+        
         Raises:
             RuntimeError: If OPENAI_API_KEY is not defined.
         """
@@ -116,7 +119,7 @@ class CorpusMongoDB:
             )
             return splitter.split_text(text)
         except ImportError:
-            # fallback simples
+            # simple fallback if langchain is not available
             chunks, start = [], 0
             while start < len(text):
                 end = min(start + CHUNK_SIZE, len(text))
@@ -140,6 +143,7 @@ class CorpusMongoDB:
 
         Returns:
             List[List[float]]: A list of embeddings corresponding to the input texts.
+    
         Raises:
             RuntimeError: If there is an error generating embeddings.
         """
@@ -185,6 +189,7 @@ class CorpusMongoDB:
             text (str): The chunk text to be saved.
             url (str): The source URL of the chunk, used for naming.
             chunk_index (int): The index of the chunk within the document.
+        
         Returns:
             str: The file path where the chunk text is saved.
         """
@@ -583,6 +588,7 @@ class CorpusMongoDB:
         Args:
             query (str): The input query to search for relevant chunks.
             max_chars (int, optional): The maximum number of characters for the rendered prompt. Defaults to MAX_CORPUS_PROMPT.
+        
         Returns:
             A tuple containing the rendered prompt text, a list of URLs used in the prompt, and a mapping of source indices to URLs.
         """

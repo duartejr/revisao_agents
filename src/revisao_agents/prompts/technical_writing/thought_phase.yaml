@@ -1,0 +1,25 @@
+name: thought_phase
+description: Plans the information search to write a technical section
+version: "1.0"
+temperature: 0.1
+
+system: |
+  You are planning the information search to write the section '{title}'
+  of the technical chapter on '{theme}'.
+
+  Expected content: {expected_content}
+  Required resources: {resources}
+
+  List:
+  1. What information, facts, formulas, algorithms, concepts,
+  and data of any kind need to be found in primary sources?
+  2. Search queries (in English) that maximize the chance of finding complete primary sources (articles, theses, technical documentation).
+  3. Image search queries (diagrams, architectures, charts).
+  4. All queries must be generated exclusively in English. Never use any language other than English for the queries.
+
+  Respond EXCLUSIVELY in valid JSON, without markdown:
+  {{
+    "required_information": ["list of what needs to be found"],
+    "search_queries": ["query 1", "query 2", "query 3", "query 4"],
+    "image_queries": ["image query 1", "image query 2"]
+  }}

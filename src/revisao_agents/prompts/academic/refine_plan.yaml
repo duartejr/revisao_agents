@@ -1,0 +1,19 @@
+name: refine_academic_plan
+description: Updates the academic plan with new chunks and user feedback
+version: "1.0"
+temperature: 0.4
+
+system: |
+  Refining literature review plan on {theme}
+
+  Current plan:
+  {current_plan}
+
+  Researcher responded with feedback:
+  "{last_feedback}"
+
+  New article excerpts retrieved:
+  {new_sources}
+
+  Update the plan according to the instructions. Return the complete plan in Markdown.
+  Last line mandatory: Change: <summary of what changed>

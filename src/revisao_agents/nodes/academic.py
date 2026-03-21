@@ -20,28 +20,53 @@ from ..utils.llm_utils.prompt_loader import load_prompt
 CHUNKS_PER_QUERY = 10  # TODO: Move to config if it should be configurable
 
 
-def consulta_vetorial_node(state: ReviewState) -> dict:
-    """Busca chunks iniciais sobre o theme."""
+def vector_search_node(state: ReviewState) -> dict:
+    """Search for initial chunks about the theme. Uses the theme as the query and retrieves relevant chunks from the vector store.
+    
+    Args:
+        state (ReviewState): The current state of the review, expected to contain:
+            - "theme": str, the review topic/theme to search for.
+    
+    Returns:
+        dict: Updated state with retrieved relevant chunks and status.
+    """
     theme = state["theme"]
     print("\n[MONGODB] query:", repr(theme))
     chunks = search_chunks(theme)
-    print("   ", len(chunks), "chunks recuperados")
+    print("   ", len(chunks), "recovered chunks")
     return {"relevant_chunks": chunks, "status": "chunks_ok"}
 
 
-def plano_inicial_academico_node(state: ReviewState) -> dict:
-    """Gera o primeiro rascunho do plano acadêmico."""
+def initial_academic_plan_node(state: ReviewState) -> dict:
+    """Generates the initial draft of the academic plan.
+    
+    Args:
+        state (ReviewState): The current state of the review, expected to contain:
+            - "theme": str, the review topic/theme to search for.
+    
+    Returns:
+        dict: Updated state with the initial academic plan and status.
+    """
     theme = state["theme"]
     ctx  = fmt_chunks(state["relevant_chunks"], 900)
-    prompt = load_prompt("academic/plano_inicial", tema=repr(theme), ctx=ctx)
+    prompt = load_prompt("academic/initial_plan", theme=repr(theme), ctx=ctx)
     resp  = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     plan = resp.content if hasattr(resp, "content") else str(resp)
-    print("\nPlano academico inicial elaborado.")
-    return {"current_plan": plan, "status": "plano_inicial_pronto"}
+    print("\nInitial academic plan generated.")
+    return {"current_plan": plan, "status": "initial_plan_ready"}
 
 
-def refinar_consulta_academico_node(state: ReviewState) -> dict:
-    """Refaz busca vetorial com base na última pergunta do usuário."""
+def refine_academic_search_node(state: ReviewState) -> dict:
+    """Refines the vector search based on the user's last question.
+    
+    Args:
+        state (ReviewState): The current state of the review, expected to contain:
+            - "theme": str, the review topic/theme to search for.
+            - "interview_history": list of tuples, the history of the interview.
+    
+    Returns:
+        dict: Updated state with refined relevant chunks and status.
+    """
     query = state["theme"]
     for role, c in reversed(state["interview_history"]):
         if role == "user":
@@ -50,71 +75,71 @@ def refinar_consulta_academico_node(state: ReviewState) -> dict:
     print("\n[MONGODB re-query] query:", repr(query[:60]))
     novos = search_chunks(query)
     acum  = accumulate_chunks(state["relevant_chunks"], novos)
-    print("   ", len(novos), "recuperados | total:", len(acum))
-    return {"relevant_chunks": acum, "status": "chunks_refinados"}
+    print("   ", len(novos), "retrieved | total:", len(acum))
+    return {"relevant_chunks": acum, "status": "chunks_refined"}
 
 
-def refinar_plano_academico_node(state: ReviewState) -> dict:
-    """Atualiza o plano acadêmico com novos chunks e feedback."""
+def refine_academic_plan_node(state: ReviewState) -> dict:
+    """Updates the academic plan with new chunks and feedback.
+    
+    Args:
+        state (ReviewState): The current state of the review, expected to contain:
+            - "theme": str, the review topic/theme to search for.
+            - "current_plan": str, the current academic plan.
+            - "interview_history": list of tuples, the history of the interview.
+    
+    Returns:
+        dict: Updated state with the refined academic plan and status.
+    """
     theme       = state["theme"]
     current_plan = truncate(state["current_plan"], 700)
-    ultima     = ""
+    last_feedback     = ""
     for role, c in reversed(state["interview_history"]):
         if role == "user":
-            ultima = c[:300]
+            last_feedback = c[:300]
             break
-    ctx_novo = fmt_chunks(state["relevant_chunks"][-CHUNKS_PER_QUERY:], 600)
+    new_sources = fmt_chunks(state["relevant_chunks"][-CHUNKS_PER_QUERY:], 600)
     prompt = load_prompt(
-        "academic/refinar_plano",
-        tema=repr(theme),
-        plano_curr=current_plan,
-        ultima=ultima,
-        ctx_novo=ctx_novo,
+        "academic/refine_plan",
+        theme=repr(theme),
+        current_plan=current_plan,
+        last_feedback=last_feedback,
+        new_sources=new_sources,
     )
-    resp  = get_llm(temperature=prompt.temperature).invoke(prompt.text)
-    plan = resp.content if hasattr(resp, "content") else str(resp)
-    print("   Plano academico atualizado.")
-    return {"current_plan": plan, "status": "plano_refinado"}
+    ans  = get_llm(temperature=prompt.temperature).invoke(prompt.text)
+    plan = ans.content if hasattr(ans, "content") else str(ans)
+    print("   Academic plan updated.")
+    return {"current_plan": plan, "status": "plan_refined"}
 
 
-def finalizar_plano_academico_node(state: ReviewState) -> dict:
-    """Gera o plano acadêmico final e salva em Markdown."""
+def finalize_academic_plan_node(state: ReviewState) -> dict:
+    """Generates the final academic plan and saves it in Markdown.
+    
+    Args:
+        state (ReviewState): The current state of the review, expected to contain:
+            - "theme": str, the review topic/theme to search for.
+            - "current_plan": str, the current academic plan.
+            - "relevant_chunks": list, the relevant chunks for the review.
+    
+    Returns:
+        dict: Updated state with the final academic plan, its path, and status.
+    """
     theme       = state["theme"]
     current_plan = truncate(state["current_plan"], 1000)
     ctx        = fmt_chunks(state["relevant_chunks"], 800)
     prompt = load_prompt(
-        "academic/finalizar_plano",
-        tema=repr(theme),
-        plano_curr=current_plan,
+        "academic/finalize_plan",
+        theme=repr(theme),
+        current_plan=current_plan,
         ctx=ctx,
     )
-    resp        = get_llm(temperature=prompt.temperature).invoke(prompt.text)
-    final_plan = resp.content if hasattr(resp, "content") else str(resp)
+    ans        = get_llm(temperature=prompt.temperature).invoke(prompt.text)
+    final_plan = ans.content if hasattr(ans, "content") else str(ans)
     print("\n" + "=" * 70)
-    print("PLANO FINAL — REVISAO ACADEMICA")
+    print("FINAL PLAN — ACADEMIC REVIEW")
     print("=" * 70)
     print(final_plan)
     print("=" * 70)
     md   = "# Plano de Revisao da Literatura\n\n**Tema:** " + theme + "\n\n" + final_plan
-    path = save_md(md, "plans/plano_revisao", theme)
-    return {"final_plan": final_plan, "final_plan_path": path, "status": "concluido"}
-
-
-def vector_search_node(state: ReviewState) -> dict:
-    return consulta_vetorial_node(state)
-
-
-def initial_academic_plan_node(state: ReviewState) -> dict:
-    return plano_inicial_academico_node(state)
-
-
-def refine_academic_search_node(state: ReviewState) -> dict:
-    return refinar_consulta_academico_node(state)
-
-
-def refine_academic_plan_node(state: ReviewState) -> dict:
-    return refinar_plano_academico_node(state)
-
-
-def finalize_academic_plan_node(state: ReviewState) -> dict:
-    return finalizar_plano_academico_node(state)
+    path = save_md(md, "plans/review_plan", theme)
+    return {"final_plan": final_plan, "final_plan_path": path, "status": "completed"}

@@ -3,13 +3,13 @@ nodes.writing — internal helpers and graph-node implementations for section wr
 
 Submodules
 ----------
-text_filters    : regex patterns and strip helpers for LLM output cleanup.
-anchor_helpers  : anchor extraction utilities.
-phase_runners   : the individual writing phases (phases 1-6).
-verification    : adaptive paragraph verification (judge + REACT loop).
-node_parsear    : parsear_plano_node — parses a plan file and extracts sections.
-node_escrever   : escrever_secoes_node — writes sections with search and verification.
-node_consolidar : consolidar_node — consolidates written sections into a final document.
+text_filters     : regex patterns and strip helpers for LLM output cleanup.
+anchor_helpers   : anchor extraction utilities.
+phase_runners    : the individual writing phases (phases 1-6).
+verification     : adaptive paragraph verification (judge + REACT loop).
+parser_node      : parse_plan_node — parses a plan file and extracts sections.
+writer_node      : sections_writer_node — writes sections with search and verification.
+consolidate_node : consolidate_node — consolidates written sections into a final document.
 """
 from .text_filters import (
     _ANCHORS_PATTERN,
@@ -23,19 +23,19 @@ from ...helpers.anchor_helpers import (
     _extract_all_anchors_with_citations,
 )
 from .phase_runners import (
-    _fase_pensamento,
-    _fase_observacao,
-    _fase_rascunho,
-    _extrair_com_fallback,
+    _thought_phase,
+    _observation_phase,
+    _draft_phase,
+    _extract_with_fallback,
 )
 from .verification import (
-    _contar_claims_verificaveis,
-    _juiz_paragrafo_melhorado,
-    _monitorar_taxa_verificacao,
-    _buscar_conteudo_complementar,
-    _verificar_e_corrigir_secao_adaptativa,
-    _verificar_paragrafo_com_anchor,
-    _verificar_e_corrigir_secao_com_anchor,
+    _count_verifiable_claims,
+    _judge_paragraph_improved,
+    _monitor_verification_rate,
+    _search_for_additional_content,
+    _verify_and_correct_adaptative_section,
+    _verify_paragraph_with_anchor,
+    _verify_and_correct_section_with_anchor,
 )
 
 __all__ = [
@@ -49,16 +49,16 @@ __all__ = [
     "_extract_citation_anchor",
     "_extract_all_anchors_with_citations",
     # phase_runners
-    "_fase_pensamento",
-    "_fase_observacao",
-    "_fase_rascunho",
-    "_extrair_com_fallback",
+    "_thought_phase",
+    "_observation_phase",
+    "_draft_phase",
+    "_extract_with_fallback",
     # verification
-    "_contar_claims_verificaveis",
-    "_juiz_paragrafo_melhorado",
-    "_monitorar_taxa_verificacao",
-    "_buscar_conteudo_complementar",
-    "_verificar_e_corrigir_secao_adaptativa",
-    "_verificar_paragrafo_com_anchor",
-    "_verificar_e_corrigir_secao_com_anchor",
+    "_count_verifiable_claims",
+    "_judge_paragraph_improved",
+    "_monitor_verification_rate",
+    "_search_for_additional_content",
+    "_verify_and_correct_adaptative_section",
+    "_verify_paragraph_with_anchor",
+    "_verify_and_correct_section_with_anchor",
 ]

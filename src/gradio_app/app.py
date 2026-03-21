@@ -3,11 +3,11 @@ app.py — Gradio-based chatbot UI for the revisao_agents project.
 
 Provides a clean, ChatGPT-style web interface for all workflow options:
 
-  Tab 1  📋 Planejar    — Plan a literature review (Academic / Technical)
-  Tab 2  ✍️  Escrever    — Execute writing from an existing plan file
-  Tab 3  📁 Indexar     — Index local PDFs into the MongoDB vector store
-  Tab 4  📚 Referências — Format a reference list from a YAML/JSON file
-  Tab 5  📄 Visualizar  — Browse and render any generated plan or review file
+  Tab 1  📋 Plan        — Plan a literature review (Academic / Technical)
+  Tab 2  ✍️  Write       — Execute writing from an existing plan file
+  Tab 3  📁 Index PDFs  — Index local PDFs into the MongoDB vector store
+  Tab 4  📚 References  — Format a reference list from a YAML/JSON file
+  Tab 5  📄 View        — Browse and render any generated plan or review file
 
 Run via:  python run_ui.py
 """
@@ -96,7 +96,7 @@ def refresh_plan_list(mode: str) -> gr.update:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Helpers: list and load output files for the Visualizar tab
+# Helpers: list and load output files for the View tab
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _list_output_files(folder: str) -> list[str]:
@@ -109,11 +109,11 @@ def _list_output_files(folder: str) -> list[str]:
 def _load_file(path: str) -> str:
     """Read and return the markdown content of a file."""
     if not path or not os.path.exists(path):
-        return "*(arquivo não encontrado)*"
+        return "*(file not found)*"
     try:
         return open(path, encoding="utf-8").read()
     except Exception as exc:
-        return f"❌ Erro ao ler arquivo: {exc}"
+        return f"❌ Error reading file: {exc}"
 
 
 def _refresh_file_list(folder: str) -> gr.update:
@@ -126,14 +126,14 @@ def _refresh_file_list(folder: str) -> gr.update:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def build_app() -> gr.Blocks:
-    with gr.Blocks(title="Agente de Revisão da Literatura") as demo:
+    with gr.Blocks(title="Literature Review Agent") as demo:
 
         # ── Header ─────────────────────────────────────────────────────────
         gr.HTML(
             """
             <div id="app-header">
-              <h1>🔬 Agente de Revisão da Literatura</h1>
-              <p>Planeje, escreva e gerencie revisões académicas e técnicas com IA</p>
+              <h1>🔬 Literature Review Agent</h1>
+              <p>Plan, write and manage academic and technical reviews with AI</p>
             </div>
             """
         )
@@ -147,7 +147,7 @@ def build_app() -> gr.Blocks:
                 scale=1,
             )
             llm_provider_status = gr.Textbox(
-                label="Status do Provider",
+                label="Provider Status",
                 value=get_llm_provider_status(),
                 interactive=False,
                 elem_classes="status-bar",
@@ -161,40 +161,40 @@ def build_app() -> gr.Blocks:
         )
 
         # ══════════════════════════════════════════════════════════════════
-        # TAB 1 — Planejar Revisão
+        # TAB 1 — Plan Review
         # ══════════════════════════════════════════════════════════════════
-        with gr.Tab("📋 Planejar"):
+        with gr.Tab("📋 Plan"):
             gr.Markdown(
-                "### Planejar Revisão da Literatura\n"
-                "O agente fará perguntas de refinamento para melhorar o plano. "
-                "Responda no campo abaixo e clique em **Responder**."
+                "### Plan Literature Review\n"
+                "The agent will ask refinement questions to improve the plan. "
+                "Answer in the field below and click **Reply**."
             )
 
             with gr.Row():
                 with gr.Column(scale=1):
                     plan_tema = gr.Textbox(
-                        label="Tema",
-                        placeholder="Ex.: Previsão de vazão com modelos de aprendizado profundo",
+                        label="Topic",
+                        placeholder="e.g.: Streamflow forecasting with deep learning models",
                         lines=2,
                     )
                     plan_tipo = gr.Radio(
-                        label="Tipo de Revisão",
+                        label="Review Type",
                         choices=[
-                            ("Acadêmica (narrativa da literatura)", "academico"),
-                            ("Técnica (capítulo didático)", "tecnico"),
-                            ("Ambas", "ambos"),
+                            ("Academic (literature narrative)", "academico"),
+                            ("Technical (didactic chapter)", "tecnico"),
+                            ("Both", "ambos"),
                         ],
                         value="academico",
                     )
                     plan_rodadas = gr.Slider(
-                        label="Rodadas de refinamento",
+                        label="Refinement rounds",
                         minimum=1, maximum=6, step=1, value=3,
                     )
-                    plan_start_btn = gr.Button("🚀 Iniciar Planejamento", variant="primary")
+                    plan_start_btn = gr.Button("🚀 Start Planning", variant="primary")
 
                 with gr.Column(scale=2):
                     plan_chatbot = gr.Chatbot(
-                        label="Conversa com o Agente",
+                        label="Agent Conversation",
                         height=350,
                         layout="bubble",
                         buttons=["copy"],
@@ -205,15 +205,15 @@ def build_app() -> gr.Blocks:
                         elem_classes="status-bar",
                     )
                     plan_user_input = gr.Textbox(
-                        label="Sua resposta",
-                        placeholder="Responda a pergunta do agente…",
+                        label="Your answer",
+                        placeholder="Answer the agent's question…",
                         lines=3,
                         visible=False,
                     )
-                    plan_reply_btn = gr.Button("💬 Responder", variant="secondary", visible=False)
+                    plan_reply_btn = gr.Button("💬 Reply", variant="secondary", visible=False)
                     plan_rendered = gr.Markdown(
-                        label="Plano Gerado",
-                        value="*(o plano aparecerá aqui quando o planejamento for concluído)*",
+                        label="Generated Plan",
+                        value="*(the plan will appear here when planning is complete)*",
                         height=300,
                         visible=False,
                     )
@@ -269,44 +269,44 @@ def build_app() -> gr.Blocks:
             )
 
         # ══════════════════════════════════════════════════════════════════
-        # TAB 2 — Escrever
+        # TAB 2 — Write
         # ══════════════════════════════════════════════════════════════════
-        with gr.Tab("✍️ Escrever"):
+        with gr.Tab("✍️ Write"):
             gr.Markdown(
-                "### Executar Escrita a partir de um Plano\n"
-                "Selecione um plano existente (gerado na aba **Planejar**) e configure as opções de escrita."
+                "### Run Writing from a Plan\n"
+                "Select an existing plan (generated in the **Plan** tab) and configure the writing options."
             )
 
             with gr.Row():
                 with gr.Column(scale=1):
                     write_mode = gr.Radio(
-                        label="Modo de Escrita",
-                        choices=["Técnica", "Acadêmica"],
-                        value="Técnica",
+                        label="Writing Mode",
+                        choices=["Technical", "Academic"],
+                        value="Technical",
                     )
                     write_plan = gr.Dropdown(
-                        label="Plano (.md)",
-                        choices=list_plan_files("Técnica"),
+                        label="Plan (.md)",
+                        choices=list_plan_files("Technical"),
                         allow_custom_value=True,
                     )
                     write_lang = gr.Radio(
-                        label="Idioma",
+                        label="Language",
                         choices=[("Português (pt-BR)", "pt"), ("English", "en")],
                         value="pt",
                     )
                     write_min_src = gr.Slider(
-                        label="Mínimo de fontes por seção",
+                        label="Min. sources per section",
                         minimum=0, maximum=10, step=1, value=0,
                     )
                     write_tavily = gr.Checkbox(
-                        label="Permitir busca web (Tavily)",
+                        label="Allow web search (Tavily)",
                         value=False,
                     )
-                    write_start_btn = gr.Button("✍️ Iniciar Escrita", variant="primary")
+                    write_start_btn = gr.Button("✍️ Start Writing", variant="primary")
 
                 with gr.Column(scale=2):
                     write_chatbot = gr.Chatbot(
-                        label="Progresso da Escrita",
+                        label="Writing Progress",
                         height=360,
                         layout="bubble",
                         buttons=["copy", "copy_all"],
@@ -317,8 +317,8 @@ def build_app() -> gr.Blocks:
                         elem_classes="status-bar",
                     )
                     write_rendered = gr.Markdown(
-                        label="Documento Gerado",
-                        value="*(o documento aparecerá aqui quando a escrita for concluída)*",
+                        label="Generated Document",
+                        value="*(the document will appear here when writing is complete)*",
                         height=360,
                     )
 
@@ -344,24 +344,24 @@ def build_app() -> gr.Blocks:
         # ══════════════════════════════════════════════════════════════════
         with gr.Tab("🤖 Revisão Interativa"):
             gr.Markdown(
-                "### Revisar Documento com Chat\n"
-                "Selecione uma revisão em **reviews/**. O sistema cria uma cópia de trabalho e "
-                "só aplica mudanças após confirmação explícita."
+                "### Review Document with Chat\n"
+                "Select a review in **reviews/**. The system creates a working copy and "
+                "only applies changes after explicit confirmation."
             )
 
             with gr.Row():
                 with gr.Column(scale=1):
                     review_file = gr.Dropdown(
-                        label="Arquivo de revisão",
+                        label="Review file",
                         choices=list_review_files(),
                         allow_custom_value=False,
                     )
-                    review_refresh = gr.Button("🔄 Atualizar arquivos", size="sm")
-                    review_start = gr.Button("▶ Iniciar sessão", variant="primary")
+                    review_refresh = gr.Button("🔄 Refresh files", size="sm")
+                    review_start = gr.Button("▶ Start session", variant="primary")
                     review_web_toggle = gr.Checkbox(
-                        label="🌐 Permitir busca na internet",
+                        label="🌐 Allow web search",
                         value=False,
-                        info="Ative para que o agente possa pesquisar artigos online.",
+                        info="Enable this so the agent can search for papers online.",
                     )
                     review_status = gr.Textbox(
                         label="Status",
@@ -379,22 +379,22 @@ def build_app() -> gr.Blocks:
                         buttons=["copy", "copy_all"],
                     )
                     review_input = gr.Textbox(
-                        label="Sua pergunta/comando",
+                        label="Your question/command",
                         placeholder="Ex.: what are the papers cited in section 2?",
                         lines=3,
                     )
-                    review_send = gr.Button("💬 Enviar", variant="primary")
+                    review_send = gr.Button("💬 Send", variant="primary")
 
                 with gr.Column(scale=2):
                     review_preview = gr.Textbox(
-                        label="Documento de trabalho (editável)",
+                        label="Working document (editable)",
                         value="",
-                        placeholder="Inicie a sessão para carregar o documento...",
+                        placeholder="Start the session to load the document...",
                         lines=22,
                         max_lines=50,
                         interactive=True,
                     )
-                    review_save = gr.Button("💾 Salvar edição manual", variant="secondary")
+                    review_save = gr.Button("💾 Save manual edit", variant="secondary")
 
             review_session = gr.State({})
 
@@ -440,34 +440,34 @@ def build_app() -> gr.Blocks:
             )
 
         # ══════════════════════════════════════════════════════════════════
-        # TAB 5 — Visualizar (rendered output viewer)
+        # TAB 5 — View (rendered output viewer)
         # ══════════════════════════════════════════════════════════════════
-        with gr.Tab("📄 Visualizar"):
+        with gr.Tab("📄 View"):
             gr.Markdown(
-                "### Visualizar Arquivos Gerados\n"
-                "Selecione a pasta e o arquivo para renderizar seu conteúdo em Markdown."
+                "### View Generated Files\n"
+                "Select the folder and file to render its Markdown content."
             )
             with gr.Row():
                 with gr.Column(scale=1):
                     view_folder = gr.Radio(
-                        label="Pasta",
-                        choices=[("📋 Planos", "plans"), ("📝 Revisões", "reviews")],
+                        label="Folder",
+                        choices=[("📋 Plans", "plans"), ("📝 Reviews", "reviews")],
                         value="reviews",
                     )
                     initial_review_files = _list_output_files("reviews")
                     view_file = gr.Dropdown(
-                        label="Arquivo",
+                        label="File",
                         choices=initial_review_files,
                         value=initial_review_files[-1] if initial_review_files else None,
                         allow_custom_value=True,
                     )
-                    view_refresh_btn = gr.Button("🔄 Atualizar lista", size="sm")
-                    view_load_btn = gr.Button("👁️ Visualizar", variant="primary")
+                    view_refresh_btn = gr.Button("🔄 Refresh list", size="sm")
+                    view_load_btn = gr.Button("👁️ View", variant="primary")
 
                 with gr.Column(scale=3):
                     view_output = gr.Markdown(
-                        value="*(selecione um arquivo e clique em Visualizar)*",
-                        label="Conteúdo",
+                        value="*(select a file and click View)*",
+                        label="Content",
                         height=620,
                     )
 
@@ -497,22 +497,22 @@ def build_app() -> gr.Blocks:
             )
 
         # ══════════════════════════════════════════════════════════════════
-        # TAB 3 — Indexar PDFs
+        # TAB 3 — Index PDFs
         # ══════════════════════════════════════════════════════════════════
-        with gr.Tab("📁 Indexar PDFs"):
+        with gr.Tab("📁 Index PDFs"):
             gr.Markdown(
-                "### Indexar PDFs Locais\n"
-                "Vectoriza os PDFs da pasta indicada e salva os chunks no MongoDB para uso no corpus."
+                "### Index Local PDFs\n"
+                "Vectorizes the PDFs in the indicated folder and saves the chunks in MongoDB for use in the corpus."
             )
 
             with gr.Row():
                 with gr.Column():
                     idx_folder = gr.Textbox(
-                        label="Caminho da pasta com PDFs",
-                        placeholder="Ex.: /home/user/artigos  ou  ~/papers",
+                        label="Path to PDF folder",
+                        placeholder="e.g.: /home/user/articles  or  ~/papers",
                         lines=1,
                     )
-                    idx_btn = gr.Button("📂 Indexar", variant="primary")
+                    idx_btn = gr.Button("📂 Index", variant="primary")
                     idx_result = gr.Markdown(label="Resultado")
 
             idx_btn.click(
@@ -522,14 +522,14 @@ def build_app() -> gr.Blocks:
             )
 
         # ══════════════════════════════════════════════════════════════════
-        # TAB 4 — Formatar Referências
+        # TAB 4 — Format References
         # ══════════════════════════════════════════════════════════════════
-        with gr.Tab("📚 Referências"):
+        with gr.Tab("📚 References"):
             gr.Markdown(
-                "### Formatar Lista de Referências\n"
-                "Faça upload de um arquivo **YAML** ou **JSON** com as referências e o padrão desejado "
+                "### Format Reference List\n"
+                "Upload a **YAML** or **JSON** file with the references and the desired format "
                 "(abnt, apa, ieee, vancouver, mla, chicago). "
-                "Veja o exemplo em `references/example_references.yaml`."
+                "See the example at `references/example_references.yaml`."
             )
 
             with gr.Row():
@@ -539,15 +539,15 @@ def build_app() -> gr.Blocks:
                         file_types=[".yaml", ".yml", ".json"],
                     )
                     ref_tavily = gr.Checkbox(
-                        label="Permitir busca web (Tavily) para resolver metadados",
+                        label="Allow web search (Tavily) to resolve metadata",
                         value=False,
                     )
                     ref_output_dir = gr.Textbox(
-                        label="Pasta de saída (opcional)",
-                        placeholder="Ex.: references/output",
+                        label="Output folder (optional)",
+                        placeholder="e.g.: references/output",
                         lines=1,
                     )
-                    ref_btn = gr.Button("📚 Formatar Referências", variant="primary")
+                    ref_btn = gr.Button("📚 Format References", variant="primary")
                     ref_status = gr.Textbox(
                         label="Status",
                         interactive=False,
@@ -556,8 +556,8 @@ def build_app() -> gr.Blocks:
 
                 with gr.Column(scale=2):
                     ref_output = gr.Markdown(
-                        label="Resultado Formatado",
-                        value="*(o resultado aparecerá aqui)*",
+                        label="Formatted Result",
+                        value="*(the result will appear here)*",
                     )
 
             ref_btn.click(
@@ -569,7 +569,7 @@ def build_app() -> gr.Blocks:
         # ── Footer ─────────────────────────────────────────────────────────
         gr.HTML(
             "<div style='text-align:center; color:#9ca3af; font-size:0.8rem; padding:1rem 0'>"
-            "Agente de Revisão da Literatura · Powered by LangGraph + Gradio"
+            "Literature Review Agent · Powered by LangGraph + Gradio"
             "</div>"
         )
 

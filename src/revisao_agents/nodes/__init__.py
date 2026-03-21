@@ -6,24 +6,14 @@ review workflows (academic, technical, technical writing, etc.)
 """
 
 from .academic import (
-    consulta_vetorial_node,
-    plano_inicial_academico_node,
-    refinar_consulta_academico_node,
-    refinar_plano_academico_node,
-    finalizar_plano_academico_node,
     vector_search_node,
     initial_academic_plan_node,
     refine_academic_search_node,
     refine_academic_plan_node,
-    finalize_academic_plan_node,
+    finalize_academic_plan_node
 )
 
 from .technical import (
-    busca_tecnica_inicial_node,
-    plano_inicial_tecnico_node,
-    refinar_busca_tecnica_node,
-    refinar_plano_tecnico_node,
-    finalizar_plano_tecnico_node,
     initial_technical_search_node,
     initial_technical_plan_node,
     refine_technical_search_node,
@@ -33,39 +23,25 @@ from .technical import (
 
 from .common import (
     human_pause_node,
-    entrevista_node,
-    roteador_entrevista,
     interview_node,
-    route_interview,
+    interview_router
 )
 
 from .technical_writing import (
     parse_plan_node,
     write_sections_node,
-    consolidate_node,
-    parsear_plano_node,
-    escrever_secoes_node,
-    consolidar_node,
+    consolidate_node
 )
 
 __all__ = [
     # Academic agents
-    "consulta_vetorial_node",
-    "plano_inicial_academico_node",
-    "refinar_consulta_academico_node",
-    "refinar_plano_academico_node",
-    "finalizar_plano_academico_node",
-    "vector_search_node",
+    "vector_node_query",
     "initial_academic_plan_node",
     "refine_academic_search_node",
-    "refine_academic_plan_node",
     "finalize_academic_plan_node",
+    "vector_search_node",
+    "refine_academic_plan_node",
     # Technical agents
-    "busca_tecnica_inicial_node",
-    "plano_inicial_tecnico_node",
-    "refinar_busca_tecnica_node",
-    "refinar_plano_tecnico_node",
-    "finalizar_plano_tecnico_node",
     "initial_technical_search_node",
     "initial_technical_plan_node",
     "refine_technical_search_node",
@@ -73,15 +49,10 @@ __all__ = [
     "finalize_technical_plan_node",
     # Common agents
     "human_pause_node",
-    "entrevista_node",
-    "roteador_entrevista",
     "interview_node",
-    "route_interview",
+    "interview_router",
     # Technical writing agents
     "parse_plan_node",
     "write_sections_node",
-    "consolidate_node",
-    "parsear_plano_node",
-    "escrever_secoes_node",
-    "consolidar_node",
+    "consolidate_node"
 ]

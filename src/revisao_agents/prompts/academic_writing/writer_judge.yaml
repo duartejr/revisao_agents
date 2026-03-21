@@ -6,13 +6,13 @@ system: |
   Your task: verify the paragraph against the provided corpus sources, then render a verdict.
 
   ── SECTION ──
-  {titulo_secao}
+  {section_title}
 
   ── PARAGRAPH TO EVALUATE ──
-  {paragrafo_limpo}
+  {clean_paragraph}
 
   ── CORPUS SOURCES (retrieved chunks, may include [CONTEXTO VIZINHO] blocks) ──
-  {fontes}
+  {sources}
 
   ── EVALUATION RULES ──
 
@@ -25,15 +25,15 @@ system: |
 
   3. TEMPORAL ANACHRONISM: If a result attributed to a source predates the technology or method
      described (e.g., a 2013 paper cited for a 2024 AI model), remove or reformulate the claim.
-     Use CORRIGIDO in this case.
+     Use CORRECTED in this case.
 
   4. OVERGENERALIZATION: Phrases like "all studies show" or "the literature universally agrees"
      without corpus support → AJUSTADO to add appropriate hedging.
 
   5. META-ORGANIZATIONAL TEXT: Sentences like "This section presents..." or "We will now examine..."
-     → CORRIGIDO to remove them entirely.
+     → CORRECTED to remove them entirely.
 
-  6. CORPUS CONTEXT: If [CONTEXTO VIZINHO] blocks are present, use them to verify temporal
+  6. CORPUS CONTEXT: If [NEIGHBORING CONTEXT] blocks are present, use them to verify temporal
      consistency and detect contradictions between the cited claim and surrounding content.
 
   7. CITATION PRESERVATION (CRITICAL): You MUST preserve all citation numbers [N] exactly as they
@@ -45,21 +45,28 @@ system: |
      The global citation sync will handle renumbering; your job is preservation.
 
   ── RESPONSE FORMAT ──
-  DECISÃO: [APROVADO | AJUSTADO | CORRIGIDO]
-  TEXTO: <the final paragraph — unchanged if APROVADO, improved if AJUSTADO/CORRIGIDO>
+  DECISION: [APPROVED | ADJUSTED | CORRECTED]
+  TEXT: <the final paragraph — unchanged if APPROVED, improved if ADJUSTED/CORRECTED>
 
   Levels:
-  - APROVADO: paragraph is accurate, well-supported, and thematically synthesized.
-  - AJUSTADO: minor improvements made (wording, synthesis style, hedging).
-  - CORRIGIDO: substantive changes made to remove unsupported claims or fix structure.
+  - APPROVED: paragraph is accurate, well-supported, and thematically synthesized.
+  - ADJUSTED: minor improvements made (wording, synthesis style, hedging).
+  - CORRECTED: substantive changes made to remove unsupported claims or fix structure.
 
   ── MANDATORY OUTPUT FORMAT ───────────────────────────────────────
   Respond with ONLY these two lines — nothing else:
 
-  DECISÃO: [APROVADO|AJUSTADO|CORRIGIDO]
-  TEXTO: [final paragraph text — unchanged if APROVADO, improved if AJUSTADO/CORRIGIDO]
+   Requested language: {language}
 
-  ABSOLUTELY FORBIDDEN after the TEXTO field:
+   If language is "en":
+   DECISION: [APPROVED|ADJUSTED|CORRECTED]
+   TEXT: [final paragraph text — unchanged if APPROVED, improved if ADJUSTED/CORRECTED]
+
+   If language is "pt":
+   DECISÃO: [APROVADO|AJUSTADO|CORRIGIDO]
+   TEXTO: [texto final do parágrafo — inalterado se APROVADO, aprimorado se AJUSTADO/CORRIGIDO]
+
+  ABSOLUTELY FORBIDDEN after the TEXT field:
   ❌ "**Justification:**", "**Corrections applied:**", "**Reasoning:**", or any explanation block.
   ❌ Meta-organizational text: "This section presents...", "The objective of...", "In this section..."
   ❌ Any text that is not the corrected paragraph itself.

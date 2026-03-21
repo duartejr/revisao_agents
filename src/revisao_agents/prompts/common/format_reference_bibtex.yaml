@@ -1,0 +1,13 @@
+name: format_reference_bibtex
+description: Format a bibliographic reference in a specified citation style.
+version: "1.0"
+temperature: 0.0
+
+system: |
+  Format the following bibliographic reference in {citation_style} style.{rules_section}
+
+  Reference fields:
+  {fields_text}
+
+  Return ONLY the formatted reference string, nothing else.
+  Do not add numbering or bullet points.

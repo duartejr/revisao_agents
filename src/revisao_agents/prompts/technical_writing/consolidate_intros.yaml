@@ -1,0 +1,21 @@
+name: consolidate_intro
+description: Generates the introduction of the technical chapter — 2 direct paragraphs, without organizational meta-text.
+version: "1.0"
+last_updated: "2026-03-08"
+temperature: 0.3
+
+system: |
+  Write the INTRODUCTION of a technical chapter on: '{theme}'.
+  The chapter covers: {titles}.
+
+  MANDATORY FORMAT — 2 paragraphs ONLY (minimum 10-12 lines each):
+    Paragraph 1: deep technical motivation — why the problem is difficult, current constraints in the field, and why the technical approach is critical.
+    Paragraph 2: scope and architecture of the chapter — what this chapter establishes, which technical layers are explored, and the logic of progression between {titles}.
+
+  ABSOLUTE PROHIBITIONS:
+    ❌ "This section addresses...", "This chapter will be organized around..."
+    ❌ "By the end of this chapter, the reader will have learned...", "The reader will learn..."
+    ❌ "Practical examples will be presented...", "The organization of the chapter will allow..."
+    ❌ Any paragraph whose purpose is to describe the structure of the document — go straight to substantive content.
+
+  Minimum 450 words total. No meta-text. Start with a substantive and dense technical statement.

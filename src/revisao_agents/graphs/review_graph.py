@@ -13,6 +13,13 @@ from ..workflows import build_academic_workflow, build_technical_workflow
 
 
 def _normalize_review_type(review_type: str | None) -> str:
+    """Normalize review type string to canonical values.
+    
+    Args:
+        review_type: Input string indicating review type (e.g., "academic", "technical", "academico", "tecnico")
+    Returns:
+        Normalized review type: "academic" or "technical"
+    """
     value = (review_type or "academic").strip().lower()
     if value in {"technical", "tecnico"}:
         return "technical"
@@ -53,6 +60,9 @@ def build_review_graph(
         review_type: "academic" | "technical"
         tipo: legacy alias for review_type ("academico" | "tecnico")
         checkpointer: optional LangGraph checkpointer (defaults to MemorySaver)
+    
+    Returns:
+        Compiled LangGraph graph instance for the specified review type.
     """
     normalized = _normalize_review_type(tipo if tipo is not None else review_type)
     if normalized == "technical":

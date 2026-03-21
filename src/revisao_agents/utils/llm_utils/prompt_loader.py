@@ -7,7 +7,7 @@ by substituting {variables} with keyword arguments.
 Usage:
     from ..utils.llm_utils.prompt_loader import load_prompt
 
-    prompt = load_prompt("academic/plano_inicial", tema=tema, ctx=ctx)
+    prompt = load_prompt("academic/initial_plan", theme=theme, ctx=ctx)
     resp = get_llm(temperature=prompt.temperature).invoke(prompt.text)
 """
 
@@ -47,7 +47,7 @@ def load_prompt(prompt_path: str, **variables: Any) -> Prompt:
 
     Args:
         prompt_path: Relative path from the prompts/ root, without .yaml extension.
-                     Examples: "academic/plano_inicial", "common/entrevista"
+                     Examples: "academic/initial_plan", "common/interview"
         **variables: Key-value pairs used to fill {placeholders} in the template.
 
     Returns:
@@ -71,7 +71,7 @@ def load_prompt(prompt_path: str, **variables: Any) -> Prompt:
     temperature: float = float(raw.get("temperature", 0.3))
     name: str = raw.get("name", prompt_path)
 
-    # Collect all extra top-level string fields (e.g. instrucoes_academico)
+    # Collect all extra top-level string fields (e.g. instructions_academic)
     extra_fields = {
         k: v for k, v in raw.items()
         if k not in {"name", "description", "version", "temperature", "system", "last_updated"}
@@ -123,12 +123,12 @@ def get_prompt_field(prompt_path: str, field_name: str, **variables: Any) -> str
     """
     Load a specific named field (not 'system') from a YAML prompt file.
 
-    Useful for multi-section YAML files like common/entrevista.yaml that have
-    both 'instrucoes_academico' and 'instrucoes_tecnico' fields.
+    Useful for multi-section YAML files like common/interview.yaml that have
+    both 'instructions_academic' and 'instructions_technical' fields.
 
     Args:
         prompt_path: Relative path to the YAML file (without .yaml).
-        field_name:  Name of the field to read (e.g. "instrucoes_academico").
+        field_name:  Name of the field to read (e.g. "instructions_academic").
         **variables: Substitution variables.
 
     Returns:

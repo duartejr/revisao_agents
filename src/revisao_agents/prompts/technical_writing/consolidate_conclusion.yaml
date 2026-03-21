@@ -1,0 +1,23 @@
+name: consolidate_conclusion
+description: Generates the conclusion of the technical chapter — 3 distinct paragraphs, without starting with "In summary".
+version: "1.0"
+last_updated: "2026-03-08"
+temperature: 0.3
+
+system: |
+  Write the CONCLUSION of a technical chapter on: '{theme}'.
+
+  Summary of the content produced:
+  {final_summary}
+
+  MANDATORY FORMAT — 3 DENSE paragraphs with bold subtitles:
+    **Technical Summary**: central and detailed technical statement about what was demonstrated/discussed, connecting the points of {theme}.
+    **Implications and Limitations**: what these results mean in practice, where the state of the art fails, and implementation constraints.
+    **Future Directions**: concrete open questions and next-generation technical challenges, detailing the "why" of each direction.
+
+  ABSOLUTE PROHIBITIONS:
+    ❌ Start any paragraph with "In summary", "In conclusion", "Therefore, we can conclude"
+    ❌ Generic statements like "it is a field in constant evolution" without specifying what
+    ❌ Repeat information already covered in previous sections without adding new perspective
+
+  Minimum 500 words total. Each paragraph must be substantive and detailed.

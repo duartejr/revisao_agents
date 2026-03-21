@@ -64,22 +64,28 @@ class TestSearchWebSources:
 
     def test_returns_formatted_web_results(self):
         fake_tavily = {
-            "urls_novos": ["https://example.com/paper1"],
-            "total_acumulado": ["https://example.com/paper1"],
-            "resultados": [],
+            "new_urls": ["https://example.com/paper1"],
+            "total_accumulated": ["https://example.com/paper1"],
+            "results": [],
         }
-        fake_extract = {
-            "extraidos": [
-                {"title": "Paper One", "url": "https://example.com/paper1", "content": "some content about climate"},
-            ],
-            "falhos": [],
-        }
+        fake_extract_tool = SimpleNamespace(
+            invoke=lambda _: {
+                "extracted": [
+                    {
+                        "title": "Paper One",
+                        "url": "https://example.com/paper1",
+                        "content": "some content about climate",
+                    },
+                ],
+                "failed": [],
+            }
+        )
         with patch(
             "revisao_agents.tools.review_tools.search_tavily_incremental",
             return_value=fake_tavily,
         ), patch(
             "revisao_agents.tools.review_tools.extract_tavily",
-            return_value=fake_extract,
+            fake_extract_tool,
         ):
             from revisao_agents.tools.review_tools import search_web_sources
 
@@ -90,9 +96,9 @@ class TestSearchWebSources:
 
     def test_returns_no_results_when_empty(self):
         fake_tavily = {
-            "urls_novos": [],
-            "total_acumulado": [],
-            "resultados": [],
+            "new_urls": [],
+            "total_accumulated": [],
+            "results": [],
         }
         with patch(
             "revisao_agents.tools.review_tools.search_tavily_incremental",
@@ -177,12 +183,12 @@ class TestSearchWebImages:
     def test_formats_image_results(self):
         mock_tool = SimpleNamespace(
             invoke=lambda _: {
-                "imagens": [
+                "images": [
                     {
-                        "url_imagem": "https://img.example/a.png",
-                        "url_origem": "https://paper.example",
-                        "titulo_pagina": "Paper",
-                        "descricao": "figure",
+                        "image_url": "https://img.example/a.png",
+                        "source_url": "https://paper.example",
+                        "page_title": "Paper",
+                        "description": "figure",
                     }
                 ]
             }
@@ -200,7 +206,7 @@ class TestExtractWebTextFromUrl:
     def test_extracts_single_url_text(self):
         mock_tool = SimpleNamespace(
             invoke=lambda _: {
-                "extraidos": [
+                "extracted": [
                     {
                         "title": "Chronos Paper",
                         "url": "https://paper.example",
