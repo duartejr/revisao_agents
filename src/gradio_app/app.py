@@ -510,15 +510,19 @@ def build_app() -> gr.Blocks:
                 outputs=[review_chatbot, review_session, review_status, review_preview],
             )
 
+            def _on_review_send(user_msg, chatbot, session, web_toggle):
+                history, session_state, status, preview = review_chat_turn(user_msg, chatbot, session, web_toggle)
+                return history, session_state, status, preview, gr.update(value="")
+
             review_send.click(
-                fn=review_chat_turn,
+                fn=_on_review_send,
                 inputs=[review_input, review_chatbot, review_session, review_web_toggle],
-                outputs=[review_chatbot, review_session, review_status, review_preview],
+                outputs=[review_chatbot, review_session, review_status, review_preview, review_input],
             )
             review_input.submit(
-                fn=review_chat_turn,
+                fn=_on_review_send,
                 inputs=[review_input, review_chatbot, review_session, review_web_toggle],
-                outputs=[review_chatbot, review_session, review_status, review_preview],
+                outputs=[review_chatbot, review_session, review_status, review_preview, review_input],
             )
 
             review_confirm.click(
