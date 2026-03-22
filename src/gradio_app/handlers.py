@@ -1799,11 +1799,8 @@ def _is_metadata_complete(metadata: dict) -> bool:
 
     if doi:
         return True
-    if title and year and not derived_from_path:
-        return True
-    if title and url and not derived_from_path:
-        return True
-    return False
+    is_valid = bool(title and not derived_from_path and (year or url))
+    return is_valid
 
 
 def _format_abnt_entry(metadata: dict) -> str:
