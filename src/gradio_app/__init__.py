@@ -1,1 +1,1 @@
-# Gradio-based UI for the revisao_agents project.
+# Gradio-based UI for the revisao_agents project
