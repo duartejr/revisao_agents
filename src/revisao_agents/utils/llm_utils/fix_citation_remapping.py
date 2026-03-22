@@ -15,7 +15,6 @@ This is a patch for write_sections_node and consolidate_node
 """
 
 import re
-from typing import Dict, List, Tuple, Set
 
 
 class CitationTracker:
@@ -23,13 +22,13 @@ class CitationTracker:
 
     def __init__(self):
         # Map: {citation_number: url}
-        self.citation_to_url: Dict[int, str] = {}
+        self.citation_to_url: dict[int, str] = {}
 
         # Counter for sources in this section
         self.source_counter = 1
 
         # URLs already added (avoids duplicates)
-        self.seen_urls: Set[str] = set()
+        self.seen_urls: set[str] = set()
 
     def add_source(self, url: str) -> int:
         """
@@ -64,7 +63,7 @@ class CitationTracker:
         self.source_counter += 1
         return num
 
-    def get_ordered_urls(self) -> List[str]:
+    def get_ordered_urls(self) -> list[str]:
         """Returns a list of URLs in the order of citations [1], [2], [3]...
 
         Example:
@@ -77,7 +76,7 @@ class CitationTracker:
                 urls.append(self.citation_to_url[i])
         return urls
 
-    def get_full_map(self) -> Dict[int, str]:
+    def get_full_map(self) -> dict[int, str]:
         """Returns the complete dictionary {citation_number: url}
 
         Example:
@@ -87,7 +86,7 @@ class CitationTracker:
         return self.citation_to_url.copy()
 
 
-def extract_numbered_citations(text: str) -> List[int]:
+def extract_numbered_citations(text: str) -> list[int]:
     """
     Extracts ALL [N] from the text in the order of appearance.
 
@@ -100,7 +99,7 @@ def extract_numbered_citations(text: str) -> List[int]:
     return [int(m) for m in matches]
 
 
-def create_remap_map(original_citations: List[int]) -> Dict[int, int]:
+def create_remap_map(original_citations: list[int]) -> dict[int, int]:
     """
     Creates a map old_idx → new_idx in the order of first appearance.
 
@@ -125,9 +124,9 @@ def create_remap_map(original_citations: List[int]) -> Dict[int, int]:
 
 def remap_text_with_tracking(
     text: str,
-    original_source_map: Dict[int, str],
-    remap_map: Dict[int, int],
-) -> Tuple[str, Dict[int, str], Dict[int, int]]:
+    original_source_map: dict[int, str],
+    remap_map: dict[int, int],
+) -> tuple[str, dict[int, str], dict[int, int]]:
     """
     Re-maps citations AND returns a new source→URL map.
 
@@ -175,8 +174,8 @@ def remap_text_with_tracking(
 
 def synchronize_text_with_references(
     text: str,
-    original_source_map: Dict[int, str],
-) -> Tuple[str, List[str]]:
+    original_source_map: dict[int, str],
+) -> tuple[str, list[str]]:
     """
     Completely synchronizes text and references.
 
@@ -204,9 +203,7 @@ def synchronize_text_with_references(
     remap_map = create_remap_map(citations)
 
     # Re-map
-    new_text, new_source_map, _ = remap_text_with_tracking(
-        text, original_source_map, remap_map
-    )
+    new_text, new_source_map, _ = remap_text_with_tracking(text, original_source_map, remap_map)
 
     # Extract URLs in new order
     ordered_urls = []

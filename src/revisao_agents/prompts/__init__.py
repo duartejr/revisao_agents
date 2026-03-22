@@ -5,11 +5,11 @@ Todos os prompts são carregados como YAML para facilitar edição e manutençã
 """
 
 from pathlib import Path
-from typing import Dict
+
 import yaml
 
 
-def load_prompt(name: str, version: str = "latest") -> Dict:
+def load_prompt(name: str, version: str = "latest") -> dict:
     """
     Carrega um prompt YAML.
     Exemplo: load_prompt("technical_writing.writer_judge")
@@ -18,9 +18,7 @@ def load_prompt(name: str, version: str = "latest") -> Dict:
     base = Path(__file__).parent
     # Suporta subpastas com "."
     parts = name.split(".")
-    file_path = (
-        base / "/".join(parts) / f"{parts[-1]}.yaml"
-    )  # technical_writing/writer_judge.yaml
+    file_path = base / "/".join(parts) / f"{parts[-1]}.yaml"  # technical_writing/writer_judge.yaml
 
     if not file_path.exists():
         raise FileNotFoundError(f"Prompt não encontrado: {file_path}")

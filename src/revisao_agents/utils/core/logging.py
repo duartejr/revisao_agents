@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from functools import lru_cache
+from functools import cache
 
 try:
     from rich.logging import RichHandler
@@ -22,7 +22,7 @@ except ImportError:
     _RICH_AVAILABLE = False
 
 
-@lru_cache(maxsize=None)
+@cache
 def get_logger(name: str = "revisao_agents", level: str = "INFO") -> logging.Logger:
     """
     Return a configured logger. Results are cached so the same logger

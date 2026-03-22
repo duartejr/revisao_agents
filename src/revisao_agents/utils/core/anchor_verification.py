@@ -1,9 +1,9 @@
 import re
-from typing import List, Tuple
-from ..vector_utils.vector_store import search_chunks
+
+from ...config import JUDGE_MAX_CORPUS_CHARS, JUDGE_TOP_K, get_llm
 from ..file_utils.helpers import extract_anchors
 from ..llm_utils.prompt_loader import load_prompt
-from ...config import JUDGE_MAX_CORPUS_CHARS, JUDGE_TOP_K, get_llm
+from ..vector_utils.vector_store import search_chunks
 
 
 def search_chunks_for_paragraph(
@@ -36,15 +36,13 @@ def search_chunks_for_paragraph(
         if len(a.strip()) >= 20 and not re.match(r"^[\\\$\{\}\[\]_\^]+", a.strip())
     ]
 
-    queries = valid_anchors[:3] + (
-        [text_without_anchors[:200]] if text_without_anchors else []
-    )
+    queries = valid_anchors[:3] + ([text_without_anchors[:200]] if text_without_anchors else [])
 
     if not queries:
         return full_corpus_prompt[:JUDGE_MAX_CORPUS_CHARS]
 
     # Uses search_chunks from vector_store (MongoDB)
-    parts: List[str] = []
+    parts: list[str] = []
     chars = 0
     chunks_seen = set()
 
@@ -73,7 +71,7 @@ def search_chunks_for_paragraph(
     return full_corpus_prompt[:JUDGE_MAX_CORPUS_CHARS]
 
 
-def judge_paragraph(clean_paragraph: str, sources: str) -> Tuple[str, str, str]:
+def judge_paragraph(clean_paragraph: str, sources: str) -> tuple[str, str, str]:
     """
     LLM Judge with 3 levels.
     Returns (final_text, level, log_entry)

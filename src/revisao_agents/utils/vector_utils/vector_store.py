@@ -1,17 +1,18 @@
 import os
-from typing import Any, List
+from typing import Any
+
 import pymongo
-from pymongo.collection import Collection
 from openai import OpenAI
+from pymongo.collection import Collection
 
 from ...config import (
-    MONGODB_URI,
-    MONGODB_DB,
-    MONGODB_COLLECTION,
-    VECTOR_INDEX_NAME,
     CHUNK_MAX_CHARS,
-    MAX_CHUNKS_TOTAL,
     CHUNKS_CACHE_DIR,
+    MAX_CHUNKS_TOTAL,
+    MONGODB_COLLECTION,
+    MONGODB_DB,
+    MONGODB_URI,
+    VECTOR_INDEX_NAME,
 )
 
 _client = None
@@ -24,9 +25,7 @@ OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 
 def _project_root() -> str:
     """Returns the absolute path to the project root directory."""
-    return os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
-    )
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 
 
 def _resolve_chunk_path(file_path: str) -> str:
@@ -74,7 +73,7 @@ def _read_chunk_text(result: dict) -> str:
     if not file_path:
         return ""
     try:
-        with open(file_path, "r", encoding="utf-8") as file_handle:
+        with open(file_path, encoding="utf-8") as file_handle:
             return file_handle.read()
     except Exception:
         return ""
@@ -114,7 +113,7 @@ def _get_openai_client():
     return _openai_client
 
 
-def _generate_embedding(text: str) -> List[float]:
+def _generate_embedding(text: str) -> list[float]:
     """
     Generates embedding for a single text using OpenAI.
     Truncates the text if necessary (model limit is generous, but we'll truncate beforehand).
@@ -135,9 +134,7 @@ def _generate_embedding(text: str) -> List[float]:
     if len(text_clean) > 8000:
         text_clean = text_clean[:8000]
     try:
-        response = client.embeddings.create(
-            input=text_clean, model=OPENAI_EMBEDDING_MODEL
-        )
+        response = client.embeddings.create(input=text_clean, model=OPENAI_EMBEDDING_MODEL)
         return response.data[0].embedding
     except Exception as e:
         print(f"   Error generating embedding: {e}")
@@ -145,7 +142,7 @@ def _generate_embedding(text: str) -> List[float]:
         raise
 
 
-def search_chunks(query: str, k: int = 16) -> List[str]:
+def search_chunks(query: str, k: int = 16) -> list[str]:
     """
     Searches for chunks similar to the query using MongoDB Atlas Vector Search.
     Generates query embedding via OpenAI.
@@ -200,7 +197,7 @@ def search_chunks(query: str, k: int = 16) -> List[str]:
     return chunks
 
 
-def search_chunk_records(query: str, k: int = 16) -> List[dict[str, Any]]:
+def search_chunk_records(query: str, k: int = 16) -> list[dict[str, Any]]:
     """Search chunks and return text plus source metadata.
 
     Args:
@@ -248,7 +245,7 @@ def search_chunk_records(query: str, k: int = 16) -> List[dict[str, Any]]:
         print(f"   Error in MongoDB vector search: {e}")
         return []
 
-    records: List[dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
     for result in results:
         chunk_text = _read_chunk_text(result)
         if not chunk_text:
@@ -281,7 +278,7 @@ def search_chunk_records(query: str, k: int = 16) -> List[dict[str, Any]]:
     return records
 
 
-def accumulate_chunks(existing: List[str], new: List[str]) -> List[str]:
+def accumulate_chunks(existing: list[str], new: list[str]) -> list[str]:
     """Accumulates new chunks without duplicates, respecting the maximum limit.
 
     Args:

@@ -14,24 +14,24 @@ _verify_and_correct_section_with_anchor : full anchor-directed adaptive loop.
 
 import re
 import time
-from typing import Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
 
-from ...config import llm_call, EXTRACT_MIN_CHARS
+from ...config import EXTRACT_MIN_CHARS, llm_call
+from ...helpers.anchor_helpers import (
+    _extract_all_anchors_with_citations,
+    _extract_citation_anchor,
+    _extract_main_anchor,
+)
 from ...utils.llm_utils.prompt_loader import load_prompt
-from ...utils.search_utils.tavily_client import search_web, extract_urls
+from ...utils.search_utils.tavily_client import extract_urls, search_web
 from ..writing.text_filters import (
     _ANCHORS_PATTERN,
+    _strip_figure_table_refs,
     _strip_justification_blocks,
     _strip_meta_sentences,
-    _strip_figure_table_refs,
-)
-from ...helpers.anchor_helpers import (
-    _extract_main_anchor,
-    _extract_citation_anchor,
-    _extract_all_anchors_with_citations,
 )
 
 # ---------------------------------------------------------------------------
@@ -60,9 +60,7 @@ def _count_verifiable_claims(paragraph: str) -> int:
 
     num_claims = 0
     num_claims += len(re.findall(r"\b\d+[\d.,]*\b", p))
-    num_claims += len(
-        re.findall(r"\b[A-Z][a-z]+\s+(?:et\s+al|[A-Z][a-z]+|\(\d{4}\))", p)
-    )
+    num_claims += len(re.findall(r"\b[A-Z][a-z]+\s+(?:et\s+al|[A-Z][a-z]+|\(\d{4}\))", p))
     num_claims += len(re.findall(r"\b(19|20)\d{2}\b|\bv\d+\.\d+", p))
     num_claims += len(re.findall(r"[\+\-\*=/<>]", p))
 
@@ -109,7 +107,7 @@ def _judge_paragraph_improved(
     section_title: str,
     prompt_dir: str = "technical_writing",
     language: str = "pt",
-) -> Tuple[str, str, str, bool]:
+) -> tuple[str, str, str, bool]:
     """3-level judge:  APPROVED / ADJUSTED / CORRECTED.
 
     Args:
@@ -135,9 +133,7 @@ def _judge_paragraph_improved(
         return clean_paragraph, "APPROVED", log_entry, True
 
     if num_claims == 0:
-        log_entry = (
-            f"✅ GENERAL.CONC  | {clean_paragraph[:70].replace(chr(10), ' ')}..."
-        )
+        log_entry = f"✅ GENERAL.CONC  | {clean_paragraph[:70].replace(chr(10), ' ')}..."
         return clean_paragraph, "APPROVED", log_entry, True
 
     p = load_prompt(
@@ -197,7 +193,7 @@ def _judge_paragraph_improved(
 # ---------------------------------------------------------------------------
 
 
-def _monitor_verification_rate(stats: dict) -> Tuple[bool, str]:
+def _monitor_verification_rate(stats: dict) -> tuple[bool, str]:
     """Return (needs_more_search, reason) based on current verification stats.
 
     Args:
@@ -234,7 +230,7 @@ def _search_for_additional_content(
     attempted_urls: set,
     prompt_dir: str = "technical_writing",
     language: str = "pt",
-) -> Tuple[int, "CorpusMongoDB", str]:
+) -> tuple[int, "CorpusMongoDB", str]:
     """Search for complementary content when paragraph verification rate is low.
 
     Args:
@@ -328,7 +324,7 @@ def _verify_and_correct_adaptative_section(
     section_sources: str,
     expected_content: str = "",
     language: str = "pt",
-) -> Tuple[str, str, dict]:
+) -> tuple[str, str, dict]:
     """Adaptive verification without explicit anchor routing (legacy fallback).
 
     Args:
@@ -409,12 +405,8 @@ def _verify_and_correct_adaptative_section(
 
         needs_more, reason = _monitor_verification_rate(stats)
         verified = stats["approved"] + stats["adjusted"]
-        rate = (
-            (verified / stats["verifiable"] * 100) if stats["verifiable"] > 0 else 100
-        )
-        log_lines.append(
-            f"\n**Result:** {verified}/{stats['verifiable']} ({rate:.0f}%) — {reason}"
-        )
+        rate = (verified / stats["verifiable"] * 100) if stats["verifiable"] > 0 else 100
+        log_lines.append(f"\n**Result:** {verified}/{stats['verifiable']} ({rate:.0f}%) — {reason}")
         print(f"     📊 {rate:.0f}% | {reason}")
 
         if not needs_more or iteration >= 3:
@@ -432,9 +424,7 @@ def _verify_and_correct_adaptative_section(
     corrected_text = re.sub(r"\n{3,}", "\n\n", corrected_text)
 
     verified = stats["approved"] + stats["adjusted"]
-    final_rate = (
-        (verified / stats["verifiable"] * 100) if stats["verifiable"] > 0 else 100
-    )
+    final_rate = (verified / stats["verifiable"] * 100) if stats["verifiable"] > 0 else 100
     print(f"\n     📊 FINAL: {verified}/{stats['verifiable']} ({final_rate:.0f}%)")
 
     report = "\n".join(log_lines)
@@ -453,7 +443,7 @@ def _verify_paragraph_with_anchor(
     section_title: str,
     prompt_dir: str = "technical_writing",
     language: str = "pt",
-) -> Tuple[str, str, str, bool]:
+) -> tuple[str, str, str, bool]:
     """Verify one paragraph using its explicit anchors for source retrieval.
 
     Args:
@@ -497,10 +487,10 @@ def _verify_paragraph_with_anchor(
             if sources:
                 print(f"        ✅ {n_chunks} chunks from cited URL")
             else:
-                print(f"        ⚠️  No chunks found, using general search")
+                print("        ⚠️  No chunks found, using general search")
                 sources = corpus.render_prompt(clean_block[:300], max_chars=3000)[0]
         else:
-            print(f"     ⚠️  Anchor without valid citation")
+            print("     ⚠️  Anchor without valid citation")
             sources = corpus.render_prompt(clean_block[:300], max_chars=3000)[0]
     else:
         anchors_with_cit = _extract_all_anchors_with_citations(block)
@@ -544,7 +534,7 @@ def _verify_and_correct_section_with_anchor(
     expected_content: str = "",
     prompt_dir: str = "technical_writing",
     language: str = "pt",
-) -> Tuple[str, str, dict]:
+) -> tuple[str, str, dict]:
     """Full adaptive verification loop using explicit anchors for directed retrieval.
 
     Args:
@@ -615,12 +605,8 @@ def _verify_and_correct_section_with_anchor(
 
         needs_more, reason = _monitor_verification_rate(stats)
         verified = stats["approved"] + stats["adjusted"]
-        rate = (
-            (verified / stats["verifiable"] * 100) if stats["verifiable"] > 0 else 100
-        )
-        log_lines.append(
-            f"\n**Result:** {verified}/{stats['verifiable']} ({rate:.0f}%) — {reason}"
-        )
+        rate = (verified / stats["verifiable"] * 100) if stats["verifiable"] > 0 else 100
+        log_lines.append(f"\n**Result:** {verified}/{stats['verifiable']} ({rate:.0f}%) — {reason}")
         log_lines.append(f"**Anchors used:** {stats['anchors_used']} paragraphs")
         print(f"     📊 {rate:.0f}% | {reason} | {stats['anchors_used']} anchors")
 
@@ -644,9 +630,7 @@ def _verify_and_correct_section_with_anchor(
     corrected_text = re.sub(r"\n{3,}", "\n\n", corrected_text)
 
     verified = stats["approved"] + stats["adjusted"]
-    final_rate = (
-        (verified / stats["verifiable"] * 100) if stats["verifiable"] > 0 else 100
-    )
+    final_rate = (verified / stats["verifiable"] * 100) if stats["verifiable"] > 0 else 100
     print(f"\n     📊 FINAL: {verified}/{stats['verifiable']} ({final_rate:.0f}%)")
     print(f"     🎯 Anchors used: {stats['anchors_used']} paragraphs")
 

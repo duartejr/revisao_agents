@@ -1,14 +1,16 @@
 import glob
 import os
 
+from .agents.reference_formatter_agent import (
+    run_reference_formatter_agent,
+)
+from .config import print_runtime_config_summary, validate_runtime_config
+from .core.schemas.writer_config import WriterConfig
+from .hitl import run_hitl_loop
 from .state import ReviewState, TechnicalWriterState
+from .utils.vector_utils.pdf_ingestor import ingest_pdf_folder
 from .workflows import build_academic_workflow, build_technical_workflow
 from .workflows.technical_writing_workflow import build_technical_writing_workflow
-from .hitl import run_hitl_loop
-from .utils.vector_utils.pdf_ingestor import ingest_pdf_folder
-from .core.schemas.writer_config import WriterConfig
-from .tools.reference_formatter import run_reference_formatter
-from .config import print_runtime_config_summary, validate_runtime_config
 
 
 def main():
@@ -60,7 +62,7 @@ def main():
         return
 
     if choice == "5":
-        run_reference_formatter()
+        run_reference_formatter_agent()
         return
 
     if choice == "3":
@@ -89,18 +91,14 @@ def main():
             writer_config = WriterConfig.academic(language=lang_opt)
         else:
             writer_config = WriterConfig.technical(language=lang_opt)
-        print(
-            f"   ✔  Language: {'Portuguese (pt-BR)' if lang_opt == 'pt' else 'English'}"
-        )
+        print(f"   ✔  Language: {'Portuguese (pt-BR)' if lang_opt == 'pt' else 'English'}")
 
         # --- Minimum distinct sources per section ---
         default_min = 4 if select_mode == "b" else 0
         print("\n" + "-" * 70)
         print("MINIMUM NUMBER OF DISTINCT SOURCES PER SECTION:")
         print(f"  (default = {default_min}; 0 = no restriction)")
-        min_src_input = input(
-            f"\nMinimum sources per section [{default_min}]: "
-        ).strip()
+        min_src_input = input(f"\nMinimum sources per section [{default_min}]: ").strip()
         try:
             min_src = int(min_src_input) if min_src_input else default_min
         except ValueError:
@@ -118,7 +116,7 @@ def main():
         tavily_opt = input("\nEnable Tavily? [y/N]: ").strip().lower() or "n"
         tavily_enabled = tavily_opt == "y"
 
-        print(f"\n" + "=" * 70)
+        print("\n" + "=" * 70)
         print(f"WRITING EXECUTION {mode_label}")
         print("=" * 70)
 
@@ -225,10 +223,7 @@ def main():
         }
         config = {"configurable": {"thread_id": f"review_{review_type}_{theme[:20]}"}}
 
-        if review_type == "academic":
-            app = build_academic_workflow()
-        else:
-            app = build_technical_workflow()
+        app = build_academic_workflow() if review_type == "academic" else build_technical_workflow()
 
         try:
             run_hitl_loop(app, config, state_init)

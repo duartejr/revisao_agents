@@ -11,24 +11,26 @@ Helper implementations live in:
 
 import logging
 import re
-from typing import Optional, Dict, Any
 from pathlib import Path
+from typing import Any
 
-from .doi_utils import (
-    CROSSREF_API_BASE,
-    extract_doi_from_url,
-    search_doi_in_text,
-    get_bibtex_from_doi,
-    search_crossref_by_title,
+from .abnt_utils import (
+    bibtex_to_abnt,
+)
+from .abnt_utils import (
+    generate_fallback_abnt as _generate_fallback_abnt,
 )
 from .arxiv_utils import (
     ARXIV_API_BASE,
     extract_arxiv_id,
     get_bibtex_from_arxiv,
 )
-from .abnt_utils import (
-    bibtex_to_abnt,
-    generate_fallback_abnt as _generate_fallback_abnt,
+from .doi_utils import (
+    CROSSREF_API_BASE,
+    extract_doi_from_url,
+    get_bibtex_from_doi,
+    search_crossref_by_title,
+    search_doi_in_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,7 +51,7 @@ __all__ = [
 ]
 
 
-def search_doi_in_mongo_chunks(file_path: str, mongo_corpus: Any) -> Optional[str]:
+def search_doi_in_mongo_chunks(file_path: str, mongo_corpus: Any) -> str | None:
     """
     Search for DOI in MongoDB chunks of the document.
     Useful for local PDFs where we have indexed content.
@@ -85,9 +87,7 @@ def search_doi_in_mongo_chunks(file_path: str, mongo_corpus: Any) -> Optional[st
     return None
 
 
-def search_paper_with_tavily(
-    file_path: str, tavily_client: Any = None
-) -> Optional[Dict[str, str]]:
+def search_paper_with_tavily(file_path: str, tavily_client: Any = None) -> dict[str, str] | None:
     """
     Use Tavily web search to find paper metadata and DOI.
 
@@ -138,7 +138,7 @@ def get_reference_data_react(
     tavily_enabled: bool = False,
     max_iterations: int = 5,
     timeout: int = 10,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     REACT agent for retrieving bibliographic data.
     Tries multiple strategies intelligently to find DOI and generate citation.

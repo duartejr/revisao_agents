@@ -1,9 +1,7 @@
-import time
-from typing import List, Dict
-from ...config import TECHNICAL_MAX_RESULTS, PRIORITY_DOMAINS, BLOCKED_DOMAINS_EXTRACT
+from ...config import BLOCKED_DOMAINS_EXTRACT, PRIORITY_DOMAINS, TECHNICAL_MAX_RESULTS
 
 
-def search_technical_content(query: str, previous_urls: List[str]) -> Dict:
+def search_technical_content(query: str, previous_urls: list[str]) -> dict:
     """
     Performs technical search via Tavily (incremental).
 
@@ -58,7 +56,7 @@ def score_url(url: str, snippet: str = "", score_tavily: float = 0.0) -> float:
     return pts
 
 
-def search_web(query: str, max_results: int = TECHNICAL_MAX_RESULTS) -> List[dict]:
+def search_web(query: str, max_results: int = TECHNICAL_MAX_RESULTS) -> list[dict]:
     """Technical search on Tavily and returns a list of results.
 
     Args:
@@ -78,7 +76,7 @@ def search_web(query: str, max_results: int = TECHNICAL_MAX_RESULTS) -> List[dic
         return []
 
 
-def search_images(queries: List[str], max_results: int = 8) -> List[dict]:
+def search_images(queries: list[str], max_results: int = 8) -> list[dict]:
     """Image search via dedicated tool.
 
     Args:
@@ -91,16 +89,14 @@ def search_images(queries: List[str], max_results: int = 8) -> List[dict]:
     try:
         from ...tools.tavily_web_search import search_tavily_images
 
-        res = search_tavily_images.invoke(
-            {"queries": queries, "max_results": max_results}
-        )
+        res = search_tavily_images.invoke({"queries": queries, "max_results": max_results})
         return res.get("images", [])[:max_results]
     except Exception as e:
         print(f"   ⚠️  search_images: {e}")
         return []
 
 
-def extract_urls(urls: List[str]) -> List[dict]:
+def extract_urls(urls: list[str]) -> list[dict]:
     """Extract full page text from URLs and normalize the payload shape.
 
     Args:

@@ -9,7 +9,6 @@ generate_fallback_abnt : produce a minimal ABNT-like citation from a file path/U
 
 import re
 from pathlib import Path
-from typing import Optional
 
 _BIBTEX_PATTERNS = {
     "author": r'author\s*=\s*["{]([^"}]+)["}]',
@@ -20,7 +19,7 @@ _BIBTEX_PATTERNS = {
 }
 
 
-def bibtex_to_abnt(bibtex: str, url: Optional[str] = None) -> str:
+def bibtex_to_abnt(bibtex: str, url: str | None = None) -> str:
     """Convert a BibTeX entry to a simplified ABNT-style citation string.
 
     Format: ``Author. Title. Journal, Year. DOI: … | Disponível em: …``
@@ -44,10 +43,7 @@ def bibtex_to_abnt(bibtex: str, url: Optional[str] = None) -> str:
     journal = extracted.get("journal", "")
     doi = extracted.get("doi", "")
 
-    if journal:
-        abnt = f"{author}. {title}. {journal}, {year}."
-    else:
-        abnt = f"{author}. {title}, {year}."
+    abnt = f"{author}. {title}. {journal}, {year}." if journal else f"{author}. {title}, {year}."
 
     if doi:
         abnt += f" DOI: {doi}"

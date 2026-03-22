@@ -13,12 +13,11 @@ _clean_anchors                        : remove anchor markup from text.
 """
 
 import re
-from typing import List, Optional, Tuple
 
 from ..nodes.writing.text_filters import _ANCHORS_PATTERN
 
 
-def _extract_main_anchor(block: str) -> Optional[str]:
+def _extract_main_anchor(block: str) -> str | None:
     """Return the longest (most informative) anchor found in *block*.
 
     Anchors shorter than 20 characters or that look like LaTeX/special symbols
@@ -41,7 +40,7 @@ def _extract_main_anchor(block: str) -> Optional[str]:
     return max(valid_anchors, key=len)
 
 
-def _extract_citation_anchor(text: str, anchor: str) -> Optional[int]:
+def _extract_citation_anchor(text: str, anchor: str) -> int | None:
     """Find the citation number [N] that immediately follows *anchor* in *text*.
 
     Falls back to scanning the 50 characters after the anchor position.
@@ -72,7 +71,7 @@ def _extract_citation_anchor(text: str, anchor: str) -> Optional[int]:
     return None
 
 
-def _extract_all_anchors_with_citations(block: str) -> List[Tuple[str, Optional[int]]]:
+def _extract_all_anchors_with_citations(block: str) -> list[tuple[str, int | None]]:
     """Return a list of *(anchor_text, citation_number)* pairs from *block*
 
     Args:
@@ -81,7 +80,7 @@ def _extract_all_anchors_with_citations(block: str) -> List[Tuple[str, Optional[
     Returns:
         list of (anchor_text, citation_number) pairs, where citation_number may be None if
     """
-    results: List[Tuple[str, Optional[int]]] = []
+    results: list[tuple[str, int | None]] = []
     pattern = re.compile(
         r'\[ANCHOR:\s*"((?:[^"\\]|\\.)*)"\]\s*\[(\d+)\]',
         re.DOTALL,

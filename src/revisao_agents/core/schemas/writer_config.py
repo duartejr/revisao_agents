@@ -6,7 +6,8 @@ to avoid Pydantic overhead in state transitions.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field, asdict
+
+from dataclasses import asdict, dataclass
 from typing import Literal
 
 WritingMode = Literal["technical", "academic"]
@@ -83,7 +84,7 @@ class WriterConfig:
     # --------------------------------------------------------------------------
 
     @classmethod
-    def technical(cls, language: str = "pt", min_sources: int = 0) -> "WriterConfig":
+    def technical(cls, language: str = "pt", min_sources: int = 0) -> WriterConfig:
         """Default technical writing configuration.
 
         Args:
@@ -104,7 +105,7 @@ class WriterConfig:
         )
 
     @classmethod
-    def academic(cls, language: str = "pt", min_sources: int = 4) -> "WriterConfig":
+    def academic(cls, language: str = "pt", min_sources: int = 4) -> WriterConfig:
         """Academic systematic-review writing configuration.
 
         Args:
@@ -132,7 +133,7 @@ class WriterConfig:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WriterConfig":
+    def from_dict(cls, data: dict) -> WriterConfig:
         """Reconstruct from a plain dict stored in LangGraph state.
 
         Falls back to technical defaults when data is empty or missing keys.

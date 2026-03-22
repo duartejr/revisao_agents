@@ -4,14 +4,14 @@ Tavily Web Search Tools — version migrated to the new package.
 Retains all original functionalities (crawlability, language, academic filters).
 """
 
-from langchain_core.tools import tool
-from typing import List, Optional
 import os
 import re
 from datetime import datetime
 
-from ..utils.core.commons import get_clean_key
+from langchain_core.tools import tool
 from tavily import TavilyClient
+
+from ..utils.core.commons import get_clean_key
 
 # ============================================================================
 # PASTA DE RASTREABILIDADE
@@ -50,8 +50,8 @@ def _slug(text: str, max_chars: int = 50) -> str:
 def _save_search_md(
     type: str,
     query: str,
-    results: List[dict],
-    extra: Optional[dict] = None,
+    results: list[dict],
+    extra: dict | None = None,
 ) -> str:
     """
     Saves the results of a Tavily search to a Markdown file.
@@ -73,7 +73,7 @@ def _save_search_md(
 
     lines = [
         f"# Tavily Search — {type.upper()}",
-        f"",
+        "",
         f"- **Date/Time:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"- **Type:** {type}",
         f"- **Query:** `{query}`",
@@ -97,24 +97,22 @@ def _save_search_md(
             descr = r.get("image_descriptions", {})
 
             lines.append(f"## [{i}] {title or url}")
-            lines.append(f"")
+            lines.append("")
             if url:
                 lines.append(f"**URL:** {url}")
             if score:
                 lines.append(
-                    f"**Score:** {score:.4f}"
-                    if isinstance(score, float)
-                    else f"**Score:** {score}"
+                    f"**Score:** {score:.4f}" if isinstance(score, float) else f"**Score:** {score}"
                 )
             if language:
                 lines.append(f"**Language:** {language}")
             if snippet:
-                lines.append(f"")
-                lines.append(f"**Content:**")
-                lines.append(f"")
+                lines.append("")
+                lines.append("**Content:**")
+                lines.append("")
                 lines.append(snippet[:2000])
             if images:
-                lines.append(f"")
+                lines.append("")
                 lines.append(f"**Images Found ({len(images)}):**")
                 for img in images:
                     desc = descr.get(img, "") if isinstance(descr, dict) else ""
@@ -122,9 +120,9 @@ def _save_search_md(
                         lines.append(f"- `{img}` — {desc}")
                     else:
                         lines.append(f"- `{img}`")
-            lines.append(f"")
-            lines.append(f"---")
-            lines.append(f"")
+            lines.append("")
+            lines.append("---")
+            lines.append("")
         else:
             # fallback for strings (e.g., list of URLs)
             lines.append(f"- {r}")
@@ -227,7 +225,7 @@ def _detect_language(text: str) -> str:
     return "en" if count_en >= count_pt else "pt"
 
 
-def _prioritize_by_language(results: List[dict], boost_en: float = 0.3) -> List[dict]:
+def _prioritize_by_language(results: list[dict], boost_en: float = 0.3) -> list[dict]:
     """
     Reorders results prioritizing English.
     Adds a boost to the score of English results.
@@ -241,9 +239,7 @@ def _prioritize_by_language(results: List[dict], boost_en: float = 0.3) -> List[
     """
     for r in results:
         # Detects language based on title + snippet
-        text_to_detect = (
-            f"{r.get('title', '')} {r.get('snippet', r.get('content', ''))}"
-        )
+        text_to_detect = f"{r.get('title', '')} {r.get('snippet', r.get('content', ''))}"
         language = _detect_language(text_to_detect)
         r["language"] = language
 
@@ -259,7 +255,7 @@ def _prioritize_by_language(results: List[dict], boost_en: float = 0.3) -> List[
     return sorted_results
 
 
-def _print_language_totals(results: List[dict]) -> None:
+def _print_language_totals(results: list[dict]) -> None:
     """Print aggregate language stats safely for a result list.
 
     Args:
@@ -399,7 +395,7 @@ def _get_client() -> TavilyClient:
     return TavilyClient(api_key=get_clean_key("TAVILY_API_KEY"))
 
 
-def filter_academic_urls(urls: List[str]) -> List[str]:
+def filter_academic_urls(urls: list[str]) -> list[str]:
     """Filter out URLs from non-academic domains.
 
     Args:
@@ -408,18 +404,14 @@ def filter_academic_urls(urls: List[str]) -> List[str]:
     Returns:
         List of URLs that do not belong to blocked domains.
     """
-    filtered = [
-        url
-        for url in urls
-        if not any(b.lower() in url.lower() for b in BLOCKED_DOMAINS)
-    ]
+    filtered = [url for url in urls if not any(b.lower() in url.lower() for b in BLOCKED_DOMAINS)]
     removed = len(urls) - len(filtered)
     if removed:
         print(f"   🚫 Removed {removed} URLs from non-academic sources")
     return filtered
 
 
-def filter_technical_urls(urls: List[str]) -> List[str]:
+def filter_technical_urls(urls: list[str]) -> list[str]:
     """Filter out URLs from non-technical domains.
 
     Args:
@@ -428,11 +420,7 @@ def filter_technical_urls(urls: List[str]) -> List[str]:
     Returns:
         List of URLs that do not belong to blocked domains.
     """
-    return [
-        url
-        for url in urls
-        if not any(b.lower() in url.lower() for b in BLOCKED_DOMAINS)
-    ]
+    return [url for url in urls if not any(b.lower() in url.lower() for b in BLOCKED_DOMAINS)]
 
 
 # ============================================================================
@@ -441,7 +429,7 @@ def filter_technical_urls(urls: List[str]) -> List[str]:
 
 
 @tool
-def search_tavily(queries: List[str], max_results: int = 5) -> dict:
+def search_tavily(queries: list[str], max_results: int = 5) -> dict:
     """Search for academic articles on Tavily, prioritizing English content.
 
     Search for academic articles on Tavily.
@@ -457,8 +445,8 @@ def search_tavily(queries: List[str], max_results: int = 5) -> dict:
         {"urls_found": [...], "results": [...]}
     """
     client = _get_client()
-    all_urls: List[str] = []
-    all_results: List[dict] = []
+    all_urls: list[str] = []
+    all_results: list[dict] = []
 
     for q in queries:
         print(f"🔎 Searching (academic, EN prioritized): {q}")
@@ -526,7 +514,7 @@ def search_tavily(queries: List[str], max_results: int = 5) -> dict:
 
 def search_tavily_incremental(
     query: str,
-    previous_urls: List[str],
+    previous_urls: list[str],
     max_results: int = 5,
 ) -> dict:
     """
@@ -617,7 +605,7 @@ def search_tavily_incremental(
 
 
 @tool
-def search_tavily_technical(queries: List[str], max_results: int = 5) -> dict:
+def search_tavily_technical(queries: list[str], max_results: int = 5) -> dict:
     """
     Technical search on Tavily — allows documentation, tutorials,
     English Wikipedia, online books, reference pages, etc.
@@ -632,8 +620,8 @@ def search_tavily_technical(queries: List[str], max_results: int = 5) -> dict:
         {"found_urls": [...], "results": [...]}
     """
     client = _get_client()
-    all_urls: List[str] = []
-    all_results: List[dict] = []
+    all_urls: list[str] = []
+    all_results: list[dict] = []
 
     for q in queries:
         print(f"🔎 Searching (technical, EN prioritized): {q}")
@@ -698,7 +686,7 @@ def search_tavily_technical(queries: List[str], max_results: int = 5) -> dict:
 
 @tool
 def search_tavily_images(
-    queries: List[str],
+    queries: list[str],
     max_results: int = 8,
 ) -> dict:
     """
@@ -730,7 +718,7 @@ def search_tavily_images(
         }
     """
     client = _get_client()
-    all_images: List[dict] = []
+    all_images: list[dict] = []
     viewed: set = set()
 
     for q in queries:
@@ -764,15 +752,18 @@ def search_tavily_images(
 
                 if not url_img or url_img in viewed:
                     continue
-                if not any(
+
+                has_valid_ext = any(
                     url_img.lower().endswith(ext)
                     for ext in (".jpg", ".jpeg", ".png", ".svg", ".gif", ".webp")
+                )
+
+                if (
+                    not has_valid_ext
+                    and "image" not in url_img.lower()
+                    and not re.search(r"\.(jpg|jpeg|png|svg|gif|webp)", url_img, re.I)
                 ):
-                    # Aceita URLs sem extensão explícita também (ex: CDN)
-                    if "image" not in url_img.lower() and not re.search(
-                        r"\.(jpg|jpeg|png|svg|gif|webp)", url_img, re.I
-                    ):
-                        continue
+                    continue
 
                 viewed.add(url_img)
                 all_images.append(
@@ -829,7 +820,7 @@ def search_tavily_images(
 
 
 @tool
-def extract_tavily(urls: List[str], include_images: bool = True) -> dict:
+def extract_tavily(urls: list[str], include_images: bool = True) -> dict:
     """
     Extracts full content from web pages via the Tavily Extract API.
     Save the complete log to ./tavily_searches/.
@@ -852,8 +843,8 @@ def extract_tavily(urls: List[str], include_images: bool = True) -> dict:
         }
     """
     client = _get_client()
-    extracted: List[dict] = []
-    flawed: List[str] = []
+    extracted: list[dict] = []
+    flawed: list[str] = []
 
     lots = [urls[i : i + 20] for i in range(0, len(urls), 20)]
 
@@ -923,7 +914,7 @@ def extract_tavily(urls: List[str], include_images: bool = True) -> dict:
 
 def search_tavily_incremental_technician(
     query: str,
-    previous_urls: List[str],
+    previous_urls: list[str],
     max_results: int = 8,
 ) -> dict:
     """

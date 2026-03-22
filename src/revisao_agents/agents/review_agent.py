@@ -273,9 +273,7 @@ def run_review_agent(
             "an empty final message. Please retry the same instruction once."
         )
 
-    parsed = _parse_agent_response(
-        reply_text, document_sections, pending_edit, target_hint
-    )
+    parsed = _parse_agent_response(reply_text, document_sections, pending_edit, target_hint)
     parsed["trace"] = trace
     return parsed
 

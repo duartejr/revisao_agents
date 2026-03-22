@@ -4,8 +4,8 @@ Now located at: utils/vector_utils/vector_store.py
 """
 
 from .vector_utils.vector_store import (
-    search_chunks,
     accumulate_chunks,
+    search_chunks,
 )
 
 __all__ = [

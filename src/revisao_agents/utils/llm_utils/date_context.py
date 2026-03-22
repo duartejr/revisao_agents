@@ -6,7 +6,7 @@ LLM prompts and system messages, preventing agents from ignoring data
 or information from after a hardcoded date.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def get_current_date_info() -> str:
@@ -16,7 +16,7 @@ def get_current_date_info() -> str:
     Returns:
         str: Current date in multiple formats for clarity.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     day_name = now.strftime("%A")
     date_str = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H:%M:%S")

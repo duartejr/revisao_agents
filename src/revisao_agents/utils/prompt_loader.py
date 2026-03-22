@@ -4,8 +4,8 @@ Now located at: utils/llm_utils/prompt_loader.py
 """
 
 from .llm_utils.prompt_loader import (
-    load_prompt,
     get_prompt_field,
+    load_prompt,
 )
 
 __all__ = [

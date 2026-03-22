@@ -22,18 +22,12 @@ _SRC = os.path.join(_ROOT, "src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-from gradio_app.app import main
+from gradio_app.app import main  # noqa: E402
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Launch the Revisão da Literatura Gradio UI"
-    )
-    parser.add_argument(
-        "--port", type=int, default=7860, help="Port to serve on (default: 7860)"
-    )
-    parser.add_argument(
-        "--share", action="store_true", help="Create a public Gradio share link"
-    )
+    parser = argparse.ArgumentParser(description="Launch the Revisão da Literatura Gradio UI")
+    parser.add_argument("--port", type=int, default=7860, help="Port to serve on (default: 7860)")
+    parser.add_argument("--share", action="store_true", help="Create a public Gradio share link")
     args = parser.parse_args()
 
     print("=" * 60)

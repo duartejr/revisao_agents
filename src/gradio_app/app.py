@@ -25,25 +25,25 @@ _SRC = os.path.join(_HERE, "..")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-import gradio as gr
+import gradio as gr  # noqa: E402
 
-from gradio_app.handlers import (
+from gradio_app.handlers import (  # noqa: E402
     cancel_review_edit,
     confirm_review_edit,
+    continue_planning,
+    format_references,
     get_current_llm_provider,
     get_llm_provider_status,
-    save_review_manual_edit,
+    index_pdfs,
     list_llm_providers,
+    list_plan_files,
+    list_review_files,
+    review_chat_turn,
+    save_review_manual_edit,
+    set_llm_provider,
     start_planning,
     start_review_session,
-    continue_planning,
-    list_review_files,
-    list_plan_files,
-    review_chat_turn,
-    set_llm_provider,
     start_writing,
-    index_pdfs,
-    format_references,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -115,10 +115,9 @@ def _auto_refresh_plan_list(mode: str, current_value: str | None) -> gr.update:
         A gr.update object with the updated choices and value for the plan dropdown.
     """
     files = list_plan_files(mode)
-    if current_value in files:
-        value = current_value
-    else:
-        value = files[0] if files else None
+
+    value = current_value if current_value in files else (files[0] if files else None)
+
     return gr.update(choices=files, value=value)
 
 
@@ -153,7 +152,8 @@ def _load_file(path: str) -> str:
     if not path or not os.path.exists(path):
         return "*(file not found)*"
     try:
-        return open(path, encoding="utf-8").read()
+        with open(path, encoding="utf-8").read() as f:
+            return f
     except Exception as exc:
         return f"❌ Error reading file: {exc}"
 
@@ -181,10 +181,9 @@ def _auto_refresh_review_list(current_value: str | None) -> gr.update:
         A gr.update object with the updated choices and value for the review dropdown.
     """
     files = list_review_files()
-    if current_value in files:
-        value = current_value
-    else:
-        value = files[-1] if files else None
+
+    value = current_value if current_value in files else (files[-1] if files else None)
+
     return gr.update(choices=files, value=value)
 
 
@@ -199,10 +198,9 @@ def _auto_refresh_view_file_list(folder: str, current_value: str | None) -> gr.u
         A gr.update object with the updated choices and value for the view file dropdown.
     """
     files = _list_output_files(folder)
-    if current_value in files:
-        value = current_value
-    else:
-        value = files[-1] if files else None
+
+    value = current_value if current_value in files else (files[-1] if files else None)
+
     return gr.update(choices=files, value=value)
 
 
@@ -214,7 +212,6 @@ def _auto_refresh_view_file_list(folder: str, current_value: str | None) -> gr.u
 def build_app() -> gr.Blocks:
     """Build the Gradio app with multiple tabs for planning, writing, and reviewing."""
     with gr.Blocks(title="Literature Review Agent") as demo:
-
         # Global periodic auto-refresh (avoids restart when files are added manually)
         auto_refresh_timer = gr.Timer(value=3.0)
 
@@ -301,9 +298,7 @@ def build_app() -> gr.Blocks:
                         lines=3,
                         visible=False,
                     )
-                    plan_reply_btn = gr.Button(
-                        "💬 Reply", variant="secondary", visible=False
-                    )
+                    plan_reply_btn = gr.Button("💬 Reply", variant="secondary", visible=False)
                     plan_rendered = gr.Markdown(
                         label="Generated Plan",
                         value="*(the plan will appear here when planning is complete)*",
@@ -317,9 +312,7 @@ def build_app() -> gr.Blocks:
             # ── Wire up ──────────────────────────────────────────────────
 
             def _on_start(tema, tipo, rodadas):
-                history, state, status, rendered = start_planning(
-                    tema, tipo, int(rodadas)
-                )
+                history, state, status, rendered = start_planning(tema, tipo, int(rodadas))
                 has_session = bool(state)
                 has_rendered = bool(rendered)
                 return (
@@ -347,9 +340,7 @@ def build_app() -> gr.Blocks:
             )
 
             def _on_reply(user_msg, history, state):
-                history, state, status, rendered = continue_planning(
-                    user_msg, history, state
-                )
+                history, state, status, rendered = continue_planning(user_msg, history, state)
                 has_session = bool(state)
                 has_rendered = bool(rendered)
                 return (
@@ -459,11 +450,33 @@ def build_app() -> gr.Blocks:
                 outputs=[write_plan],
             )
 
-            def _on_write(plan, mode, lang, min_src, tavily, history):
-                for h, s, rendered in start_writing(
-                    plan, mode, lang, min_src, tavily, history
-                ):
-                    yield h, s, rendered
+            def _on_write(
+                plan: str,
+                mode: str,
+                lang: str,
+                min_src: int,
+                tavily: bool,
+                history: list,
+            ) -> tuple:
+                """
+                Delegate the writing process to the start_writing generator.
+
+                This function acts as a bridge, streaming the writing progress,
+                intermediate states, and the final rendered output back to the UI.
+
+                Args:
+                    plan (str): The structured plan or theme to be processed.
+                    mode (str): The writing mode (e.g., 'academic' or 'technical').
+                    lang (str): The target language for the output (e.g., 'pt', 'en').
+                    min_src (int): Minimum number of sources required for validation.
+                    tavily (bool): Whether to enable web search via Tavily.
+                    history (list): The conversation or state history for context.
+
+                Yields:
+                    tuple: A tuple containing (history, state, rendered_markdown)
+                        at each step of the generation process.
+                """
+                yield from start_writing(plan, mode, lang, min_src, tavily, history)
 
             write_start_btn.click(
                 fn=_on_write,
@@ -632,9 +645,7 @@ def build_app() -> gr.Blocks:
                     view_file = gr.Dropdown(
                         label="File",
                         choices=initial_review_files,
-                        value=(
-                            initial_review_files[-1] if initial_review_files else None
-                        ),
+                        value=(initial_review_files[-1] if initial_review_files else None),
                         allow_custom_value=True,
                     )
                     view_refresh_btn = gr.Button("🔄 Refresh list", size="sm")
@@ -687,15 +698,14 @@ def build_app() -> gr.Blocks:
                 "Vectorizes the PDFs in the indicated folder and saves the chunks in MongoDB for use in the corpus."
             )
 
-            with gr.Row():
-                with gr.Column():
-                    idx_folder = gr.Textbox(
-                        label="Path to PDF folder",
-                        placeholder="e.g.: /home/user/articles  or  ~/papers",
-                        lines=1,
-                    )
-                    idx_btn = gr.Button("📂 Index", variant="primary")
-                    idx_result = gr.Markdown(label="Resultado")
+            with gr.Row(), gr.Column():
+                idx_folder = gr.Textbox(
+                    label="Path to PDF folder",
+                    placeholder="e.g.: /home/user/articles  or  ~/papers",
+                    lines=1,
+                )
+                idx_btn = gr.Button("📂 Index", variant="primary")
+                idx_result = gr.Markdown(label="Resultado")
 
             idx_btn.click(
                 fn=index_pdfs,

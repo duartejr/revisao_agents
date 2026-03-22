@@ -1,30 +1,30 @@
-import os
 import hashlib
-from typing import List, Dict, Tuple
+import os
+
 import pymongo
-from pymongo.collection import Collection
-from openai import OpenAI
 import tiktoken
+from openai import OpenAI
+from pymongo.collection import Collection
 
 from ...config import (
-    MONGODB_URI,
-    MONGODB_DB,
+    ANCHOR_MIN_SIM,
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
+    CHUNKS_CACHE_DIR,
+    MAX_CORPUS_PROMPT,
     MONGODB_COLLECTION,
-    VECTOR_INDEX_NAME,
+    MONGODB_DB,
+    MONGODB_URI,
     OPENAI_API_KEY,
     OPENAI_EMBEDDING_MODEL,
-    CHUNK_SIZE,
-    CHUNK_OVERLAP,
-    TOP_K_WRITER,
-    TOP_K_VERIFICATION,
-    MAX_CORPUS_PROMPT,
-    ANCHOR_MIN_SIM,
-    CHUNKS_CACHE_DIR,
     SNIPPET_MIN_SCORE,
+    TOP_K_VERIFICATION,
+    TOP_K_WRITER,
+    VECTOR_INDEX_NAME,
 )
-from ..file_utils.helpers import normalize, fuzzy_sim
-from ..search_utils.tavily_client import score_url  # import local
 from ...core.schemas.corpus import Chunk
+from ..file_utils.helpers import fuzzy_sim, normalize
+from ..search_utils.tavily_client import score_url  # import local
 
 
 class CorpusMongoDB:
@@ -33,8 +33,8 @@ class CorpusMongoDB:
         self._collection = None
         self._openai_client = None
         self._tokenizer = None
-        self._used_urls: List[str] = []
-        self._source_map: Dict[int, str] = {}
+        self._used_urls: list[str] = []
+        self._source_map: dict[int, str] = {}
         self._n_docs = 0
         self._total_chunks = 0
         project_root = os.path.abspath(
@@ -43,9 +43,7 @@ class CorpusMongoDB:
         if os.path.isabs(CHUNKS_CACHE_DIR):
             self._chunks_cache_dir = CHUNKS_CACHE_DIR
         else:
-            self._chunks_cache_dir = os.path.abspath(
-                os.path.join(project_root, CHUNKS_CACHE_DIR)
-            )
+            self._chunks_cache_dir = os.path.abspath(os.path.join(project_root, CHUNKS_CACHE_DIR))
         os.makedirs(self._chunks_cache_dir, exist_ok=True)
 
     def _get_collection(self) -> Collection:
@@ -113,7 +111,7 @@ class CorpusMongoDB:
         return self._tokenizer
 
     @staticmethod
-    def _chunker(text: str) -> List[str]:
+    def _chunker(text: str) -> list[str]:
         """Splits the input text into smaller chunks for processing.
 
         Args:
@@ -146,7 +144,7 @@ class CorpusMongoDB:
                 start = end - CHUNK_OVERLAP
             return chunks
 
-    def _generate_batch_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def _generate_batch_embeddings(self, texts: list[str]) -> list[list[float]]:
         """Generates embeddings for a batch of texts using the OpenAI API.
 
         Args:
@@ -183,9 +181,7 @@ class CorpusMongoDB:
         all_embeddings = []
         for batch in batches:
             try:
-                response = client.embeddings.create(
-                    input=batch, model=OPENAI_EMBEDDING_MODEL
-                )
+                response = client.embeddings.create(input=batch, model=OPENAI_EMBEDDING_MODEL)
                 all_embeddings.extend([item.embedding for item in response.data])
             except Exception as e:
                 print(f"   Error generating embeddings in batch.: {e}")
@@ -223,7 +219,7 @@ class CorpusMongoDB:
             str: The chunk text read from the file.
         """
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 return f.read()
         except Exception as e:
             print(f"   Error reading chunk from {file_path}: {e}")
@@ -243,8 +239,8 @@ class CorpusMongoDB:
 
     def build(
         self,
-        extracted_documents: List[dict],
-        snippets: List[dict],
+        extracted_documents: list[dict],
+        snippets: list[dict],
         prefix: str = "section",
     ) -> "CorpusMongoDB":
         """Builds the MongoDB corpus by processing extracted documents and snippets, generating embeddings, and storing them in the collection.
@@ -292,14 +288,12 @@ class CorpusMongoDB:
             try:
                 embeddings = self._generate_batch_embeddings(chunks_txt)
             except Exception as e:
-                print(
-                    f"   Failed to generate embeddings for {url[:100]}, skipping. Error: {e}"
-                )
+                print(f"   Failed to generate embeddings for {url[:100]}, skipping. Error: {e}")
                 source_idx += 1
                 continue
 
             # Save each chunk to a file and prepare the document for MongoDB insertion
-            for i, (chunk_text, emb) in enumerate(zip(chunks_txt, embeddings)):
+            for i, (chunk_text, emb) in enumerate(zip(chunks_txt, embeddings, strict=False)):
                 file_path = self._save_chunk_to_file(chunk_text, url, i)
                 documents_to_insert.append(
                     {
@@ -369,24 +363,17 @@ class CorpusMongoDB:
         if documents_to_insert:
             try:
                 collection.insert_many(documents_to_insert, ordered=False)
-                print(
-                    f"      💾 {len(documents_to_insert)} new chunks inserted into MongoDB."
-                )
+                print(f"      💾 {len(documents_to_insert)} new chunks inserted into MongoDB.")
             except Exception as e:
                 print(f"      ❌ Error inserting documents: {e}")
 
         self._n_docs = len(
-            set(
-                d["url"]
-                for d in documents_to_insert + [{"url": u} for u in self._used_urls]
-            )
+            set(d["url"] for d in documents_to_insert + [{"url": u} for u in self._used_urls])
         )
-        print(
-            f"      {self._n_docs} total documents | {self._total_chunks} chunks in this section"
-        )
+        print(f"      {self._n_docs} total documents | {self._total_chunks} chunks in this section")
         return self
 
-    def query(self, texto_query: str, top_k: int = TOP_K_WRITER) -> List[Chunk]:
+    def query(self, texto_query: str, top_k: int = TOP_K_WRITER) -> list[Chunk]:
         """Searches for chunks similar to the query using MongoDB Atlas Vector Search.
         Generates query embedding via OpenAI and retrieves the most relevant chunks.
 
@@ -437,11 +424,7 @@ class CorpusMongoDB:
 
         if not results:
             print("      ⚠️ No results found. Check if:")
-            print(
-                "         - The vector index '{}' exists and is active".format(
-                    VECTOR_INDEX_NAME
-                )
-            )
+            print(f"         - The vector index '{VECTOR_INDEX_NAME}' exists and is active")
             print("         - The collection contains documents with embeddings")
             return []
 
@@ -449,9 +432,7 @@ class CorpusMongoDB:
         for r in results:
             file_path = r.get("file_path")
             if not file_path:
-                print(
-                    f"      ⚠️ Document without file_path: {r.get('url', 'unknown url')}"
-                )
+                print(f"      ⚠️ Document without file_path: {r.get('url', 'unknown url')}")
                 continue
 
             if not os.path.exists(file_path):
@@ -478,7 +459,7 @@ class CorpusMongoDB:
         chunk: Chunk,
         window: int = 1,
         include_self: bool = True,
-    ) -> List[Chunk]:
+    ) -> list[Chunk]:
         """
         Given a reference chunk, returns its neighbors in the same document.
 
@@ -506,9 +487,7 @@ class CorpusMongoDB:
             ).sort("chunk_idx", 1)
 
             docs = list(cursor)
-            print(
-                f"      📎 {len(docs)} chunks encontrados (janela ±{window} em '{chunk.url}')"
-            )
+            print(f"      📎 {len(docs)} chunks encontrados (janela ±{window} em '{chunk.url}')")
         except Exception as e:
             print(f"   ❌ Error searching for neighbors: {e}")
             return []
@@ -538,7 +517,7 @@ class CorpusMongoDB:
 
         return results
 
-    def get_url_chunks(self, url: str, max_chunks: int = 12) -> List[Chunk]:
+    def get_url_chunks(self, url: str, max_chunks: int = 12) -> list[Chunk]:
         """
         Retrieve all stored chunks for a URL, sorted by their chunk index.
 
@@ -652,7 +631,9 @@ class CorpusMongoDB:
             if chunk.source_idx not in sources_viewed:
                 sources_viewed.add(chunk.source_idx)
                 title = chunk.title or ""
-                cab = f"{'━'*55}\nSOURCE [{chunk.source_idx}] — {title}\nURL: {chunk.url}\n{'─'*55}\n"
+                cab = (
+                    f"{'━'*55}\nSOURCE [{chunk.source_idx}] — {title}\nURL: {chunk.url}\n{'─'*55}\n"
+                )
             else:
                 cab = f"[cont. SOURCE {chunk.source_idx} URL: {chunk.url}]\n"
 
@@ -666,9 +647,7 @@ class CorpusMongoDB:
             chars += len(block)
 
         context = "".join(parts)
-        print(
-            f"      📨 {len(chunks)} chunks | {len(sources_viewed)} sources | {chars:,} chars"
-        )
+        print(f"      📨 {len(chunks)} chunks | {len(sources_viewed)} sources | {chars:,} chars")
         return context, urls_render, self._source_map
 
     def render_prompt_url(
@@ -679,7 +658,7 @@ class CorpusMongoDB:
         top_k: int = 5,
         include_neighbors: bool = False,
         neighbor_window: int = 2,
-    ) -> Tuple[str, List[str], int]:
+    ) -> tuple[str, list[str], int]:
         """
         Renders prompt for verification based on anchor + specific URL.
 
@@ -699,9 +678,7 @@ class CorpusMongoDB:
         chunks = self.query(anchor_text, top_k=top_k * 2)
 
         # Filter only chunks from the quoted URL.
-        chunks_of_url = [
-            chunk for chunk in chunks if chunk.url.strip() == cited_urls.strip()
-        ]
+        chunks_of_url = [chunk for chunk in chunks if chunk.url.strip() == cited_urls.strip()]
 
         # Fallback: returns chunks from the overall search if URL not found.
         if not chunks_of_url:
@@ -710,14 +687,12 @@ class CorpusMongoDB:
 
         chunks_of_url = chunks_of_url[:top_k]
 
-        parts: List[str] = []
+        parts: list[str] = []
         accumulated_chars = 0
-        used_urls: List[str] = []
+        used_urls: list[str] = []
 
         for chunk in chunks_of_url:
-            block = (
-                f"[SOURCE {chunk.source_idx} | {chunk.url[:140]}]\n" f"{chunk.text}\n\n"
-            )
+            block = f"[SOURCE {chunk.source_idx} | {chunk.url[:140]}]\n" f"{chunk.text}\n\n"
             if accumulated_chars + len(block) > max_chars:
                 break
             parts.append(block)
@@ -729,9 +704,9 @@ class CorpusMongoDB:
         if include_neighbors and chunks_of_url:
             primary_texts = {c.text for c in chunks_of_url}
             all_url_chunks = self.get_url_chunks(cited_urls, max_chunks=20)
-            neighbor_chunks = [
-                c for c in all_url_chunks if c.text not in primary_texts
-            ][:neighbor_window]
+            neighbor_chunks = [c for c in all_url_chunks if c.text not in primary_texts][
+                :neighbor_window
+            ]
             for nc in neighbor_chunks:
                 block = f"[NEIGHBORING CONTEXT — {nc.url[:140]}]\n" f"{nc.text}\n\n"
                 if accumulated_chars + len(block) > max_chars:
@@ -750,9 +725,9 @@ class CorpusMongoDB:
 
     def render_prompt_anchors(
         self,
-        anchors_with_urls: List[Tuple[str, str]],
+        anchors_with_urls: list[tuple[str, str]],
         max_chars: int = 3000,
-    ) -> Tuple[str, List[str], int]:
+    ) -> tuple[str, list[str], int]:
         """
         Render prompt based on multiple anchors with their URLs.
 
@@ -781,9 +756,7 @@ class CorpusMongoDB:
             chunks = self.query(anchor_text, top_k=3)
 
             # Filter by URL
-            chunks_of_url = [
-                chunk for chunk in chunks if chunk.url.strip() == cited_url.strip()
-            ]
+            chunks_of_url = [chunk for chunk in chunks if chunk.url.strip() == cited_url.strip()]
 
             # If not found for the specific URL, use the best matches
             if not chunks_of_url:

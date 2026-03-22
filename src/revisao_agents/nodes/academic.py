@@ -11,10 +11,10 @@ Prompts are loaded from YAML files in prompts/academic/.
 """
 
 from ..state import ReviewState
+from ..utils.file_utils.helpers import fmt_chunks, save_md, truncate
 from ..utils.llm_utils.llm_providers import get_llm
-from ..utils.vector_utils.vector_store import search_chunks, accumulate_chunks
-from ..utils.file_utils.helpers import fmt_chunks, truncate, save_md
 from ..utils.llm_utils.prompt_loader import load_prompt
+from ..utils.vector_utils.vector_store import accumulate_chunks, search_chunks
 
 # Constants (may need to be moved to config)
 CHUNKS_PER_QUERY = 10  # TODO: Move to config if it should be configurable

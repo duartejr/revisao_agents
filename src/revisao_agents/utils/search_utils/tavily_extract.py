@@ -1,8 +1,7 @@
-from typing import List
 from ...config import MAX_IMAGES_SECTION
 
 
-def extract(urls: List[str]) -> List[dict]:
+def extract(urls: list[str]) -> list[dict]:
     """Extract full text from URLs using Tavily Extract.
 
     Args:
@@ -23,7 +22,7 @@ def extract(urls: List[str]) -> List[dict]:
         return []
 
 
-def search_images(queries: List[str]) -> List[dict]:
+def search_images(queries: list[str]) -> list[dict]:
     """Search for images using a dedicated tool.
 
     Args:

@@ -3,18 +3,18 @@ consolidate_node — consolidates all written sections into a final document
 Part of the nodes/writing subpackage.
 """
 
-import re
-import os
 import logging
+import os
+import re
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
-
-from ...state import TechnicalWriterState
 from ...config import llm_call
 from ...core.schemas.writer_config import WriterConfig
+from ...state import TechnicalWriterState
 from ...utils.llm_utils.prompt_loader import load_prompt
 from .text_filters import _strip_figure_table_refs
+
+logger = logging.getLogger(__name__)
 
 
 def consolidate_node(state: TechnicalWriterState) -> dict:
@@ -51,7 +51,6 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
     theme = state["theme"]
     sections = sorted(state["written_sections"], key=lambda s: s["index"])
     all_urls = list(dict.fromkeys(state.get("refs_urls", [])))
-    all_images = state.get("refs_images", [])
     react_log = state.get("react_log", [])
     stats_global = state.get("verification_stats", [])
     final_summary = state.get("cumulative_summary", "")[:1000]
@@ -128,7 +127,7 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
     # ══════════════════════════════════════════════════════════════════
     # GLOBAL CITATION SYNCHRONIZATION + PER-SECTION REFERENCE REBUILD
     # ══════════════════════════════════════════════════════════════════
-    print(f"\n  🔗 Synchronizing global citations...")
+    print("\n  🔗 Synchronizing global citations...")
 
     # 1. Build consolidated source_map: {original_citation_number: url}
     #    Merge all per-section source_maps; keep the first URL seen per index.
@@ -214,9 +213,7 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
     document_sync = re.sub(r"\[\d+(?:\s*,\s*\d+)+\]", _renumber_compound, document_sync)
 
     n_global_sources = len(global_source_map_sync)
-    print(
-        f"     ✅ {n_global_sources} global sources | {len(global_map)} citations remapped"
-    )
+    print(f"     ✅ {n_global_sources} global sources | {len(global_map)} citations remapped")
 
     # 6. Rebuild per-section "### References for this section" blocks
     #    First, split out the conclusion so it doesn't contaminate the
@@ -233,9 +230,7 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
         doc_sections_part = document_sync
         doc_conclusion_part = ""
 
-    section_pattern = re.compile(
-        r"(?=\n<!--\s*(?:Paragraphs|Par[áa]grafos):)", re.IGNORECASE
-    )
+    section_pattern = re.compile(r"(?=\n<!--\s*(?:Paragraphs|Par[áa]grafos):)", re.IGNORECASE)
     section_blocks = section_pattern.split(doc_sections_part)
 
     rebuilt_parts = []

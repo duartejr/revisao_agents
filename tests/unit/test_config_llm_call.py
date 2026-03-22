@@ -13,9 +13,7 @@ from revisao_agents.config import LLMInvocationError, llm_call
 def test_llm_call_returns_text_content():
     fake_llm = SimpleNamespace(invoke=lambda prompt: SimpleNamespace(content="ok"))
 
-    with patch(
-        "revisao_agents.utils.llm_utils.llm_providers.get_llm", return_value=fake_llm
-    ):
+    with patch("revisao_agents.utils.llm_utils.llm_providers.get_llm", return_value=fake_llm):
         result = llm_call("hello", temperature=0.1)
 
     assert result == "ok"
@@ -30,18 +28,22 @@ def test_llm_call_structured_output_path():
         def with_structured_output(self, schema):
             return _Structured()
 
-    with patch(
-        "revisao_agents.utils.llm_utils.llm_providers.get_llm", return_value=_LLM()
-    ):
+    with patch("revisao_agents.utils.llm_utils.llm_providers.get_llm", return_value=_LLM()):
         result = llm_call("hello", response_schema=dict)
 
     assert result == {"status": "ok"}
 
 
 def test_llm_call_raises_typed_error_on_provider_failure():
-    with patch(
-        "revisao_agents.utils.llm_utils.llm_providers.get_llm",
-        side_effect=RuntimeError("provider unavailable"),
+    """
+    Test that llm_call raises a custom LLMInvocationError when the
+    underlying provider fails with a RuntimeError.
+    """
+    with (
+        patch(
+            "revisao_agents.utils.llm_utils.llm_providers.get_llm",
+            side_effect=RuntimeError("provider unavailable"),
+        ),
+        pytest.raises(LLMInvocationError),
     ):
-        with pytest.raises(LLMInvocationError):
-            llm_call("hello")
+        llm_call("hello")

@@ -9,23 +9,23 @@ Phases
    _extract_with_fallback : URL extraction with Tavily + fallback retry.
 """
 
-from typing import List, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
 
 from ...config import (
-    llm_call,
-    parse_json_safe,
+    CTX_ABSTRACT_CHARS,
     EXTRACT_MIN_CHARS,
     MAX_URLS_EXTRACT,
-    CTX_ABSTRACT_CHARS,
     MIN_SECTION_PARAGRAPHS,
     TOP_K_OBSERVATION,
+    llm_call,
+    parse_json_safe,
 )
 from ...core.schemas.techinical_writing import SectionAnswer
 from ...utils.llm_utils.prompt_loader import load_prompt
-from ...utils.search_utils.tavily_client import search_web, extract_urls, score_url
+from ...utils.search_utils.tavily_client import extract_urls, score_url, search_web
 
 # ---------------------------------------------------------------------------
 # Phase 1: Thought (planning)
@@ -80,7 +80,7 @@ def _thought_phase(
 
 
 def _observation_phase(
-    necessary_information: List[str],
+    necessary_information: list[str],
     corpus: "CorpusMongoDB",
     prompt_dir: str = "technical_writing",
     language: str = "pt",
@@ -104,9 +104,7 @@ def _observation_phase(
         return {
             "sufficient": False,
             "gaps": necessary_information,
-            "complementary_query": (
-                necessary_information[0] if necessary_information else ""
-            ),
+            "complementary_query": (necessary_information[0] if necessary_information else ""),
             "summary": "Corpus vazio.",
         }
 
@@ -144,11 +142,11 @@ def _draft_phase(
     objective: str,
     resources: str,
     corpus: str,
-    section_urls: List[str],
+    section_urls: list[str],
     cumulative_summary: str,
     pos: int,
     n_total: int,
-    all_titles: List[str],
+    all_titles: list[str],
     n_extracted: int,
     prompt_dir: str = "technical_writing",
     language: str = "pt",
@@ -223,8 +221,8 @@ def _draft_phase(
 
 
 def _extract_with_fallback(
-    results: List[dict],
-    queries_fallback: List[str],
+    results: list[dict],
+    queries_fallback: list[str],
     urls_attempted: set,
     corpus: "CorpusMongoDB",
 ) -> tuple:
@@ -249,9 +247,7 @@ def _extract_with_fallback(
         [
             (
                 r.get("url", ""),
-                score_url(
-                    r.get("url", ""), r.get("snippet", ""), float(r.get("score", 0))
-                ),
+                score_url(r.get("url", ""), r.get("snippet", ""), float(r.get("score", 0))),
             )
             for r in results
             if r.get("url")
@@ -261,7 +257,7 @@ def _extract_with_fallback(
     )
 
     urls_to_extract = []
-    for url, sc in scored:
+    for url, _ in scored:
         if url in urls_attempted:
             continue
         if corpus.url_exists(url):

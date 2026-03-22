@@ -2,8 +2,6 @@
 Unit tests for runtime configuration validation helpers.
 """
 
-import os
-
 from revisao_agents.config import get_runtime_config_summary, validate_runtime_config
 
 

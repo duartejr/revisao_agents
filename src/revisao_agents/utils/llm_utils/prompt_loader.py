@@ -125,9 +125,7 @@ def load_prompt(prompt_path: str, **variables: Any) -> Prompt:
         "source": str(yaml_path.relative_to(_PROMPTS_ROOT.parent.parent)),
     }
 
-    return Prompt(
-        name=name, text=rendered.strip(), temperature=temperature, metadata=metadata
-    )
+    return Prompt(name=name, text=rendered.strip(), temperature=temperature, metadata=metadata)
 
 
 def get_prompt_field(prompt_path: str, field_name: str, **variables: Any) -> str:

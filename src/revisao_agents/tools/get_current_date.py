@@ -5,8 +5,9 @@ This tool ensures agents are aware of the actual current date,
 preventing them from ignoring data or information from after a hardcoded date.
 """
 
+from datetime import UTC, datetime
+
 from langchain_core.tools import tool
-from datetime import datetime, timezone
 
 
 @tool
@@ -24,7 +25,7 @@ def get_current_date() -> str:
         >>> get_current_date()
         "Current date: 2026-03-10 (Monday)\nTime: 14:35:42 UTC"
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Format the date in multiple ways for clarity
     iso_format = now.isoformat(timespec="seconds")

@@ -1,6 +1,7 @@
 import os
 import re
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -35,16 +36,12 @@ def resolve_topic(input_value: str) -> str:
         content = path.read_text(encoding="utf-8")
 
         # Look for a common header pattern (Case-insensitive 'Topic' or 'Tema')
-        match = re.search(
-            r"\*\*(?:Topic|Theme|Tema|T[óo]pico):\*\*\s*(.+)", content, re.IGNORECASE
-        )
+        match = re.search(r"\*\*(?:Topic|Theme|Tema|T[óo]pico):\*\*\s*(.+)", content, re.IGNORECASE)
         if match:
             return match.group(1).strip()
 
         # Fallback: Extract the first non-empty line
-        first_line = next(
-            (line.strip() for line in content.splitlines() if line.strip()), ""
-        )
+        first_line = next((line.strip() for line in content.splitlines() if line.strip()), "")
         return first_line or input_value.strip()
 
     except Exception:
@@ -113,28 +110,24 @@ def _run_planning_until_complete(
 
 
 def main(
-    input_value: str = typer.Argument(
-        ..., help="Review theme or path to file containing theme/plan"
-    ),
-    review_type: str = typer.Option(
-        "academic", "--review-type", "-t", help="Type: academic or technical"
-    ),  # noqa: B008
-    rounds: int = typer.Option(
-        3, "--rounds", "-r", help="Number of refinement rounds"
-    ),  # noqa: B008
-    output_file: Path = typer.Option(
-        None, "--output", "-o", help="Save final plan to file (optional)"
-    ),  # noqa: B008
-    model: str = typer.Option(
-        "", "--model", help="LLM model to use (optional)"
-    ),  # noqa: B008
-    auto_response: str = typer.Option(
-        "Keep the current plan.",
-        "--auto-response",
-        help="Automatic response for HITL steps",
-    ),  # noqa: B008
-    debug: bool = typer.Option(False, "--debug", help="Verbose mode"),  # noqa: B008
-):
+    input_value: Annotated[
+        str,
+        typer.Argument(..., help="Review theme or path to file containing theme/plan"),
+    ],
+    review_type: Annotated[
+        str, typer.Option("--review-type", "-t", help="Type: academic or technical")
+    ] = "academic",
+    rounds: Annotated[int, typer.Option("--rounds", "-r", help="Number of refinement rounds")] = 3,
+    output_file: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Save final plan to file (optional)"),
+    ] = None,
+    model: Annotated[str, typer.Option("--model", help="LLM model to use (optional)")] = "",
+    auto_response: Annotated[
+        str, typer.Option("--auto-response", help="Automatic response for HITL steps")
+    ] = "Keep the current plan.",
+    debug: Annotated[bool, typer.Option("--debug", help="Verbose mode")] = False,
+) -> None:
     """Execute academic/technical planning until final plan is generated.
 
     Args:
@@ -161,9 +154,7 @@ def main(
 
     theme = resolve_topic(input_value)
     if not theme:
-        console.print(
-            "[bold red]Error:[/bold red] theme is empty after reading the argument/file."
-        )
+        console.print("[bold red]Error:[/bold red] theme is empty after reading the argument/file.")
         raise typer.Exit(2)
 
     console.print(
@@ -185,9 +176,7 @@ def main(
         plan_path = result.get("final_plan_path", "")
 
         console.print("\n[bold]Final planning result:[/bold]")
-        console.print(
-            final_plan or result.get("current_plan", "No final plan generated.")
-        )
+        console.print(final_plan or result.get("current_plan", "No final plan generated."))
         if plan_path:
             console.print(f"\n[green]Plan automatically saved at:[/green] {plan_path}")
 

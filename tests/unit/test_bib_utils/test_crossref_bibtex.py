@@ -2,7 +2,6 @@
 Unit tests for bibliography REACT fallback behavior.
 """
 
-from pathlib import Path
 from unittest.mock import patch
 
 from revisao_agents.core.schemas.corpus import Chunk
@@ -49,9 +48,7 @@ def test_search_doi_in_mongo_chunks_with_dict_chunks():
     assert doi == "10.1000/xyz123"
 
 
-@patch(
-    "revisao_agents.utils.bib_utils.crossref_bibtex.bibtex_to_abnt", return_value="ABNT"
-)
+@patch("revisao_agents.utils.bib_utils.crossref_bibtex.bibtex_to_abnt", return_value="ABNT")
 @patch(
     "revisao_agents.utils.bib_utils.crossref_bibtex.get_bibtex_from_doi",
     return_value="@article{a}",
@@ -69,9 +66,7 @@ def test_get_reference_data_react_url_doi_path(mock_bibtex, mock_abnt):
     assert result["abnt"] == "ABNT"
 
 
-@patch(
-    "revisao_agents.utils.bib_utils.crossref_bibtex.bibtex_to_abnt", return_value="ABNT"
-)
+@patch("revisao_agents.utils.bib_utils.crossref_bibtex.bibtex_to_abnt", return_value="ABNT")
 @patch(
     "revisao_agents.utils.bib_utils.crossref_bibtex.get_bibtex_from_doi",
     return_value="@article{mongo}",

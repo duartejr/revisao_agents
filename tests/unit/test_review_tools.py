@@ -2,12 +2,10 @@
 Unit tests for review_tools.py – tool contracts and error handling.
 """
 
+import os
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
-import tempfile
-import os
-
-import pytest
 
 # ── search_evidence ──────────────────────────────────────────────────────
 
@@ -53,9 +51,7 @@ class TestSearchEvidence:
         # search_chunks should have been called with k <= 10
         call_args = mock_sc.call_args
         # k may be positional (arg[1]) or keyword
-        k_val = (
-            call_args.kwargs.get("k") if "k" in call_args.kwargs else call_args.args[1]
-        )
+        k_val = call_args.kwargs.get("k") if "k" in call_args.kwargs else call_args.args[1]
         assert k_val <= 10
 
 
@@ -163,9 +159,7 @@ class TestSearchNearChunks:
         with tempfile.TemporaryDirectory() as tmpd:
             anchor_path = os.path.join(tmpd, "abc123_2.txt")
             for idx in range(0, 5):
-                with open(
-                    os.path.join(tmpd, f"abc123_{idx}.txt"), "w", encoding="utf-8"
-                ) as f:
+                with open(os.path.join(tmpd, f"abc123_{idx}.txt"), "w", encoding="utf-8") as f:
                     f.write(f"chunk-{idx}")
 
             with patch(
@@ -247,9 +241,7 @@ class TestGetBibtexForReference:
         ):
             from revisao_agents.tools.review_tools import get_bibtex_for_reference
 
-            result = get_bibtex_for_reference.invoke(
-                {"query_or_doi": "Chronos 2 paper"}
-            )
+            result = get_bibtex_for_reference.invoke({"query_or_doi": "Chronos 2 paper"})
 
         assert "10.1234/abcd" in result
         assert "@article" in result

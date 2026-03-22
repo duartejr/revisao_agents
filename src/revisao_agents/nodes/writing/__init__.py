@@ -12,22 +12,22 @@ writer_node      : sections_writer_node — writes sections with search and veri
 consolidate_node : consolidate_node — consolidates written sections into a final document.
 """
 
-from .text_filters import (
-    _ANCHORS_PATTERN,
-    _strip_justification_blocks,
-    _strip_meta_sentences,
-    _strip_figure_table_refs,
-)
 from ...helpers.anchor_helpers import (
-    _extract_main_anchor,
-    _extract_citation_anchor,
     _extract_all_anchors_with_citations,
+    _extract_citation_anchor,
+    _extract_main_anchor,
 )
 from .phase_runners import (
-    _thought_phase,
-    _observation_phase,
     _draft_phase,
     _extract_with_fallback,
+    _observation_phase,
+    _thought_phase,
+)
+from .text_filters import (
+    _ANCHORS_PATTERN,
+    _strip_figure_table_refs,
+    _strip_justification_blocks,
+    _strip_meta_sentences,
 )
 from .verification import (
     _count_verifiable_claims,
@@ -35,8 +35,8 @@ from .verification import (
     _monitor_verification_rate,
     _search_for_additional_content,
     _verify_and_correct_adaptative_section,
-    _verify_paragraph_with_anchor,
     _verify_and_correct_section_with_anchor,
+    _verify_paragraph_with_anchor,
 )
 
 __all__ = [

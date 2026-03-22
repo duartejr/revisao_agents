@@ -1,11 +1,11 @@
+import difflib
 import os
 import re
-import difflib
-from typing import List
+
 from ...config import HIST_MAX_TURNS, PLAN_MAX_CHARS
 
 
-def fmt_chunks(chunks: List[str], max_chars: int = 1200) -> str:
+def fmt_chunks(chunks: list[str], max_chars: int = 1200) -> str:
     """Formats a list of text chunks into a single string, truncating if necessary.
 
     Args:
@@ -23,7 +23,7 @@ def fmt_chunks(chunks: List[str], max_chars: int = 1200) -> str:
     return block.strip()
 
 
-def fmt_snippets(results: List[dict], max_chars: int = 1200) -> str:
+def fmt_snippets(results: list[dict], max_chars: int = 1200) -> str:
     """Formats search results with title, snippet, and URL into a single string.
 
     Args:
@@ -45,7 +45,7 @@ def fmt_snippets(results: List[dict], max_chars: int = 1200) -> str:
     return block.strip()
 
 
-def summarize_hist(history: List[tuple], max_turns: int = HIST_MAX_TURNS) -> str:
+def summarize_hist(history: list[tuple], max_turns: int = HIST_MAX_TURNS) -> str:
     """Summarizes a conversation history into a concise string with recent turns.
 
     Args:
@@ -193,9 +193,7 @@ def parse_technical_plan(text: str) -> tuple:
         A tuple containing the theme (str), summary (str), and a list of sections (list of dicts).
     """
     theme = "Technical Review"
-    m = re.search(
-        r"\*\*(?:Theme|Topic|Tema|T[óo]pico):\*\*\s*(.+)", text, re.IGNORECASE
-    )
+    m = re.search(r"\*\*(?:Theme|Topic|Tema|T[óo]pico):\*\*\s*(.+)", text, re.IGNORECASE)
     if m:
         theme = m.group(1).replace("*", "").strip()
     summary = text[:1200].strip()
@@ -206,9 +204,7 @@ def parse_technical_plan(text: str) -> tuple:
         title_clean = title.strip().replace("**", "")
         if (
             not level_clean
-            or re.search(
-                r"(?:^|\b)(Level|N[ií]vel)(?:\b|$)", level_clean, re.IGNORECASE
-            )
+            or re.search(r"(?:^|\b)(Level|N[ií]vel)(?:\b|$)", level_clean, re.IGNORECASE)
             or "---" in level_clean
             or re.search(
                 r"(?:Title|T[ií]tulo|Expected\s+Content|Conte[uú]do\s+Esperado|Resources|Recursos)",
@@ -227,9 +223,7 @@ def parse_technical_plan(text: str) -> tuple:
         )
     if not sections:
         for i, t in enumerate(re.findall(r"^##\s+([0-9]+\..+)$", text, re.MULTILINE)):
-            sections.append(
-                {"index": i, "title": t, "expected_content": t, "resources": ""}
-            )
+            sections.append({"index": i, "title": t, "expected_content": t, "resources": ""})
     if not sections:
         raise ValueError("❌ Nenhuma seção encontrada no plano.")
     return theme, summary, sections
@@ -252,9 +246,7 @@ def parse_academic_plan(text: str) -> tuple:
         A tuple containing the theme (str), summary (str), and a list of sections (list of dicts).
     """
     theme = "Academic Review"
-    m = re.search(
-        r"\*\*(?:Theme|Topic|Tema|T[óo]pico):\*\*\s*(.+)", text, re.IGNORECASE
-    )
+    m = re.search(r"\*\*(?:Theme|Topic|Tema|T[óo]pico):\*\*\s*(.+)", text, re.IGNORECASE)
     if m:
         theme = m.group(1).replace("*", "").strip()
 
@@ -266,9 +258,7 @@ def parse_academic_plan(text: str) -> tuple:
     sections = []
 
     # Primary: 3-column table  | N. Title | Objective | TTopics |
-    pattern = (
-        r"\|\s*\*?\*?(\d[\d\.]*\.?\s+[^|*]+?)\*?\*?\s*\|\s*([^|]+)\s*\|\s*([^|]*)\s*\|"
-    )
+    pattern = r"\|\s*\*?\*?(\d[\d\.]*\.?\s+[^|*]+?)\*?\*?\s*\|\s*([^|]+)\s*\|\s*([^|]*)\s*\|"
     for title_raw, objective, topics in re.findall(pattern, content):
         title_clean = title_raw.strip().replace("**", "")
         if (
@@ -292,9 +282,7 @@ def parse_academic_plan(text: str) -> tuple:
 
     # Fallback: H2 / H3 numbered headings  (## 1. Title)
     if not sections:
-        for i, t in enumerate(
-            re.findall(r"^#{2,3}\s+(\d[\d\.]*\s+.+)$", content, re.MULTILINE)
-        ):
+        for i, t in enumerate(re.findall(r"^#{2,3}\s+(\d[\d\.]*\s+.+)$", content, re.MULTILINE)):
             sections.append(
                 {
                     "index": i,
@@ -321,9 +309,6 @@ def extract_anchors(text: str) -> list:
     """
     pattern = re.compile(r'\[ANCHOR:\s*"((?:[^"\\]|\\.)*)"\]', re.DOTALL)
     return [m.strip() for m in pattern.findall(text)]
-
-
-import re
 
 
 def contains_assertion_verbs(text: str) -> bool:

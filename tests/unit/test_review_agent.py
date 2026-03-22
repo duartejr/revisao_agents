@@ -10,8 +10,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from revisao_agents.agents.review_agent import (
     _extract_edit_proposal,
     _parse_agent_response,
@@ -51,7 +49,6 @@ def _make_sections():
     """Parse the sample markdown into sections — reuse the handler parser."""
     # We inline a minimal parser here so the test doesn't depend on handlers.py
     import re
-    from typing import Optional
 
     lines = SAMPLE_MARKDOWN.splitlines(keepends=True)
     line_offsets: list[int] = []
@@ -70,14 +67,10 @@ def _make_sections():
     for hi, (start_line, title) in enumerate(headers):
         next_sl = headers[hi + 1][0] if hi + 1 < len(headers) else len(lines)
         sec_start = line_offsets[start_line]
-        sec_end = (
-            line_offsets[next_sl]
-            if next_sl < len(line_offsets)
-            else len(SAMPLE_MARKDOWN)
-        )
+        sec_end = line_offsets[next_sl] if next_sl < len(line_offsets) else len(SAMPLE_MARKDOWN)
         section_text = SAMPLE_MARKDOWN[sec_start:sec_end]
 
-        refs_line: Optional[int] = None
+        refs_line: int | None = None
         for i in range(start_line + 1, next_sl):
             if lines[i].strip().lower().startswith("### referências desta seção"):
                 refs_line = i
@@ -85,15 +78,9 @@ def _make_sections():
 
         body_end_line = refs_line if refs_line is not None else next_sl
         body_start = (
-            line_offsets[start_line + 1]
-            if start_line + 1 < len(line_offsets)
-            else sec_start
+            line_offsets[start_line + 1] if start_line + 1 < len(line_offsets) else sec_start
         )
-        body_end = (
-            line_offsets[body_end_line]
-            if body_end_line < len(line_offsets)
-            else sec_end
-        )
+        body_end = line_offsets[body_end_line] if body_end_line < len(line_offsets) else sec_end
 
         references: list[str] = []
         if refs_line is not None:
@@ -104,14 +91,10 @@ def _make_sections():
 
         paragraphs: list[dict] = []
         current_lines: list[str] = []
-        current_start: Optional[int] = None
+        current_start: int | None = None
         for i in range(start_line + 1, body_end_line):
             stripped = lines[i].strip()
-            if (
-                not stripped
-                or stripped.startswith("<!--")
-                or stripped.startswith("### ")
-            ):
+            if not stripped or stripped.startswith("<!--") or stripped.startswith("### "):
                 if current_lines:
                     para_text = "".join(current_lines).strip()
                     if para_text:
@@ -131,9 +114,7 @@ def _make_sections():
         if current_lines and current_start is not None:
             para_text = "".join(current_lines).strip()
             if para_text:
-                paragraphs.append(
-                    {"text": para_text, "start": current_start, "end": body_end}
-                )
+                paragraphs.append({"text": para_text, "start": current_start, "end": body_end})
 
         sections.append(
             {
@@ -586,10 +567,7 @@ class TestSystemPrompt:
         assert "Introduction" in system_msg
         assert "Methodology" in system_msg
         # Key rules should be present
-        assert (
-            "list all references" in system_msg.lower()
-            or "referências" in system_msg.lower()
-        )
+        assert "list all references" in system_msg.lower() or "referências" in system_msg.lower()
         assert "REVISED_TEXT_START" in system_msg
         assert "search_evidence" in system_msg
         assert "search_evidence_sources" in system_msg

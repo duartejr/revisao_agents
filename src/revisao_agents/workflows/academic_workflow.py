@@ -1,17 +1,17 @@
-from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, StateGraph
 
-from ..state import ReviewState
 from ..nodes import (
-    vector_search_node,
+    finalize_academic_plan_node,
+    human_pause_node,
     initial_academic_plan_node,
     interview_node,
-    human_pause_node,
-    refine_academic_search_node,
-    refine_academic_plan_node,
-    finalize_academic_plan_node,
     interview_router,
+    refine_academic_plan_node,
+    refine_academic_search_node,
+    vector_search_node,
 )
+from ..state import ReviewState
 
 
 def build_academic_workflow():

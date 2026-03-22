@@ -13,20 +13,19 @@ import os
 import re
 
 from langchain_core.tools import tool
-from typing import List
 
-from ..utils.vector_utils.vector_store import search_chunks, search_chunk_records
 from ..tools.tavily_web_search import (
-    search_tavily_incremental,
     extract_tavily,
     search_tavily_images,
+    search_tavily_incremental,
 )
 from ..utils.bib_utils.doi_utils import (
     extract_doi_from_url,
     get_bibtex_from_doi,
     search_crossref_by_title,
+    search_doi_in_text,
 )
-from ..utils.bib_utils.doi_utils import search_doi_in_text
+from ..utils.vector_utils.vector_store import search_chunk_records, search_chunks
 
 
 @tool
@@ -45,7 +44,7 @@ def search_evidence(query: str, k: int = 6) -> str:
         Formatted string with numbered evidence chunks, or a
         'no results' message.
     """
-    chunks: List[str] = search_chunks(query[:600], k=min(k, 10))
+    chunks: list[str] = search_chunks(query[:600], k=min(k, 10))
     if not chunks:
         return "No relevant evidence found in the academic corpus."
     parts = [f"[Chunk {i+1}]:\n{c}" for i, c in enumerate(chunks)]
@@ -77,7 +76,7 @@ def search_web_sources(query: str, max_results: int = 5) -> str:
     if not urls:
         return "No web results found."
     extracted = extract_tavily.invoke({"urls": urls, "include_images": False})
-    results: List[str] = []
+    results: list[str] = []
     for item in extracted.get("extracted", [])[:3]:
         results.append(
             f"Title: {item.get('title', '')}\n"
@@ -105,7 +104,7 @@ def search_evidence_sources(query: str, k: int = 6) -> str:
     if not records:
         return "No evidence sources found in the academic corpus."
 
-    lines: List[str] = []
+    lines: list[str] = []
     for idx, record in enumerate(records, start=1):
         title = record.get("source_title", "") or "(untitled source)"
         url = record.get("source_url", "")
@@ -194,7 +193,7 @@ def search_near_chunks(query: str, n: int = 2) -> str:
 
     for idx, path in selected:
         try:
-            with open(path, "r", encoding="utf-8") as file_handle:
+            with open(path, encoding="utf-8") as file_handle:
                 text = file_handle.read().strip()
         except Exception:
             text = ""
@@ -233,7 +232,7 @@ def search_web_images(query: str, max_results: int = 8) -> str:
     if not images:
         return "No web images found."
 
-    lines: List[str] = []
+    lines: list[str] = []
     for idx, item in enumerate(images[:8], start=1):
         lines.append(
             "\n".join(
@@ -356,9 +355,7 @@ def fetch_reference_metadata(
     # Step 1 — resolve DOI from args
     resolved_doi: str | None = None
     if doi:
-        resolved_doi = extract_doi_from_url(doi) or (
-            doi if re.match(r"^10\.\d", doi) else None
-        )
+        resolved_doi = extract_doi_from_url(doi) or (doi if re.match(r"^10\.\d", doi) else None)
     if resolved_doi is None and url:
         resolved_doi = extract_doi_from_url(url)
     # Step 2 — Crossref title search as fallback
@@ -369,7 +366,7 @@ def fetch_reference_metadata(
     if resolved_doi:
         bibtex = get_bibtex_from_doi(resolved_doi)
 
-    lines: List[str] = ["=== Reference Metadata ==="]
+    lines: list[str] = ["=== Reference Metadata ==="]
     lines.append(f"Provided title : {title or '(none)'}")
     lines.append(f"Provided DOI   : {doi or '(none)'}")
     lines.append(f"Provided URL   : {url or '(none)'}")
@@ -382,9 +379,7 @@ def fetch_reference_metadata(
             "in the requested citation style (ABNT, APA, etc.)."
         )
     else:
-        lines.append(
-            "\nBibTeX: (not available — Crossref lookup failed or yielded no match)"
-        )
+        lines.append("\nBibTeX: (not available — Crossref lookup failed or yielded no match)")
         if url and not url.startswith("/"):
             lines.append(
                 f"\nSUGGESTION: Call extract_web_text_from_url('{url}') to "
@@ -429,7 +424,7 @@ def search_article_online(title: str) -> str:
         return f"No web results found for title: {title}"
 
     extracted = extract_tavily.invoke({"urls": urls, "include_images": False})
-    results: List[str] = []
+    results: list[str] = []
     for item in extracted.get("extracted", [])[:3]:
         url_found = item.get("url", "")
         content = str(item.get("content", ""))

@@ -138,9 +138,7 @@ def test_incomplete_metadata_guidance_when_web_disabled():
         "[10] /tmp/arquivo_local_sem_metadado.pdf\n"
     )
 
-    reply, _meta = _handle_reference_request(
-        markdown, "resolva [10] em ABNT", allow_web=False
-    )
+    reply, _meta = _handle_reference_request(markdown, "resolva [10] em ABNT", allow_web=False)
     assert "ative **Allow web search**" in reply
 
 
@@ -159,9 +157,7 @@ def test_provided_format_guidance_when_web_disabled():
             return_value="[1] AUTHOR, A. **Test**. 2024.",
         ),
     ):
-        reply, meta = _handle_format_provided_references_request(
-            user_text, allow_web=False
-        )
+        reply, meta = _handle_format_provided_references_request(user_text, allow_web=False)
     assert meta["intent"] == "format_provided"
     assert meta["agent"] == "reference_extractor+reference_formatter"
 

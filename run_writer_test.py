@@ -9,13 +9,15 @@ Monitors all phases, logs progress to stdout, and runs post-execution
 quality checks on the generated review file.
 """
 
+import glob
 import os
+import re
 import sys
 import time
-import re
-import glob
 from datetime import datetime
 from pathlib import Path
+
+from revisao_agents.state import TechnicalWriterState
 
 # ── Resolve package path ─────────────────────────────────────────────────────
 AGENT_DIR = Path(__file__).parent
@@ -32,14 +34,6 @@ print("=" * 70)
 
 # 1. Import check
 try:
-    from revisao_agents.nodes.technical_writing import (
-        parsear_plano_node,
-        escrever_secoes_node,
-        consolidar_node,
-        _fase_pensamento,
-        _juiz_paragrafo_melhorado,
-        _buscar_conteudo_complementar,
-    )
     from revisao_agents.utils.llm_utils.prompt_loader import load_prompt
     from revisao_agents.workflows.technical_writing_workflow import build_workflow
 
@@ -57,9 +51,7 @@ try:
         cont_esp="test",
         recursos="test",
     )
-    print(
-        f"✅ fase_pensamento.yaml resolved ({len(p.text)} chars, temp={p.temperature})"
-    )
+    print(f"✅ fase_pensamento.yaml resolved ({len(p.text)} chars, temp={p.temperature})")
 except Exception as e:
     print(f"❌ fase_pensamento.yaml failed: {e}")
     sys.exit(1)
@@ -82,9 +74,7 @@ try:
         titulo_secao="test",
         conteudo_esperado="test",
     )
-    print(
-        f"✅ busca_complementar.yaml resolved ({len(p.text)} chars, temp={p.temperature})"
-    )
+    print(f"✅ busca_complementar.yaml resolved ({len(p.text)} chars, temp={p.temperature})")
 except Exception as e:
     print(f"❌ busca_complementar.yaml failed: {e}")
     sys.exit(1)
@@ -99,7 +89,7 @@ print(f"✅ Plan file found: {Path(PLAN_FILE).name}")
 try:
     from revisao_agents.utils.file_utils.helpers import parse_technical_plan
 
-    with open(PLAN_FILE, "r", encoding="utf-8") as f:
+    with open(PLAN_FILE, encoding="utf-8") as f:
         plan_text = f.read()
     tema, resumo, secoes = parse_technical_plan(plan_text)
     print(f"✅ Plan parsed: tema='{tema[:60]}' | {len(secoes)} section(s)")
@@ -124,8 +114,6 @@ print(f"STARTING WRITER — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 print(f"Plan: {Path(PLAN_FILE).name}")
 print(f"Sections: {len(secoes)}")
 print("=" * 70)
-
-from revisao_agents.state import TechnicalWriterState
 
 state_init: TechnicalWriterState = {
     "theme": "",
@@ -181,12 +169,8 @@ print("QUALITY CHECKS")
 print("=" * 70)
 
 # Find output file
-md_files = sorted(
-    glob.glob("reviews/revisao_tecnica_*.md"), key=os.path.getmtime, reverse=True
-)
-log_files = sorted(
-    glob.glob("reviews/revisao_tecnica_*.log"), key=os.path.getmtime, reverse=True
-)
+md_files = sorted(glob.glob("reviews/revisao_tecnica_*.md"), key=os.path.getmtime, reverse=True)
+log_files = sorted(glob.glob("reviews/revisao_tecnica_*.log"), key=os.path.getmtime, reverse=True)
 
 if not md_files:
     print("❌ No output .md file found in reviews/")
@@ -197,7 +181,7 @@ print(f"\n📄 Output: {out_file}")
 file_size = os.path.getsize(out_file)
 print(f"   Size: {file_size:,} bytes")
 
-with open(out_file, "r", encoding="utf-8") as f:
+with open(out_file, encoding="utf-8") as f:
     md_content = f.read()
 
 n_lines = md_content.count("\n")
@@ -239,21 +223,15 @@ check(
 check("Verification blockquote present", "Verificação por parágrafo" in md_content)
 
 # URL check in references
-refs_match = re.findall(
-    r"### Referências desta seção\n\n(.*?)(?:\n\n|$)", md_content, re.DOTALL
-)
-has_urls = (
-    any(re.search(r"https?://", block) for block in refs_match) if refs_match else False
-)
+refs_match = re.findall(r"### Referências desta seção\n\n(.*?)(?:\n\n|$)", md_content, re.DOTALL)
+has_urls = any(re.search(r"https?://", block) for block in refs_match) if refs_match else False
 check("References contain URLs", has_urls)
 
 # Paragraph density
 section_match = re.search(r"## 5\.0 Aplicação.*?(?=\n##\s|\Z)", md_content, re.DOTALL)
 if section_match:
     section_text = section_match.group(0)
-    section_paragraphs = len(
-        [p for p in section_text.split("\n\n") if len(p.strip()) > 100]
-    )
+    section_paragraphs = len([p for p in section_text.split("\n\n") if len(p.strip()) > 100])
     check(
         "Section 5.0 has >= 4 substantial paragraphs",
         section_paragraphs >= 4,
@@ -270,7 +248,7 @@ if log_files:
     log_file = log_files[0]
     log_size = os.path.getsize(log_file)
     print(f"\n📋 Log: {log_file}  ({log_size:,} bytes)")
-    with open(log_file, "r", encoding="utf-8") as f:
+    with open(log_file, encoding="utf-8") as f:
         log_content = f.read()
     log_checks = [
         ("Log has APROVADO entries", "APROVADO" in log_content),
@@ -289,7 +267,7 @@ else:
 # Stats from final state
 stats = final_state.get("verification_stats", [])
 if stats:
-    print(f"\n📊 Verification stats:")
+    print("\n📊 Verification stats:")
     for s in stats:
         t = s.get("total", 0)
         aprov = s.get("aprovados", 0)
@@ -304,10 +282,7 @@ if stats:
         )
 
 print(f"\n{'='*70}")
-print(
-    f"FINAL: {checks_passed}/{checks_total} checks passed | "
-    f"Runtime: {elapsed_total:.0f}s"
-)
+print(f"FINAL: {checks_passed}/{checks_total} checks passed | " f"Runtime: {elapsed_total:.0f}s")
 print(f"Output: {out_file}")
 print(f"{'='*70}\n")
 

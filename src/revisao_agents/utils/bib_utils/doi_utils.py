@@ -10,15 +10,14 @@ get_bibtex_from_doi       : fetch BibTeX from Crossref using a DOI.
 search_crossref_by_title  : query Crossref by title to find a DOI.
 """
 
-import re
 import json
 import logging
+import re
 import threading
 import time
-import urllib.request
 import urllib.error
 import urllib.parse
-from typing import Optional
+import urllib.request
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +33,8 @@ _CROSSREF_MIN_INTERVAL = 1.2  # seconds between requests
 _crossref_lock = threading.Lock()
 _crossref_last_call: float = 0.0  # timestamp of last request
 
-_doi_cache: dict[str, Optional[str]] = {}  # doi  -> bibtex or None
-_title_cache: dict[str, Optional[str]] = {}  # title -> doi   or None
+_doi_cache: dict[str, str | None] = {}  # doi  -> bibtex or None
+_title_cache: dict[str, str | None] = {}  # title -> doi   or None
 
 
 def _crossref_wait() -> None:
@@ -52,7 +51,7 @@ def _crossref_wait() -> None:
 # ---------------------------------------------------------------------------
 
 
-def extract_doi_from_url(file_path: str) -> Optional[str]:
+def extract_doi_from_url(file_path: str) -> str | None:
     """Extract a DOI from a URL or file path string.
 
     Handles ``doi.org`` URL patterns and embedded ``10.XXXX/...`` patterns.
@@ -77,7 +76,7 @@ def extract_doi_from_url(file_path: str) -> Optional[str]:
     return None
 
 
-def search_doi_in_text(text: str) -> Optional[str]:
+def search_doi_in_text(text: str) -> str | None:
     """Find a DOI pattern inside raw text (useful for PDF first pages).
 
     Args:
@@ -106,9 +105,7 @@ def search_doi_in_text(text: str) -> Optional[str]:
     return None
 
 
-def _fetch_bibtex_url(
-    url: str, headers: dict, timeout: int, doi_clean: str
-) -> Optional[str]:
+def _fetch_bibtex_url(url: str, headers: dict, timeout: int, doi_clean: str) -> str | None:
     """Make one HTTP request for BibTeX, with a single 429-backoff retry."""
     for attempt in range(2):
         _crossref_wait()
@@ -133,7 +130,7 @@ def _fetch_bibtex_url(
     return None  # both attempts exhausted
 
 
-def get_bibtex_from_doi(doi: str, timeout: int = 10) -> Optional[str]:
+def get_bibtex_from_doi(doi: str, timeout: int = 10) -> str | None:
     """Retrieve BibTeX from the Crossref API for the given DOI.
 
     Tries the primary ``/transform`` endpoint first; falls back to
@@ -162,7 +159,7 @@ def get_bibtex_from_doi(doi: str, timeout: int = 10) -> Optional[str]:
     url = f"{CROSSREF_API_BASE}/{doi_encoded}/transform"
     headers = {"User-Agent": _USER_AGENT, "Accept": "application/x-bibtex"}
 
-    bibtex: Optional[str] = None
+    bibtex: str | None = None
     try:
         bibtex = _fetch_bibtex_url(url, headers, timeout, doi_clean)
         if bibtex:
@@ -186,7 +183,7 @@ def get_bibtex_from_doi(doi: str, timeout: int = 10) -> Optional[str]:
     return bibtex
 
 
-def search_crossref_by_title(title: str, timeout: int = 10) -> Optional[str]:
+def search_crossref_by_title(title: str, timeout: int = 10) -> str | None:
     """Query Crossref by title to obtain a DOI.
 
     Results are cached for the process lifetime.
@@ -208,8 +205,8 @@ def search_crossref_by_title(title: str, timeout: int = 10) -> Optional[str]:
     encoded_title = urllib.parse.quote(title[:100])
     url = f"{CROSSREF_API_BASE}?query.title={encoded_title}&rows=1&select=DOI"
 
-    doi: Optional[str] = None
-    for attempt in range(2):
+    doi: str | None = None
+    for _ in range(2):
         _crossref_wait()
         try:
             req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})

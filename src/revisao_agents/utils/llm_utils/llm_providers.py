@@ -19,17 +19,18 @@ Required API keys in the .env file:
     OPENROUTER_API_KEY  -> OpenRouter
 """
 
-from abc import ABC, abstractmethod
-from typing import Any, List, Optional, Type, TypeVar, Union
-from enum import Enum
 import os
+from abc import ABC, abstractmethod
+from enum import Enum
+from typing import Any, TypeVar
+
 from dotenv import load_dotenv
+from langchain.agents import create_agent
 
 # LangChain imports
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
-from langchain.agents import create_agent
 
 load_dotenv()
 
@@ -56,7 +57,7 @@ class LLMProvider(Enum):
 class BaseLLMProvider(ABC):
     """Common interface for all LLM providers."""
 
-    def __init__(self, temperature: float = 0.2, model_name: Optional[str] = None):
+    def __init__(self, temperature: float = 0.2, model_name: str | None = None):
         self.temperature = temperature
         self.model_name = model_name or self.get_default_model()
         self._llm = None
@@ -79,9 +80,7 @@ class BaseLLMProvider(ABC):
             self._llm = self.create_llm()
         return self._llm
 
-    def create_agent_with_tools(
-        self, tools: List, system_prompt: str, name: str | None
-    ) -> Any:
+    def create_agent_with_tools(self, tools: list, system_prompt: str, name: str | None) -> Any:
         """Creates a ReAct agent with linked tools.
 
         Args:
@@ -263,7 +262,7 @@ class LLMFactory:
         cls,
         provider: LLMProvider,
         temperature: float = 0.2,
-        model_name: Optional[str] = None,
+        model_name: str | None = None,
     ) -> BaseLLMProvider:
         """
         Instantiates the chosen provider.
@@ -324,9 +323,9 @@ class LLMFactory:
 
 
 def get_llm(
-    provider: Optional[LLMProvider] = None,
+    provider: LLMProvider | None = None,
     temperature: float = 0.2,
-    model_name: Optional[str] = None,
+    model_name: str | None = None,
 ) -> Any:
     """
     Returns a ready-to-use LLM.
@@ -357,12 +356,12 @@ def get_llm(
 
 
 def create_agent_easy(
-    tools: List,
+    tools: list,
     system_prompt: str,
-    provider: Optional[LLMProvider] = None,
+    provider: LLMProvider | None = None,
     temperature: float = 0.2,
-    model_name: Optional[str] = None,
-    name: Optional[str] = None,
+    model_name: str | None = None,
+    name: str | None = None,
 ) -> Any:
     """
     Creates an agent with linked tools.
@@ -390,9 +389,7 @@ def create_agent_easy(
         llm_provider = LLMFactory.from_env()
     else:
         llm_provider = LLMFactory.create_provider(provider, temperature, model_name)
-    return llm_provider.create_agent_with_tools(
-        tools=tools, system_prompt=system_prompt, name=name
-    )
+    return llm_provider.create_agent_with_tools(tools=tools, system_prompt=system_prompt, name=name)
 
 
 T = TypeVar("T")
@@ -401,8 +398,8 @@ T = TypeVar("T")
 def llm_call(
     prompt: str,
     temperature: float = 0.2,
-    response_schema: Optional[Type[T]] = None,
-) -> Union[str, T]:
+    response_schema: type[T] | None = None,
+) -> str | T:
     """Wrapper for LLM calls with multi-provider support and structured output.
 
     Env vars:

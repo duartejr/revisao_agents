@@ -22,12 +22,12 @@ it as context when calling the LLM to format each reference.
 
 Public entry point
 ------------------
-run_reference_formatter()   — interactive CLI (called from __main__.py)
 format_references_from_file() — programmatic API
 """
 
 from __future__ import annotations
 
+# 1. Standard Library Imports
 import contextlib
 import json
 import logging
@@ -36,18 +36,20 @@ import re
 import urllib.request
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
+# 2. Third Party Imports
 import yaml  # PyYAML
 
-logger = logging.getLogger(__name__)
-
-# ── Imports from existing codebase ────────────────────────────────────────────
+# 3. Local/Existing Codebase Imports (MOVIDOS PARA CIMA)
 from ..config import llm_call
-from ..utils.llm_utils.prompt_loader import load_prompt
 from ..utils.bib_utils.crossref_bibtex import get_reference_data_react
 from ..utils.bib_utils.doi_utils import get_bibtex_from_doi
+from ..utils.llm_utils.prompt_loader import load_prompt
 from ..utils.vector_utils.mongodb_corpus import CorpusMongoDB
+
+# 4. Global Variables and Logger (AGORA DEPOIS DOS IMPORTS)
+logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Built-in pattern formatters
@@ -57,7 +59,7 @@ from ..utils.vector_utils.mongodb_corpus import CorpusMongoDB
 BUILTIN_PATTERNS = {"abnt", "apa", "ieee", "vancouver", "mla", "chicago"}
 
 
-def _format_abnt(fields: Dict[str, Any]) -> str:
+def _format_abnt(fields: dict[str, Any]) -> str:
     """ABNT NBR 6023 formatting from a field dict.
 
     Args:
@@ -110,7 +112,7 @@ def _format_abnt(fields: Dict[str, Any]) -> str:
     return citation
 
 
-def _format_apa(fields: Dict[str, Any]) -> str:
+def _format_apa(fields: dict[str, Any]) -> str:
     """APA 7th Edition formatting.
 
     Args:
@@ -154,7 +156,7 @@ def _format_apa(fields: Dict[str, Any]) -> str:
     return citation
 
 
-def _format_ieee(fields: Dict[str, Any]) -> str:
+def _format_ieee(fields: dict[str, Any]) -> str:
     """IEEE reference style formatting.
 
     Args:
@@ -201,7 +203,7 @@ def _format_ieee(fields: Dict[str, Any]) -> str:
     return citation
 
 
-def _format_vancouver(fields: Dict[str, Any]) -> str:
+def _format_vancouver(fields: dict[str, Any]) -> str:
     """Vancouver / NLM formatting.
 
     Args:
@@ -245,7 +247,7 @@ def _format_vancouver(fields: Dict[str, Any]) -> str:
     return citation
 
 
-def _format_mla(fields: Dict[str, Any]) -> str:
+def _format_mla(fields: dict[str, Any]) -> str:
     """MLA 9th edition formatting.
 
     Args:
@@ -291,7 +293,7 @@ def _format_mla(fields: Dict[str, Any]) -> str:
     return citation
 
 
-def _format_chicago(fields: Dict[str, Any]) -> str:
+def _format_chicago(fields: dict[str, Any]) -> str:
     """Chicago Author-Date formatting.
 
     Args:
@@ -354,7 +356,7 @@ _BUILTIN_FORMATTERS = {
 _BIBTEX_FIELD_RE = re.compile(r'(\w+)\s*=\s*["{]([^"}]+)["}]', re.IGNORECASE)
 
 
-def _parse_bibtex_fields(bibtex: str) -> Dict[str, str]:
+def _parse_bibtex_fields(bibtex: str) -> dict[str, str]:
     """Extract key=value fields from a BibTeX string into a plain dict.
 
     Args:
@@ -362,10 +364,7 @@ def _parse_bibtex_fields(bibtex: str) -> Dict[str, str]:
 
     Returns:
         Dictionary of fields extracted from the BibTeX entry."""
-    return {
-        m.group(1).lower(): m.group(2).strip()
-        for m in _BIBTEX_FIELD_RE.finditer(bibtex)
-    }
+    return {m.group(1).lower(): m.group(2).strip() for m in _BIBTEX_FIELD_RE.finditer(bibtex)}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -398,7 +397,7 @@ def _fetch_pattern_rules(pattern_url: str) -> str:
         return ""
 
 
-def _format_with_llm(fields: Dict[str, Any], pattern: str, rules_text: str) -> str:
+def _format_with_llm(fields: dict[str, Any], pattern: str, rules_text: str) -> str:
     """Use the LLM to format a reference when no built-in formatter exists.
     The prompt includes the fields and the rules text to guide the LLM in formatting.
 
@@ -439,10 +438,10 @@ def _format_with_llm(fields: Dict[str, Any], pattern: str, rules_text: str) -> s
 
 
 def _resolve_reference(
-    entry: Dict[str, Any],
-    mongo_corpus: Optional[Any],
+    entry: dict[str, Any],
+    mongo_corpus: Any | None,
     tavily_enabled: bool,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Resolve a single reference entry into a fields dict.
 
     Priority:
@@ -505,10 +504,8 @@ def _resolve_reference(
             max_iterations=5,
             timeout=10,
         )
-        if ref_data.get("bibtex"):
-            fields = _parse_bibtex_fields(ref_data["bibtex"])
-        else:
-            fields = {}
+
+        fields = _parse_bibtex_fields(ref_data["bibtex"]) if ref_data.get("bibtex") else {}
 
         # Overlay manual fields if provided in the entry
         for k, v in entry.items():
@@ -532,7 +529,7 @@ def _resolve_reference(
 def format_references_from_file(
     input_path: str,
     tavily_enabled: bool = False,
-    output_path: Optional[str] = None,
+    output_path: str | None = None,
 ) -> str:
     """Format references from a YAML or JSON input file.
 
@@ -558,13 +555,11 @@ def format_references_from_file(
         raise ValueError(f"Unsupported file format: {path.suffix} (use .yaml or .json)")
 
     if not isinstance(data, dict):
-        raise ValueError(
-            "Input file must be a mapping with 'pattern' and 'references' keys."
-        )
+        raise ValueError("Input file must be a mapping with 'pattern' and 'references' keys.")
 
     pattern: str = str(data.get("pattern", "abnt")).lower().strip()
     pattern_url: str = str(data.get("pattern_url", "")).strip()
-    entries: List[Any] = data.get("references", [])
+    entries: list[Any] = data.get("references", [])
 
     if not entries:
         raise ValueError("No references found under 'references:' in the input file.")
@@ -592,7 +587,7 @@ def format_references_from_file(
     formatter = _BUILTIN_FORMATTERS.get(pattern)
 
     # ── Connect MongoDB (best-effort) ─────────────────────────────────────
-    mongo_corpus: Optional[Any] = None
+    mongo_corpus: Any | None = None
     try:
         mongo_corpus = CorpusMongoDB()
         mongo_corpus.connect()
@@ -602,7 +597,7 @@ def format_references_from_file(
         mongo_corpus = None
 
     # ── Process each reference ────────────────────────────────────────────
-    formatted_refs: List[str] = []
+    formatted_refs: list[str] = []
     total = len(entries)
 
     for i, entry in enumerate(entries, 1):
@@ -675,72 +670,3 @@ def format_references_from_file(
         print(f"\n  ⚠️  Could not save output: {exc}")
 
     return markdown
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Interactive CLI (called from __main__.py)
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-def run_reference_formatter() -> None:
-    """Interactive menu for the Reference Formatting Agent.
-
-    Args:
-        None (all input is via prompts)
-
-    Returns:
-        None (prints formatted references and saves to file)
-    """
-    print("\n" + "=" * 70)
-    print("AGENTE DE FORMATAÇÃO DE REFERÊNCIAS")
-    print("=" * 70)
-    print(
-        "\nEste agente lê um arquivo YAML ou JSON com suas referências e as\n"
-        "formata no padrão bibliográfico escolhido.\n"
-        "\nPadrões embutidos: ABNT, APA, IEEE, Vancouver, MLA, Chicago.\n"
-        "Para qualquer outro padrão, inclua 'pattern_url' no arquivo YAML\n"
-        "com o link para as regras do padrão.\n"
-    )
-    print(f"  Exemplos disponíveis em: references/")
-    print(f"    • references/example_abnt.yaml")
-    print(f"    • references/example_apa.yaml")
-    print(f"    • references/example_ieee.yaml")
-    print(f"    • references/example_custom_pattern.yaml\n")
-
-    # ── Input file ───────────────────────────────────────────────────────
-    input_path = input("📂 Caminho do arquivo YAML/JSON de referências: ").strip()
-    if not input_path:
-        print("❌ Caminho vazio.")
-        return
-    input_path = os.path.expanduser(input_path)
-    if not os.path.exists(input_path):
-        print(f"❌ Arquivo não encontrado: {input_path}")
-        return
-
-    # ── Tavily option ─────────────────────────────────────────────────────
-    print("\nDeseja permitir busca web via Tavily para referências sem DOI?")
-    tavily_opt = input("Permitir Tavily? [y/N]: ").strip().lower() or "n"
-    tavily_enabled = tavily_opt == "y"
-
-    # ── Output path (optional) ────────────────────────────────────────────
-    print("\n(Opcional) Caminho de saída para o arquivo .md formatado.")
-    print("  Pressione Enter para usar o nome padrão em reviews/")
-    output_path_raw = input("📝 Saída [Enter = automático]: ").strip()
-    output_path: Optional[str] = (
-        os.path.expanduser(output_path_raw) if output_path_raw else None
-    )
-
-    print("\n" + "=" * 70)
-
-    try:
-        markdown = format_references_from_file(
-            input_path=input_path,
-            tavily_enabled=tavily_enabled,
-            output_path=output_path,
-        )
-        print("\n" + "=" * 70)
-        print("✅ FORMATAÇÃO CONCLUÍDA")
-        print("=" * 70)
-    except Exception as exc:
-        print(f"\n❌ Erro: {exc}")
-        logger.exception("Reference formatter error")

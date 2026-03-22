@@ -10,14 +10,14 @@ Prompts are loaded from YAML files in prompts/common/.
 """
 
 from ..state import ReviewState
-from ..utils.llm_utils.llm_providers import get_llm
 from ..utils.file_utils.helpers import (
     fmt_chunks,
     fmt_snippets,
     summarize_hist,
     truncate,
 )
-from ..utils.llm_utils.prompt_loader import load_prompt, get_prompt_field
+from ..utils.llm_utils.llm_providers import get_llm
+from ..utils.llm_utils.prompt_loader import get_prompt_field, load_prompt
 
 # Constants (may need to be moved to config)
 TERMINATION_PT = {"fim", "terminar", "sair", "encerrar", "pronto", "acabar"}

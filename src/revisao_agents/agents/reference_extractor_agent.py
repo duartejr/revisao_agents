@@ -17,10 +17,9 @@ import logging
 from datetime import date
 
 from langchain_core.messages import AIMessage, HumanMessage
-from langchain.agents import create_agent
 
 from ..tools.reference_tools import get_reference_tools
-from ..utils.llm_utils.llm_providers import get_llm, create_agent_easy
+from ..utils.llm_utils.llm_providers import create_agent_easy
 from ..utils.llm_utils.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -131,8 +130,7 @@ def run_reference_extractor_agent(
         content = getattr(msg, "content", "") or ""
         if isinstance(content, list):
             content = " ".join(
-                part.get("text", "") if isinstance(part, dict) else str(part)
-                for part in content
+                part.get("text", "") if isinstance(part, dict) else str(part) for part in content
             )
         if content.strip():
             return content.strip()

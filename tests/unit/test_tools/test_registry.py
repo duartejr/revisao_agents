@@ -4,7 +4,6 @@ tests/unit/test_tools/test_registry.py
 Unit tests for the tools registry.
 """
 
-import pytest
 from revisao_agents.tools.registry import get_all_tools
 
 

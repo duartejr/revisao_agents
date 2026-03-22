@@ -4,8 +4,8 @@ tests/unit/test_agents/test_academic.py
 Unit tests for the academic review agents.
 """
 
-from unittest.mock import patch, MagicMock
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from revisao_agents.state import ReviewState
 

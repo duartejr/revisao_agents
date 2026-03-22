@@ -11,7 +11,6 @@ pipeline.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 import pdfplumber
 
@@ -33,7 +32,7 @@ def _extract_pdf_text(pdf_path: Path) -> str:
     Returns:
         Extracted text from all pages, concatenated with double newlines.
     """
-    pages: List[str] = []
+    pages: list[str] = []
     try:
         with pdfplumber.open(pdf_path) as pdf:
             for page in pdf.pages:
@@ -86,7 +85,7 @@ def ingest_pdf_folder(folder_path: str) -> dict:
     print(f"   {len(pdf_files)} PDF(s) found\n")
 
     corpus = CorpusMongoDB()
-    extracted_documents: List[dict] = []
+    extracted_documents: list[dict] = []
 
     counts = {"indexed": 0, "skipped": 0, "already": 0, "errors": 0}
 
@@ -104,14 +103,12 @@ def ingest_pdf_folder(folder_path: str) -> dict:
         text = _extract_pdf_text(pdf_path)
 
         if not text:
-            print(f"      ❌ Empty text — invalid or protected file")
+            print("      ❌ Empty text — invalid or protected file")
             counts["errors"] += 1
             continue
 
         if len(text) < EXTRACT_MIN_CHARS:
-            print(
-                f"      ⚠️  Text too short ({len(text)} chars < {EXTRACT_MIN_CHARS}) — ignored"
-            )
+            print(f"      ⚠️  Text too short ({len(text)} chars < {EXTRACT_MIN_CHARS}) — ignored")
             counts["skipped"] += 1
             continue
 

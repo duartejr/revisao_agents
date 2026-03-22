@@ -14,6 +14,7 @@ yields.  This produces true, line-by-line live output in the UI.
 
 from __future__ import annotations
 
+# 1. Standard Library Imports
 import glob
 import hashlib
 import logging
@@ -24,41 +25,29 @@ import shutil
 import sys
 import tempfile
 import threading
+from collections.abc import Generator
 from datetime import datetime
-from typing import Any, Generator, Optional
+from typing import Any
 
-_SRC = os.path.join(os.path.dirname(__file__), "..")
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-
-from revisao_agents.state import ReviewState, TechnicalWriterState
-from revisao_agents.workflows import build_academic_workflow, build_technical_workflow
-from revisao_agents.workflows.technical_writing_workflow import (
-    build_technical_writing_workflow,
-)
-from revisao_agents.config import (
-    get_runtime_config_summary,
-    llm_call,
-    validate_runtime_config,
-)
-from revisao_agents.utils.vector_utils.pdf_ingestor import ingest_pdf_folder
-from revisao_agents.utils.vector_utils.vector_store import (
-    search_chunks,
-    search_chunk_records,
-)
-from revisao_agents.utils.llm_utils.prompt_loader import load_prompt
-from revisao_agents.core.schemas.writer_config import WriterConfig
-from revisao_agents.tools.tavily_web_search import (
-    extract_tavily,
-    search_tavily_incremental,
-)
-from revisao_agents.tools.reference_formatter import format_references_from_file
-from revisao_agents.agents.review_agent import run_review_agent
+# 2. Local Codebase Imports
 from revisao_agents.agents.reference_extractor_agent import (
     run_reference_extractor_agent,
 )
 from revisao_agents.agents.reference_formatter_agent import (
     run_reference_formatter_agent,
+)
+from revisao_agents.agents.review_agent import run_review_agent
+from revisao_agents.config import (
+    get_runtime_config_summary,
+    llm_call,
+    validate_runtime_config,
+)
+from revisao_agents.core.schemas.writer_config import WriterConfig
+from revisao_agents.state import ReviewState, TechnicalWriterState
+from revisao_agents.tools.reference_formatter import format_references_from_file
+from revisao_agents.tools.tavily_web_search import (
+    extract_tavily,
+    search_tavily_incremental,
 )
 from revisao_agents.utils.bib_utils.doi_utils import (
     extract_doi_from_url,
@@ -66,6 +55,21 @@ from revisao_agents.utils.bib_utils.doi_utils import (
     search_crossref_by_title,
     search_doi_in_text,
 )
+from revisao_agents.utils.llm_utils.prompt_loader import load_prompt
+from revisao_agents.utils.vector_utils.pdf_ingestor import ingest_pdf_folder
+from revisao_agents.utils.vector_utils.vector_store import (
+    search_chunk_records,
+    search_chunks,
+)
+from revisao_agents.workflows import build_academic_workflow, build_technical_workflow
+from revisao_agents.workflows.technical_writing_workflow import (
+    build_technical_writing_workflow,
+)
+
+_SRC = os.path.join(os.path.dirname(__file__), "..")
+
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 
 _SUPPORTED_LLM_PROVIDERS = ("gemini", "groq", "openai", "openrouter")
 
@@ -134,13 +138,13 @@ class _StdoutCapture:
     can read lines as they are produced by any print() inside the block.
     """
 
-    def __init__(self, q: "queue.Queue[str]"):
+    def __init__(self, q: queue.Queue[str]):
         """Initialize the stdout capture with a queue to receive lines."""
         self._q = q
         self._buf = ""
         self._original: Any = None
 
-    def __enter__(self) -> "_StdoutCapture":
+    def __enter__(self) -> _StdoutCapture:
         """Redirect sys.stdout to this object, which funnels lines into the queue."""
         self._original = sys.stdout
         sys.stdout = self  # type: ignore[assignment]
@@ -187,13 +191,13 @@ class _StderrCapture:
     warnings and direct stderr writes also appear in the live UI stream.
     """
 
-    def __init__(self, q: "queue.Queue[str]"):
+    def __init__(self, q: queue.Queue[str]):
         """Initialize the stderr capture with a queue to receive lines."""
         self._q = q
         self._buf = ""
         self._original: Any = None
 
-    def __enter__(self) -> "_StderrCapture":
+    def __enter__(self) -> _StderrCapture:
         """Redirect sys.stderr to this object, which funnels lines into the queue."""
         self._original = sys.stderr
         sys.stderr = self  # type: ignore[assignment]
@@ -238,7 +242,7 @@ class _QueueLogHandler(logging.Handler):
     """A logging handler that sends log records to a queue, allowing logs to be captured and
     streamed in real-time to the UI."""
 
-    def __init__(self, q: "queue.Queue[str]"):
+    def __init__(self, q: queue.Queue[str]):
         """Initialize the queue log handler with a queue to receive log messages."""
         super().__init__(level=logging.NOTSET)
         self._q = q
@@ -263,13 +267,13 @@ class _LoggingCapture:
     logger so logging calls are streamed live to the UI.
     """
 
-    def __init__(self, q: "queue.Queue[str]"):
+    def __init__(self, q: queue.Queue[str]):
         """Initialize the logging capture with a queue to receive log messages."""
         self._q = q
         self._handler = _QueueLogHandler(q)
         self._logger = logging.getLogger()
 
-    def __enter__(self) -> "_LoggingCapture":
+    def __enter__(self) -> _LoggingCapture:
         """Add the queue log handler to the root logger."""
         self._handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
         self._logger.addHandler(self._handler)
@@ -323,7 +327,8 @@ def _read_md(path: str | None) -> str:
     if not path or not os.path.exists(path):
         return ""
     try:
-        return open(path, encoding="utf-8").read()
+        with open(path, encoding="utf-8") as f:
+            return f.read()
     except Exception:
         return ""
 
@@ -392,11 +397,7 @@ def start_planning(
 
     thread_id = f"revisao_{tipo_atual}_{tema[:20]}"
     config = {"configurable": {"thread_id": thread_id}}
-    app = (
-        build_academic_workflow()
-        if tipo_atual == "academico"
-        else build_technical_workflow()
-    )
+    app = build_academic_workflow() if tipo_atual == "academico" else build_technical_workflow()
 
     log_q: queue.Queue[str] = queue.Queue()
     with _StdoutCapture(log_q):
@@ -411,9 +412,7 @@ def start_planning(
     while not log_q.empty():
         lines.append(log_q.get_nowait())
     if lines:
-        history.append(
-            {"role": "assistant", "content": "```\n" + "\n".join(lines) + "\n```"}
-        )
+        history.append({"role": "assistant", "content": "```\n" + "\n".join(lines) + "\n```"})
 
     graph_state = app.get_state(config)
 
@@ -500,9 +499,7 @@ def continue_planning(
     while not log_q.empty():
         lines.append(log_q.get_nowait())
     if lines:
-        history = history + [
-            {"role": "assistant", "content": "```\n" + "\n".join(lines) + "\n```"}
-        ]
+        history = history + [{"role": "assistant", "content": "```\n" + "\n".join(lines) + "\n```"}]
 
     graph_state = app.get_state(config)
 
@@ -555,9 +552,7 @@ def list_plan_files(mode: str) -> list[str]:
     """List available plan files for the given mode (Academic or Technical)."""
     os.makedirs("plans", exist_ok=True)
     pattern = (
-        "plans/plano_revisao_tecnica_*.md"
-        if mode == "Technical"
-        else "plans/plano_revisao_*.md"
+        "plans/plano_revisao_tecnica_*.md" if mode == "Technical" else "plans/plano_revisao_*.md"
     )
     files = sorted(glob.glob(pattern))
     if not files:
@@ -602,8 +597,7 @@ def start_writing(
             + [
                 {
                     "role": "assistant",
-                    "content": "❌ Configuração incompleta:\n- "
-                    + "\n- ".join(cfg_issues),
+                    "content": "❌ Configuração incompleta:\n- " + "\n- ".join(cfg_issues),
                 }
             ],
             "❌ Erro",
@@ -695,9 +689,7 @@ def start_writing(
         try:
             kind, data = result_q.get(timeout=120)
         except queue.Empty:
-            history = history + [
-                {"role": "assistant", "content": "⏳ Aguardando agente…"}
-            ]
+            history = history + [{"role": "assistant", "content": "⏳ Aguardando agente…"}]
             yield history, "⏳ Aguardando…", ""
             continue
 
@@ -713,9 +705,7 @@ def start_writing(
             if node != "__end__":
                 st = data.get(node, {}).get("status", "")
                 if st:
-                    history = history + [
-                        {"role": "assistant", "content": f"**[{node}]** → {st}"}
-                    ]
+                    history = history + [{"role": "assistant", "content": f"**[{node}]** → {st}"}]
                     yield history, f"🔄 {node}", ""
 
         elif kind == "error":
@@ -726,17 +716,11 @@ def start_writing(
     thread.join(timeout=5)
 
     new_files = set(_list_md("reviews")) - snapshot_before
-    output_file = (
-        max(new_files, key=os.path.getmtime)
-        if new_files
-        else _find_newest_md("reviews")
-    )
+    output_file = max(new_files, key=os.path.getmtime) if new_files else _find_newest_md("reviews")
     rendered = _read_md(output_file)
 
     link_msg = (
-        f"✅ Escrita concluída!  📄 `{output_file}`"
-        if output_file
-        else "✅ Escrita concluída!"
+        f"✅ Escrita concluída!  📄 `{output_file}`" if output_file else "✅ Escrita concluída!"
     )
     history = history + [{"role": "assistant", "content": link_msg}]
     yield history, "✅ Concluído", rendered
@@ -863,13 +847,11 @@ def _split_sections(markdown: str) -> list[dict]:
         )
         section_start = line_offsets[start_line]
         section_end = (
-            line_offsets[next_start_line]
-            if next_start_line < len(line_offsets)
-            else len(markdown)
+            line_offsets[next_start_line] if next_start_line < len(line_offsets) else len(markdown)
         )
         section_text = markdown[section_start:section_end]
 
-        references_start_line: Optional[int] = None
+        references_start_line: int | None = None
         for i in range(start_line + 1, next_start_line):
             if re.match(
                 r"^###\s+(?:References\s+for\s+this\s+section|Refer[êe]ncias\s+desta\s+se[çc][ãa]o)\s*$",
@@ -880,20 +862,12 @@ def _split_sections(markdown: str) -> list[dict]:
                 break
 
         body_end_line = (
-            references_start_line
-            if references_start_line is not None
-            else next_start_line
+            references_start_line if references_start_line is not None else next_start_line
         )
         body_start = (
-            line_offsets[start_line + 1]
-            if start_line + 1 < len(line_offsets)
-            else section_start
+            line_offsets[start_line + 1] if start_line + 1 < len(line_offsets) else section_start
         )
-        body_end = (
-            line_offsets[body_end_line]
-            if body_end_line < len(line_offsets)
-            else section_end
-        )
+        body_end = line_offsets[body_end_line] if body_end_line < len(line_offsets) else section_end
         body_text = markdown[body_start:body_end].strip()
 
         references: list[str] = []
@@ -905,14 +879,10 @@ def _split_sections(markdown: str) -> list[dict]:
 
         paragraphs: list[dict] = []
         current_lines: list[str] = []
-        current_start: Optional[int] = None
+        current_start: int | None = None
         for i in range(start_line + 1, body_end_line):
             stripped = lines[i].strip()
-            if (
-                not stripped
-                or stripped.startswith("<!--")
-                or stripped.startswith("### ")
-            ):
+            if not stripped or stripped.startswith("<!--") or stripped.startswith("### "):
                 if current_lines:
                     para_text = "".join(current_lines).strip()
                     if para_text:
@@ -956,11 +926,9 @@ def _split_sections(markdown: str) -> list[dict]:
     return sections
 
 
-def _resolve_section_index(user_text: str, sections: list[dict]) -> Optional[int]:
+def _resolve_section_index(user_text: str, sections: list[dict]) -> int | None:
     text = user_text.lower()
-    sec_match = re.search(
-        r"(?:section|sec|se[çc][ãa]o|chapter|cap[ií]tulo)\s*(\d+)", text
-    )
+    sec_match = re.search(r"(?:section|sec|se[çc][ãa]o|chapter|cap[ií]tulo)\s*(\d+)", text)
     if sec_match:
         number = sec_match.group(1)
         for idx, section in enumerate(sections):
@@ -974,7 +942,7 @@ def _resolve_section_index(user_text: str, sections: list[dict]) -> Optional[int
     return None
 
 
-def _resolve_paragraph_index(user_text: str, paragraph_count: int) -> Optional[int]:
+def _resolve_paragraph_index(user_text: str, paragraph_count: int) -> int | None:
     if paragraph_count <= 0:
         return None
     text = user_text.lower()
@@ -1191,9 +1159,7 @@ def _intent(user_text: str) -> str:
             "mais documentos",
             "mais fontes",
         ]
-    ) and any(
-        phrase in text for phrase in ["phrase", "excerpt", "snippet", "frase", "trecho"]
-    ):
+    ) and any(phrase in text for phrase in ["phrase", "excerpt", "snippet", "frase", "trecho"]):
         return "suggest_more_documents_for_phrase"
     if any(
         word in text
@@ -1280,15 +1246,13 @@ def _list_section_citations(markdown: str, user_text: str) -> str:
     return f"### {heading} {sections[sec_idx]['title']}\n\n" + "\n".join(refs)
 
 
-def _extract_citation_number(user_text: str) -> Optional[int]:
+def _extract_citation_number(user_text: str) -> int | None:
     match = re.search(r"\[(\d+)\]", user_text)
     if match:
         return int(match.group(1))
 
     text = user_text.lower()
-    match = re.search(
-        r"(?:source|citation|reference|refer(?:e|ê)ncia|fonte)\s*#?\s*(\d+)", text
-    )
+    match = re.search(r"(?:source|citation|reference|refer(?:e|ê)ncia|fonte)\s*#?\s*(\d+)", text)
     if match:
         return int(match.group(1))
     return None
@@ -1407,9 +1371,7 @@ def _is_citation_usage_query(user_text: str) -> bool:
         "citado",
         "citam",
     ]
-    return any(w in text for w in listing_words) and any(
-        re.search(w, text) for w in usage_words
-    )
+    return any(w in text for w in listing_words) and any(re.search(w, text) for w in usage_words)
 
 
 def _extract_requested_citation_numbers(user_text: str) -> list[int]:
@@ -1456,9 +1418,7 @@ def _classify_reference_intent(user_text: str) -> str | None:
         "padrão",
         "padrao",
     ]
-    has_format_keyword = any(
-        _contains_keyword(text, keyword) for keyword in format_keywords
-    )
+    has_format_keyword = any(_contains_keyword(text, keyword) for keyword in format_keywords)
     if has_format_keyword:
         provided_items = _extract_provided_reference_items(user_text)
         if provided_items:
@@ -1492,9 +1452,7 @@ def _classify_reference_intent(user_text: str) -> str | None:
     has_explicit_phrase = any(
         _contains_keyword(text, phrase) for phrase in explicit_list_all_phrases
     )
-    has_list_action = any(
-        _contains_keyword(text, keyword) for keyword in list_all_action_words
-    )
+    has_list_action = any(_contains_keyword(text, keyword) for keyword in list_all_action_words)
     has_reference_word = any(
         _contains_keyword(text, keyword)
         for keyword in [
@@ -1506,9 +1464,7 @@ def _classify_reference_intent(user_text: str) -> str | None:
             "sources",
         ]
     )
-    if has_explicit_phrase or (
-        has_list_action and has_reference_word and "document" in text
-    ):
+    if has_explicit_phrase or (has_list_action and has_reference_word and "document" in text):
         return "list_all"
 
     # 3) Numbered citation requests.
@@ -1681,10 +1637,7 @@ def _parse_bibtex_fields(bibtex: str) -> dict[str, str]:
     """
     if not bibtex:
         return {}
-    return {
-        m.group(1).lower(): m.group(2).strip()
-        for m in _BIBTEX_FIELD_RE.finditer(bibtex)
-    }
+    return {m.group(1).lower(): m.group(2).strip() for m in _BIBTEX_FIELD_RE.finditer(bibtex)}
 
 
 def _metadata_from_bibtex(number: int | None, bibtex: str) -> dict:
@@ -1795,9 +1748,7 @@ def _metadata_from_raw_reference(number: int | None, raw_reference: str) -> dict
         title_guess = _title_from_file_path(file_path)
     else:
         text_no_url = re.sub(r"https?://\S+", "", body)
-        text_no_doi = re.sub(
-            r"10\.\d{4,9}/[^\s,;]+", "", text_no_url, flags=re.IGNORECASE
-        )
+        text_no_doi = re.sub(r"10\.\d{4,9}/[^\s,;]+", "", text_no_url, flags=re.IGNORECASE)
         text_no_path = re.sub(r"/[^\n]*?\.pdf", "", text_no_doi, flags=re.IGNORECASE)
         text_no_labels = re.sub(
             r"\b(?:dispon[ií]vel em|arquivo local|citado em)\b:?.*",
@@ -2074,9 +2025,7 @@ def _collect_reference_inventory(markdown: str) -> dict:
     }
 
 
-def _enrich_reference_from_mongo(
-    number: int, paragraphs: list[str]
-) -> tuple[dict, dict]:
+def _enrich_reference_from_mongo(number: int, paragraphs: list[str]) -> tuple[dict, dict]:
     """Attempts to enrich the reference metadata by performing a search in the MongoDB vector store using the paragraphs that cite the reference number.
 
     Args:
@@ -2281,9 +2230,7 @@ def _handle_resolve_numbers_request(
     )
     abnt_list = run_reference_formatter_agent(enriched, allow_web=allow_web)
 
-    heading = _localized_text(
-        language, "### Refer\u00eancias (ABNT)", "### References (ABNT)"
-    )
+    heading = _localized_text(language, "### Refer\u00eancias (ABNT)", "### References (ABNT)")
     reply = f"{heading}\n\n{abnt_list}"
     return reply, {
         "intent": "resolve_numbers",
@@ -2448,15 +2395,9 @@ def _enrich_metadata_doi_first(metadata: dict, allow_web: bool) -> tuple[dict, d
 
     if should_try_tavily:
         query_seed = (
-            query
-            or metadata.get("title")
-            or metadata.get("url")
-            or metadata.get("doi")
-            or ""
+            query or metadata.get("title") or metadata.get("url") or metadata.get("doi") or ""
         )
-        web_ref, web_meta = _enrich_reference_from_web(
-            metadata.get("number") or 0, str(query_seed)
-        )
+        web_ref, web_meta = _enrich_reference_from_web(metadata.get("number") or 0, str(query_seed))
         web_queries += int(web_meta.get("web_queries", 0))
         web_hits += int(web_meta.get("web_hits", 0))
         if web_ref:
@@ -2470,9 +2411,7 @@ def _enrich_metadata_doi_first(metadata: dict, allow_web: bool) -> tuple[dict, d
     }
 
 
-def _handle_format_provided_references_request(
-    user_text: str, allow_web: bool
-) -> tuple[str, dict]:
+def _handle_format_provided_references_request(user_text: str, allow_web: bool) -> tuple[str, dict]:
     """Runs extractor then formatter on the user-provided reference list.
 
     The extractor resolves paths, in-text citations, and partial entries into
@@ -2499,9 +2438,7 @@ def _handle_format_provided_references_request(
     return reply, meta
 
 
-def _handle_reference_request(
-    markdown: str, user_text: str, allow_web: bool
-) -> tuple[str, dict]:
+def _handle_reference_request(markdown: str, user_text: str, allow_web: bool) -> tuple[str, dict]:
     """This is the main handler for resolving numbered references in the document based on user requests.
     It collects the reference inventory, identifies which numbers to target, and attempts to enrich their metadata
     using MongoDB and web search as needed, then formats the results in ABNT style.
@@ -2637,9 +2574,7 @@ def _handle_reference_request(
 
     lines += [
         "",
-        _localized_text(
-            language, "### Referências numeradas [n]", "### Numbered references [n]"
-        ),
+        _localized_text(language, "### Referências numeradas [n]", "### Numbered references [n]"),
         "",
     ]
     if dedup_resolved:
@@ -2673,9 +2608,7 @@ def _handle_reference_request(
 
     lines += [
         "",
-        _localized_text(
-            language, "### Rastreabilidade da busca", "### Search traceability"
-        ),
+        _localized_text(language, "### Rastreabilidade da busca", "### Search traceability"),
         _localized_text(
             language,
             f"- MongoDB: {mongo_queries} consulta(s), {mongo_hits} item(ns) resolvido(s)",
@@ -2741,9 +2674,7 @@ def _list_paragraphs_using_citation(markdown: str, user_text: str) -> str:
             if ref.startswith(token):
                 reference_hits.append(f"- **{section['title']}**: {ref}")
 
-        for paragraph_index, paragraph in enumerate(
-            section.get("paragraphs", []), start=1
-        ):
+        for paragraph_index, paragraph in enumerate(section.get("paragraphs", []), start=1):
             text = paragraph.get("text", "")
             if token not in text:
                 continue
@@ -2777,9 +2708,7 @@ def _list_paragraphs_using_citation(markdown: str, user_text: str) -> str:
     if reference_hits:
         lines += [
             "",
-            _localized_text(
-                language, "### Referência detectada", "### Detected reference"
-            ),
+            _localized_text(language, "### Referência detectada", "### Detected reference"),
             "",
             *reference_hits[:8],
         ]
@@ -2851,9 +2780,7 @@ def _confirm_paragraph(markdown: str, user_text: str) -> tuple[str, dict]:
     )
 
     msg = (
-        _localized_text(
-            language, "### Verificação do parágrafo\n", "### Paragraph verification\n"
-        )
+        _localized_text(language, "### Verificação do parágrafo\n", "### Paragraph verification\n")
         + _localized_text(
             language,
             f"- Seção: **{target_sec['title'] if target_sec else 'N/A'}**\n",
@@ -2943,9 +2870,7 @@ def _suggest_more_documents(user_text: str, allow_web: bool) -> tuple[str, dict]
     if urls:
         lines += ["\n**Web (Tavily)**"]
         for idx, item in enumerate(extracted.get("extracted", [])[:3], start=1):
-            lines.append(
-                f"- [{idx}] {item.get('title','(sem título)')} — {item.get('url','')}"
-            )
+            lines.append(f"- [{idx}] {item.get('title','(sem título)')} — {item.get('url','')}")
     else:
         lines.append(
             _localized_text(
@@ -2962,9 +2887,7 @@ def _suggest_more_documents(user_text: str, allow_web: bool) -> tuple[str, dict]
     }
 
 
-def _build_edit_proposal(
-    markdown: str, user_text: str, allow_web: bool
-) -> tuple[str, dict]:
+def _build_edit_proposal(markdown: str, user_text: str, allow_web: bool) -> tuple[str, dict]:
     """
     Builds an edit proposal for a given paragraph in the markdown content based on the user's input.
 
@@ -3091,18 +3014,14 @@ def start_review_session(
     """
     language = _detect_user_language(
         " ".join(
-            str(msg.get("content", ""))
-            for msg in (history or [])[-3:]
-            if isinstance(msg, dict)
+            str(msg.get("content", "")) for msg in (history or [])[-3:] if isinstance(msg, dict)
         )
     )
     if not review_file or not os.path.exists(review_file):
         return (
             history,
             session_state,
-            _localized_text(
-                language, "❌ Arquivo não encontrado.", "❌ File not found."
-            ),
+            _localized_text(language, "❌ Arquivo não encontrado.", "❌ File not found."),
             "",
         )
 
@@ -3203,9 +3122,7 @@ def review_chat_turn(
     allow_web = bool(web_enabled) or _explicit_web_request(user_msg)
     pending_edit = session_state.get("pending_edit") or {}
     pending_reference_action = session_state.get("pending_reference_action") or {}
-    awaiting_reference_confirmation = bool(
-        session_state.get("awaiting_reference_confirmation")
-    )
+    awaiting_reference_confirmation = bool(session_state.get("awaiting_reference_confirmation"))
     target_hint = _resolve_target_hint(
         user_msg,
         sections,
@@ -3250,9 +3167,7 @@ def review_chat_turn(
             elif pending_intent == "format_provided":
                 requires_web = bool(pending_reference_action.get("requires_web"))
                 if requires_web and not allow_web:
-                    incomplete_items = (
-                        pending_reference_action.get("incomplete_items") or []
-                    )
+                    incomplete_items = pending_reference_action.get("incomplete_items") or []
                     reply = _localized_text(
                         language,
                         "Não executei a formatação para evitar saída parcial incorreta.\n"
@@ -3339,9 +3254,7 @@ def review_chat_turn(
             return (
                 history,
                 session_state,
-                _localized_text(
-                    language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"
-                ),
+                _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"),
                 _read_md(working_copy),
             )
 
@@ -3358,9 +3271,7 @@ def review_chat_turn(
         return (
             history,
             session_state,
-            _localized_text(
-                language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"
-            ),
+            _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"),
             _read_md(working_copy),
         )
 
@@ -3378,9 +3289,7 @@ def review_chat_turn(
         return (
             history,
             session_state,
-            _localized_text(
-                language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"
-            ),
+            _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"),
             _read_md(working_copy),
         )
 
@@ -3398,16 +3307,12 @@ def review_chat_turn(
         return (
             history,
             session_state,
-            _localized_text(
-                language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"
-            ),
+            _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"),
             _read_md(working_copy),
         )
 
     if reference_intent == "resolve_numbers":
-        reply, ref_meta = _handle_resolve_numbers_request(
-            markdown, user_msg, allow_web=allow_web
-        )
+        reply, ref_meta = _handle_resolve_numbers_request(markdown, user_msg, allow_web=allow_web)
         history = history + [
             {"role": "user", "content": user_msg},
             {"role": "assistant", "content": reply},
@@ -3425,9 +3330,7 @@ def review_chat_turn(
         return (
             history,
             session_state,
-            _localized_text(
-                language, "✅ Referências processadas", "✅ References processed"
-            ),
+            _localized_text(language, "✅ Referências processadas", "✅ References processed"),
             _read_md(working_copy),
         )
 
@@ -3524,11 +3427,7 @@ def review_chat_turn(
                 if has_pending
                 else "Não havia edição pendente para cancelar."
             ),
-            (
-                "🗑️ Pending edit canceled."
-                if has_pending
-                else "There was no pending edit to cancel."
-            ),
+            ("🗑️ Pending edit canceled." if has_pending else "There was no pending edit to cancel."),
         )
 
     elif action == "edit_proposal":
@@ -3638,9 +3537,7 @@ def save_review_manual_edit(
         return (
             history,
             session_state,
-            _localized_text(
-                language, "❌ Nenhuma sessão ativa.", "❌ No active session."
-            ),
+            _localized_text(language, "❌ Nenhuma sessão ativa.", "❌ No active session."),
             "",
         )
     if not edited_text.strip():

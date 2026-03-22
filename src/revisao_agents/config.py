@@ -1,7 +1,11 @@
+# 1. Standard Library Imports
 import os
-from typing import Any, Optional, Type, TypeVar, Union
+from typing import Any, TypeVar
 
 from dotenv import load_dotenv
+
+# 2. Third-Party Imports
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -155,9 +159,7 @@ def get_runtime_config_summary() -> dict:
     provider = _env_clean("LLM_PROVIDER", "groq").lower()
     model = _env_clean("LLM_MODEL", "") or "<default>"
     provider_key_name = _PROVIDER_ENV_KEYS.get(provider, "")
-    provider_key_ok = (
-        bool(_env_clean(provider_key_name, "")) if provider_key_name else False
-    )
+    provider_key_ok = bool(_env_clean(provider_key_name, "")) if provider_key_name else False
 
     mongodb_uri = _env_clean("MONGODB_URI", "")
     openai_key = _env_clean("OPENAI_API_KEY", "")
@@ -185,15 +187,9 @@ def print_runtime_config_summary() -> None:
         f"Provider key     : {summary['llm_provider_key']} "
         f"({'OK' if summary['llm_provider_key_present'] else 'MISSING'})"
     )
-    print(
-        f"MongoDB URI           : {'OK' if summary['mongodb_uri_present'] else 'MISSING'}"
-    )
-    print(
-        f"Tavily API Key        : {'OK' if summary['tavily_key_present'] else 'MISSING'}"
-    )
-    print(
-        f"OpenAI (embeddings)   : {'OK' if summary['openai_key_present'] else 'MISSING'}"
-    )
+    print(f"MongoDB URI           : {'OK' if summary['mongodb_uri_present'] else 'MISSING'}")
+    print(f"Tavily API Key        : {'OK' if summary['tavily_key_present'] else 'MISSING'}")
+    print(f"OpenAI (embeddings)   : {'OK' if summary['openai_key_present'] else 'MISSING'}")
     print("-" * 70)
 
 
@@ -262,8 +258,9 @@ def get_llm(temperature: float = 0.3) -> Any:
         Any: A LangChain-compatible LLM object (BaseChatModel) with bound tools.
     """
     try:
-        from .utils.llm_utils.llm_providers import get_llm as _get_llm, LLMProvider
         from .tools import get_all_tools
+        from .utils.llm_utils.llm_providers import LLMProvider
+        from .utils.llm_utils.llm_providers import get_llm as _get_llm
 
         provider_map = {
             "GEMINI": LLMProvider.GEMINI,
@@ -296,11 +293,9 @@ def get_llm(temperature: float = 0.3) -> Any:
 
             tools = get_all_tools()
             return llm.bind_tools(tools)
-        except:
+        except Exception:
             return llm
 
-
-from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -312,8 +307,8 @@ class LLMInvocationError(RuntimeError):
 def llm_call(
     prompt: str,
     temperature: float = 0.2,
-    response_schema: Optional[Type[T]] = None,
-) -> Union[str, T]:
+    response_schema: type[T] | None = None,
+) -> str | T:
     """
     Wrapper for LLM calls with multi-provider support and structured output.
 
@@ -380,7 +375,8 @@ def parse_json_safe(texto: str) -> dict | None:
         Optional[Dict[str, Any]]: A dictionary representing the parsed JSON if
             successful; None if no valid JSON structure is found or if parsing fails.
     """
-    import re, json
+    import json
+    import re
 
     match = re.search(r"\{[\s\S]*\}", texto)
     if match:
