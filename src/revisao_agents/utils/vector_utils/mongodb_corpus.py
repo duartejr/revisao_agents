@@ -631,9 +631,7 @@ class CorpusMongoDB:
             if chunk.source_idx not in sources_viewed:
                 sources_viewed.add(chunk.source_idx)
                 title = chunk.title or ""
-                cab = (
-                    f"{'━'*55}\nSOURCE [{chunk.source_idx}] — {title}\nURL: {chunk.url}\n{'─'*55}\n"
-                )
+                cab = f"{'━' * 55}\nSOURCE [{chunk.source_idx}] — {title}\nURL: {chunk.url}\n{'─' * 55}\n"
             else:
                 cab = f"[cont. SOURCE {chunk.source_idx} URL: {chunk.url}]\n"
 
@@ -692,7 +690,7 @@ class CorpusMongoDB:
         used_urls: list[str] = []
 
         for chunk in chunks_of_url:
-            block = f"[SOURCE {chunk.source_idx} | {chunk.url[:140]}]\n" f"{chunk.text}\n\n"
+            block = f"[SOURCE {chunk.source_idx} | {chunk.url[:140]}]\n{chunk.text}\n\n"
             if accumulated_chars + len(block) > max_chars:
                 break
             parts.append(block)
@@ -708,7 +706,7 @@ class CorpusMongoDB:
                 :neighbor_window
             ]
             for nc in neighbor_chunks:
-                block = f"[NEIGHBORING CONTEXT — {nc.url[:140]}]\n" f"{nc.text}\n\n"
+                block = f"[NEIGHBORING CONTEXT — {nc.url[:140]}]\n{nc.text}\n\n"
                 if accumulated_chars + len(block) > max_chars:
                     break
                 parts.append(block)

@@ -34,7 +34,7 @@ def parse_plan_node(state: TechnicalWriterState) -> dict:
         theme, plan_summary, sections = parse_technical_plan(text)
     print(f"   ✅ Theme: {theme} | {len(sections)} sections")
     for s in sections:
-        print(f"      [{s['index']+1}] {s['title']}")
+        print(f"      [{s['index'] + 1}] {s['title']}")
     return {
         "theme": theme,
         "plan_summary": plan_summary,

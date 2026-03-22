@@ -47,7 +47,7 @@ def search_evidence(query: str, k: int = 6) -> str:
     chunks: list[str] = search_chunks(query[:600], k=min(k, 10))
     if not chunks:
         return "No relevant evidence found in the academic corpus."
-    parts = [f"[Chunk {i+1}]:\n{c}" for i, c in enumerate(chunks)]
+    parts = [f"[Chunk {i + 1}]:\n{c}" for i, c in enumerate(chunks)]
     return "\n\n---\n\n".join(parts)
 
 

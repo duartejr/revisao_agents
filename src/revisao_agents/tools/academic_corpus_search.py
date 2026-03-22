@@ -52,7 +52,7 @@ def search_academic_corpus(
             f"=== SOURCES FOUND FOR: '{query}' ===\n"
             f"Section: {section_title or 'Not provided'}\n"
             f"Total chunks used: {len(used_urls)}\n"
-            f"{'='*60}\n\n"
+            f"{'=' * 60}\n\n"
         )
 
         return header + context

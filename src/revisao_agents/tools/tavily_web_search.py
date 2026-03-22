@@ -272,8 +272,8 @@ def _print_language_totals(results: list[dict]) -> None:
     total_en = sum(1 for r in results if r.get("language") == "en")
     total_pt = sum(1 for r in results if r.get("language") == "pt")
     print(
-        f"   📊 TOTAL: {total_en} English ({total_en/total*100:.0f}%), "
-        f"{total_pt} Portuguese ({total_pt/total*100:.0f}%)"
+        f"   📊 TOTAL: {total_en} English ({total_en / total * 100:.0f}%), "
+        f"{total_pt} Portuguese ({total_pt / total * 100:.0f}%)"
     )
 
 
@@ -877,7 +877,7 @@ def extract_tavily(urls: list[str], include_images: bool = True) -> dict:
 
             for item in res.get("failed_results", []):
                 flawed.append(item.get("url", ""))
-                print(f"   ✖ Failed: {item.get('url','')[:60]}")
+                print(f"   ✖ Failed: {item.get('url', '')[:60]}")
 
         except Exception as e:
             print(f"   ⚠️  Error in lot: {e}")

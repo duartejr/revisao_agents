@@ -2827,7 +2827,7 @@ def _suggest_more_documents(user_text: str, allow_web: bool) -> tuple[str, dict]
 
     local_chunks = search_chunks(query[:600], k=5)
     local_msg = "\n".join(
-        f"- Local evidence chunk {i+1}: {chunk[:180]}..."
+        f"- Local evidence chunk {i + 1}: {chunk[:180]}..."
         for i, chunk in enumerate(local_chunks[:3])
     )
 
@@ -2867,7 +2867,7 @@ def _suggest_more_documents(user_text: str, allow_web: bool) -> tuple[str, dict]
     if urls:
         lines += ["\n**Web (Tavily)**"]
         for idx, item in enumerate(extracted.get("extracted", [])[:3], start=1):
-            lines.append(f"- [{idx}] {item.get('title','(sem título)')} — {item.get('url','')}")
+            lines.append(f"- [{idx}] {item.get('title', '(sem título)')} — {item.get('url', '')}")
     else:
         lines.append(
             _localized_text(
@@ -2935,7 +2935,7 @@ def _build_edit_proposal(markdown: str, user_text: str, allow_web: bool) -> tupl
         if urls:
             ext = extract_tavily.invoke({"urls": urls, "include_images": False})
             web_context = "\n\nWEB SOURCES:\n" + "\n\n".join(
-                f"URL: {item.get('url','')}\nTITLE: {item.get('title','')}\nCONTENT: {str(item.get('content',''))[:1200]}"
+                f"URL: {item.get('url', '')}\nTITLE: {item.get('title', '')}\nCONTENT: {str(item.get('content', ''))[:1200]}"
                 for item in ext.get("extracted", [])
             )
 
@@ -2971,8 +2971,8 @@ def _build_edit_proposal(markdown: str, user_text: str, allow_web: bool) -> tupl
         )
         + _localized_text(
             language,
-            f"- Alvo: **{section['title']}**, parágrafo **{p_idx+1}**\n",
-            f"- Target: **{section['title']}**, paragraph **{p_idx+1}**\n",
+            f"- Alvo: **{section['title']}**, parágrafo **{p_idx + 1}**\n",
+            f"- Target: **{section['title']}**, paragraph **{p_idx + 1}**\n",
         )
         + _localized_text(
             language,

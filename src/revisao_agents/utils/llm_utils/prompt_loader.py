@@ -62,7 +62,7 @@ def load_prompt(prompt_path: str, **variables: Any) -> Prompt:
 
     if not yaml_path.exists():
         raise FileNotFoundError(
-            f"Prompt file not found: {yaml_path}\n" f"  Searched under: {_PROMPTS_ROOT}"
+            f"Prompt file not found: {yaml_path}\n  Searched under: {_PROMPTS_ROOT}"
         )
 
     raw = _load_yaml_raw(yaml_path)

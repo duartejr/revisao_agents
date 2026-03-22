@@ -184,7 +184,7 @@ def _draft_phase(
         )
 
     all_txt = "\n".join(
-        f"  {'→ ' if i == pos else '  '}{i+1}. {t}" for i, t in enumerate(all_titles)
+        f"  {'→ ' if i == pos else '  '}{i + 1}. {t}" for i, t in enumerate(all_titles)
     )
 
     instructions = load_prompt(
@@ -195,15 +195,15 @@ def _draft_phase(
     )
     prompt = (
         f"THEMe: {theme}\n"
-        f"SECTION: {pos+1}/{n_total} — {title}\n"
+        f"SECTION: {pos + 1}/{n_total} — {title}\n"
         f"OBJECTIVES: {objective}\n"
         f"MANDATORY RESOURCES: {resources if resources else 'as per technical content'}\n\n"
         f"CHAPTER STRUCTURE:\n{all_txt}\n\n"
         f"{previous_ctx}"
-        f"{'━'*60}\n"
+        f"{'━' * 60}\n"
         f"SOURCE CORPUS — {n_extracted} indexed documents "
         f"(below: most relevant excerpts retrieved by similarity)\n"
-        f"{'━'*60}\n"
+        f"{'━' * 60}\n"
         f"{corpus}\n\n" + instructions.text + f"\n## {title}\n"
     )
     result: SectionAnswer = llm_call(

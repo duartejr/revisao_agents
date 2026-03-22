@@ -91,15 +91,15 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
         resources = section.get("resources", "")
         index_num = section.get("index", pos)
 
-        print(f"\n{'━'*70}")
-        print(f"  [{pos+1}/{n_total}] PROCESSING: {title}")
-        print(f"{'━'*70}")
+        print(f"\n{'━' * 70}")
+        print(f"  [{pos + 1}/{n_total}] PROCESSING: {title}")
+        print(f"{'━' * 70}")
 
         log = [
-            f"\n{'='*70}",
-            f"SECTION [{pos+1}/{n_total}]: {title}",
+            f"\n{'=' * 70}",
+            f"SECTION [{pos + 1}/{n_total}]: {title}",
             f"Timestamp: {datetime.now().isoformat()}",
-            f"{'='*70}",
+            f"{'=' * 70}",
         ]
 
         # PHASE 1: Thought
@@ -138,9 +138,7 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
                 language=config.language,
             )
             _corpus_sufficient = obs.get("sufficient", False)
-            log.append(
-                f"Corpus sufficient: {_corpus_sufficient} | " f"{obs.get('summary', '')[:120]}"
-            )
+            log.append(f"Corpus sufficient: {_corpus_sufficient} | {obs.get('summary', '')[:120]}")
             print(f"     Corpus sufficient: {_corpus_sufficient}")
 
         if not _corpus_sufficient and tavily_enabled:
@@ -165,7 +163,7 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
         print("\n  🗄️  Indexing in MongoDB...")
         log.append("\n── MONGODB INDEXING ──")
         slug_section = re.sub(r"[^\w]", "_", title[:30]).lower()
-        prefix = f"s{pos+1:02d}_{slug_section}"
+        prefix = f"s{pos + 1:02d}_{slug_section}"
 
         if _corpus_sufficient:
             # Reuse the global check corpus — no new documents to index
@@ -272,11 +270,11 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
             print(f"     ⚠️  Only {n_distinct} distinct sources (minimum: {min_src}). Retrying...")
             log.append(f"⚠️  Retry: {n_distinct}/{min_src} distinct sources")
             diversity_hint = (
-                f"\n\n{'━'*60}\n"
+                f"\n\n{'━' * 60}\n"
                 f"MANDATORY INSTRUCTION: Use at least {min_src} DISTINCT sources in this section.\n"
                 f"Distribute citations among different corpus documents.\n"
                 f"DO NOT rely on only 1-2 papers.\n"
-                f"{'━'*60}\n"
+                f"{'━' * 60}\n"
             )
             draft_retry, urls_retry = _draft_phase(
                 theme,
@@ -396,7 +394,7 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
         else:
             print("     ⚠️  No citations found in this section")
 
-        print(f"  ✅ [{pos+1}/{n_total}] Section completed ({rate:.0f}% verified)")
+        print(f"  ✅ [{pos + 1}/{n_total}] Section completed ({rate:.0f}% verified)")
 
         written_sections.append(
             {
@@ -420,10 +418,12 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
         section_summary = summarize_section(title, final_text)
         if cumulative_summary:
             cumulative_summary += (
-                f"\n\n[{labels['section_marker']} {pos+1}: {title}] {section_summary}"
+                f"\n\n[{labels['section_marker']} {pos + 1}: {title}] {section_summary}"
             )
         else:
-            cumulative_summary = f"[{labels['section_marker']} {pos+1}: {title}] {section_summary}"
+            cumulative_summary = (
+                f"[{labels['section_marker']} {pos + 1}: {title}] {section_summary}"
+            )
         if len(cumulative_summary) > CTX_ABSTRACT_CHARS * 3:
             split_marker = f"\n\n[{labels['section_marker']} "
             parts = cumulative_summary.split(split_marker)

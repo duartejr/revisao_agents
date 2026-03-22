@@ -278,8 +278,7 @@ class LLMFactory:
         provider_class = cls._providers.get(provider)
         if not provider_class:
             raise ValueError(
-                f"Provider '{provider}' not supported. "
-                f"Options: {[p.value for p in LLMProvider]}"
+                f"Provider '{provider}' not supported. Options: {[p.value for p in LLMProvider]}"
             )
         return provider_class(temperature=temperature, model_name=model_name)
 

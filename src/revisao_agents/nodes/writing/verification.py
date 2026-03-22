@@ -384,7 +384,7 @@ def _verify_and_correct_adaptative_section(
                 result.append(clean_block)
                 stats["approved"] += 1
                 stats["structural"] += 1
-                log_lines.append(f"  par.{i+1}: ⏭️  NO SOURCES")
+                log_lines.append(f"  par.{i + 1}: ⏭️  NO SOURCES")
                 continue
 
             final_text, level, log_entry, is_verifiable = _judge_paragraph_improved(
@@ -392,7 +392,7 @@ def _verify_and_correct_adaptative_section(
             )
 
             result.append(final_text)
-            log_lines.append(f"  par.{i+1}: {log_entry}")
+            log_lines.append(f"  par.{i + 1}: {log_entry}")
 
             if is_verifiable:
                 stats["verifiable"] += 1
@@ -592,7 +592,7 @@ def _verify_and_correct_section_with_anchor(
             )
 
             result.append(final_text)
-            log_lines.append(f"  par.{i+1}: {log_entry}")
+            log_lines.append(f"  par.{i + 1}: {log_entry}")
             stats["total"] += 1
             if is_verifiable:
                 stats["verifiable"] += 1

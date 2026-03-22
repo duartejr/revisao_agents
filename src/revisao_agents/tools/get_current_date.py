@@ -33,11 +33,7 @@ def get_current_date() -> str:
     date_str = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H:%M:%S")
 
-    return (
-        f"Current date: {date_str} ({day_name})\n"
-        f"Time: {time_str} UTC\n"
-        f"ISO 8601: {iso_format}"
-    )
+    return f"Current date: {date_str} ({day_name})\nTime: {time_str} UTC\nISO 8601: {iso_format}"
 
 
 __all__ = ["get_current_date"]
