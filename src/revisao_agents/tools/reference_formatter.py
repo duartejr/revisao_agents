@@ -28,6 +28,7 @@ format_references_from_file() — programmatic API
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -628,10 +629,8 @@ def format_references_from_file(
 
     # ── Close MongoDB ─────────────────────────────────────────────────────
     if mongo_corpus:
-        try:
+        with contextlib.suppress(Exception):
             mongo_corpus.close()
-        except Exception:
-            pass
 
     # ── Build markdown output ─────────────────────────────────────────────
     now = datetime.now().strftime("%Y-%m-%d %H:%M")

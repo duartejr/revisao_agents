@@ -91,8 +91,34 @@ body, .gradio-container {
 # ═══════════════════════════════════════════════════════════════════════════
 
 def refresh_plan_list(mode: str) -> gr.update:
+    """Refresh the list of available plan files based on the selected mode (Technical/Academic).
+    
+    Args:
+        mode: The selected writing mode, expected to be "Technical" or "Academic".
+    
+    Returns:
+        A gr.update object with the updated choices and default value for the plan dropdown.
+    """
     files = list_plan_files(mode)
     return gr.update(choices=files, value=files[0] if files else None)
+
+
+def _auto_refresh_plan_list(mode: str, current_value: str | None) -> gr.update:
+    """Auto-refresh plan dropdown preserving current selection when possible.
+    
+    Args:
+        mode: The selected writing mode, expected to be "Technical" or "Academic".
+        current_value: The currently selected plan file path (if any).
+    
+    Returns:
+        A gr.update object with the updated choices and value for the plan dropdown.
+    """
+    files = list_plan_files(mode)
+    if current_value in files:
+        value = current_value
+    else:
+        value = files[0] if files else None
+    return gr.update(choices=files, value=value)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -100,14 +126,28 @@ def refresh_plan_list(mode: str) -> gr.update:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _list_output_files(folder: str) -> list[str]:
-    """Return sorted .md files from plans/ or reviews/."""
+    """Return sorted .md files from plans/ or reviews/.
+    
+    Args:
+        folder: The folder to list files from, expected to be "plans" or "reviews".
+    
+    Returns:
+        A list of file paths for .md files in the specified folder, sorted alphabetically.
+    """
     os.makedirs(folder, exist_ok=True)
     files = sorted(f for f in os.listdir(folder) if f.endswith(".md"))
     return [os.path.join(folder, f) for f in files] if files else []
 
 
 def _load_file(path: str) -> str:
-    """Read and return the markdown content of a file."""
+    """Read and return the markdown content of a file.
+    
+    Args:
+        path: The file path to read.
+    
+    Returns:
+        The content of the file as a string, or an error message if the file cannot be read.
+    """
     if not path or not os.path.exists(path):
         return "*(file not found)*"
     try:
@@ -117,8 +157,51 @@ def _load_file(path: str) -> str:
 
 
 def _refresh_file_list(folder: str) -> gr.update:
+    """Refresh the file list for the View tab based on the selected folder.
+    
+    Args:
+        folder: The selected folder, expected to be "plans" or "reviews".
+    
+    Returns:
+        A gr.update object with the updated choices and default value for the file dropdown.
+    """
     files = _list_output_files(folder)
     return gr.update(choices=files, value=files[-1] if files else None)
+
+
+def _auto_refresh_review_list(current_value: str | None) -> gr.update:
+    """Auto-refresh review dropdown preserving current selection when possible.
+    
+    Args:
+        current_value: The currently selected review file path (if any).
+    
+    Returns:
+        A gr.update object with the updated choices and value for the review dropdown.
+    """
+    files = list_review_files()
+    if current_value in files:
+        value = current_value
+    else:
+        value = files[-1] if files else None
+    return gr.update(choices=files, value=value)
+
+
+def _auto_refresh_view_file_list(folder: str, current_value: str | None) -> gr.update:
+    """Auto-refresh view file dropdown preserving current selection when possible.
+    
+    Args:
+        folder: The selected folder, expected to be "plans" or "reviews".
+        current_value: The currently selected file path (if any).
+    
+    Returns:
+        A gr.update object with the updated choices and value for the view file dropdown.
+    """
+    files = _list_output_files(folder)
+    if current_value in files:
+        value = current_value
+    else:
+        value = files[-1] if files else None
+    return gr.update(choices=files, value=value)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -126,7 +209,11 @@ def _refresh_file_list(folder: str) -> gr.update:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def build_app() -> gr.Blocks:
+    """Build the Gradio app with multiple tabs for planning, writing, and reviewing."""
     with gr.Blocks(title="Literature Review Agent") as demo:
+
+        # Global periodic auto-refresh (avoids restart when files are added manually)
+        auto_refresh_timer = gr.Timer(value=3.0)
 
         # ── Header ─────────────────────────────────────────────────────────
         gr.HTML(
@@ -329,6 +416,12 @@ def build_app() -> gr.Blocks:
                 outputs=[write_plan],
             )
 
+            auto_refresh_timer.tick(
+                fn=_auto_refresh_plan_list,
+                inputs=[write_mode, write_plan],
+                outputs=[write_plan],
+            )
+
             def _on_write(plan, mode, lang, min_src, tavily, history):
                 for h, s, rendered in start_writing(plan, mode, lang, min_src, tavily, history):
                     yield h, s, rendered
@@ -346,7 +439,8 @@ def build_app() -> gr.Blocks:
             gr.Markdown(
                 "### Review Document with Chat\n"
                 "Select a review in **reviews/**. The system creates a working copy and "
-                "only applies changes after explicit confirmation."
+                "only applies changes after explicit confirmation.\n"
+                "For reference commands (list/format), the assistant now always asks for confirmation before execution."
             )
 
             with gr.Row():
@@ -401,6 +495,12 @@ def build_app() -> gr.Blocks:
             review_refresh.click(
                 fn=lambda: gr.update(choices=list_review_files(), value=None),
                 inputs=[],
+                outputs=[review_file],
+            )
+
+            auto_refresh_timer.tick(
+                fn=_auto_refresh_review_list,
+                inputs=[review_file],
                 outputs=[review_file],
             )
 
@@ -475,6 +575,12 @@ def build_app() -> gr.Blocks:
             view_folder.change(
                 fn=_refresh_file_list,
                 inputs=[view_folder],
+                outputs=[view_file],
+            )
+
+            auto_refresh_timer.tick(
+                fn=_auto_refresh_view_file_list,
+                inputs=[view_folder, view_file],
                 outputs=[view_file],
             )
             # Refresh button → re-scan folder
@@ -581,6 +687,12 @@ def build_app() -> gr.Blocks:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def main(share: bool = False, port: int = 7860):
+    """Launch the Gradio app.
+    
+    Args:
+        share: Whether to create a public share link (useful when running in a remote environment)
+        port: The local port to serve the app on (default: 7860)
+    """
     os.makedirs("plans", exist_ok=True)
     os.makedirs("reviews", exist_ok=True)
     demo = build_app()
