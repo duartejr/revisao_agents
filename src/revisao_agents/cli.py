@@ -109,12 +109,12 @@ def _run_planning_until_complete(
 
 def main(
     input_value: str = typer.Argument(..., help="Review theme or path to file containing theme/plan"),
-    review_type: str = typer.Option("academic", "--review-type", "-t", help="Type: academic or technical"),
-    rounds: int = typer.Option(3, "--rounds", "-r", help="Number of refinement rounds"),
-    output_file: Path = typer.Option(None, "--output", "-o", help="Save final plan to file (optional)"),
-    model: str = typer.Option("", "--model", help="LLM model to use (optional)"),
-    auto_response: str = typer.Option("Keep the current plan.", "--auto-response", help="Automatic response for HITL steps"),
-    debug: bool = typer.Option(False, "--debug", help="Verbose mode"),
+    review_type: str = typer.Option("academic", "--review-type", "-t", help="Type: academic or technical"),  # noqa: B008
+    rounds: int = typer.Option(3, "--rounds", "-r", help="Number of refinement rounds"),  # noqa: B008
+    output_file: Path = typer.Option(None, "--output", "-o", help="Save final plan to file (optional)"),  # noqa: B008
+    model: str = typer.Option("", "--model", help="LLM model to use (optional)"),  # noqa: B008
+    auto_response: str = typer.Option("Keep the current plan.", "--auto-response", help="Automatic response for HITL steps"),  # noqa: B008
+    debug: bool = typer.Option(False, "--debug", help="Verbose mode"),  # noqa: B008
 ):
     """Execute academic/technical planning until final plan is generated.
     
@@ -171,7 +171,7 @@ def main(
 
     except Exception as e:
         console.print(f"[bold red]Error during review:[/bold red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 # Use typer.run() for direct CLI invocation (no subcommands)

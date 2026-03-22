@@ -19,7 +19,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
 
 from ..tools.reference_tools import get_reference_tools
-from ..utils.llm_utils.llm_providers import get_llm
+from ..utils.llm_utils.llm_providers import get_llm, create_agent_easy
 from ..utils.llm_utils.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -52,22 +52,27 @@ def run_reference_formatter_agent(
         return "No references provided to the formatter agent."
 
     try:
+        allow_web_hint = (
+            "## WEB SEARCH DISABLED\n"
+            "  The `search_web_for_reference` tool is NOT available in this session.\n"
+            "  Skip step 5 — do NOT attempt to call `search_web_for_reference`.\n"
+        ) if not allow_web else ""
         prompt = load_prompt(
             "common/reference_formatter",
             today_date=_today(),
             references_input=references_input,
+            allow_web_hint=allow_web_hint,
         )
     except Exception as exc:
         logger.error("Failed to load reference_formatter prompt: %s", exc)
         return f"Formatter prompt load error: {exc}"
 
     tools = get_reference_tools(allow_web=allow_web)
-    llm = get_llm(temperature=prompt.temperature)
 
-    agent = create_agent(
-        model=llm,
+    agent = create_agent_easy(
         tools=tools,
         system_prompt=prompt.text,
+        temperature=prompt.temperature,
         name="reference_formatter",
     )
 

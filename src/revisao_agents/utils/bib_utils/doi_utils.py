@@ -13,6 +13,8 @@ search_crossref_by_title  : query Crossref by title to find a DOI.
 import re
 import json
 import logging
+import threading
+import time
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -23,6 +25,28 @@ logger = logging.getLogger(__name__)
 CROSSREF_API_BASE = "https://api.crossref.org/v1/works"
 
 _USER_AGENT = "ReviewAgent/1.0 (mailto:support@example.com)"
+
+# ---------------------------------------------------------------------------
+# Rate limiter — CrossRef allows ~1 req/s; we use 1.2 s minimum interval.
+# Cache avoids re-fetching the same DOI/title within the same process run.
+# ---------------------------------------------------------------------------
+_CROSSREF_MIN_INTERVAL = 1.2          # seconds between requests
+_crossref_lock = threading.Lock()
+_crossref_last_call: float = 0.0      # timestamp of last request
+
+_doi_cache:   dict[str, Optional[str]] = {}   # doi  -> bibtex or None
+_title_cache: dict[str, Optional[str]] = {}   # title -> doi   or None
+
+
+def _crossref_wait() -> None:
+    """Block until at least _CROSSREF_MIN_INTERVAL seconds have passed since
+    the last request, then record the current time as the new last call."""
+    global _crossref_last_call
+    with _crossref_lock:
+        elapsed = time.monotonic() - _crossref_last_call
+        if elapsed < _CROSSREF_MIN_INTERVAL:
+            time.sleep(_CROSSREF_MIN_INTERVAL - elapsed)
+        _crossref_last_call = time.monotonic()
 
 
 # ---------------------------------------------------------------------------
@@ -81,11 +105,36 @@ def search_doi_in_text(text: str) -> Optional[str]:
     return None
 
 
+def _fetch_bibtex_url(url: str, headers: dict, timeout: int, doi_clean: str) -> Optional[str]:
+    """Make one HTTP request for BibTeX, with a single 429-backoff retry."""
+    for attempt in range(2):
+        _crossref_wait()
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                bibtex = response.read().decode('utf-8').strip()
+                if bibtex and bibtex.startswith("@"):
+                    return bibtex
+                logger.warning(f"❌ Invalid BibTeX response for DOI {doi_clean}")
+                return None
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                retry_after = int(e.headers.get("Retry-After", "10"))
+                logger.warning(
+                    f"⏳ HTTP 429 for DOI {doi_clean} — waiting {retry_after}s "
+                    f"(attempt {attempt + 1}/2)"
+                )
+                time.sleep(retry_after)
+                continue
+            raise  # re-raise non-429 HTTP errors
+    return None  # both attempts exhausted
+
+
 def get_bibtex_from_doi(doi: str, timeout: int = 10) -> Optional[str]:
     """Retrieve BibTeX from the Crossref API for the given DOI.
 
     Tries the primary ``/transform`` endpoint first; falls back to
-    ``dx.doi.org`` on HTTP 400.
+    ``dx.doi.org`` on HTTP 400.  Results are cached for the process lifetime.
 
     Args:
         doi: The DOI string to query (with or without "https://doi.org/").
@@ -102,43 +151,42 @@ def get_bibtex_from_doi(doi: str, timeout: int = 10) -> Optional[str]:
         logger.warning(f"⚠️ Invalid DOI format: {doi_clean}")
         return None
 
+    # Return cached result immediately (avoids redundant API calls)
+    if doi_clean in _doi_cache:
+        return _doi_cache[doi_clean]
+
     doi_encoded = urllib.parse.quote(doi_clean, safe='/')
     url = f"{CROSSREF_API_BASE}/{doi_encoded}/transform"
     headers = {"User-Agent": _USER_AGENT, "Accept": "application/x-bibtex"}
 
+    bibtex: Optional[str] = None
     try:
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            bibtex = response.read().decode('utf-8').strip()
-            if bibtex and bibtex.startswith("@"):
-                logger.debug(f"✅ BibTeX retrieved for DOI {doi_clean}")
-                return bibtex
-            logger.warning(f"❌ Invalid BibTeX response for DOI {doi_clean}")
-            return None
+        bibtex = _fetch_bibtex_url(url, headers, timeout, doi_clean)
+        if bibtex:
+            logger.debug(f"✅ BibTeX retrieved for DOI {doi_clean}")
     except urllib.error.HTTPError as e:
         logger.warning(f"❌ HTTP {e.code} for DOI {doi_clean}: {e.reason}")
         if e.code == 400:
             alt_url = f"https://dx.doi.org/{doi_encoded}"
             try:
-                alt_req = urllib.request.Request(alt_url, headers=headers)
-                with urllib.request.urlopen(alt_req, timeout=timeout) as resp:
-                    bibtex = resp.read().decode('utf-8')
-                    if bibtex and bibtex.startswith("@"):
-                        logger.info(f"✅ BibTeX via dx.doi.org for {doi_clean}")
-                        return bibtex
+                bibtex = _fetch_bibtex_url(alt_url, headers, timeout, doi_clean)
+                if bibtex:
+                    logger.info(f"✅ BibTeX via dx.doi.org for {doi_clean}")
             except Exception as alt_e:
                 logger.debug(f"   dx.doi.org also failed: {alt_e}")
-        return None
     except (urllib.error.URLError, TimeoutError) as e:
         logger.warning(f"❌ Network error for DOI {doi}: {e}")
-        return None
     except Exception as e:
         logger.error(f"❌ Unexpected error for DOI {doi}: {e}")
-        return None
+
+    _doi_cache[doi_clean] = bibtex
+    return bibtex
 
 
 def search_crossref_by_title(title: str, timeout: int = 10) -> Optional[str]:
     """Query Crossref by title to obtain a DOI.
+
+    Results are cached for the process lifetime.
 
     Args:
         title: The title of the paper to search for.
@@ -150,17 +198,34 @@ def search_crossref_by_title(title: str, timeout: int = 10) -> Optional[str]:
     if not title or len(title) < 5:
         return None
 
+    cache_key = title.strip().lower()[:100]
+    if cache_key in _title_cache:
+        return _title_cache[cache_key]
+
     encoded_title = urllib.parse.quote(title[:100])
     url = f"{CROSSREF_API_BASE}?query.title={encoded_title}&rows=1&select=DOI"
 
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            data = json.loads(response.read().decode('utf-8'))
-            items = data.get("message", {}).get("items", [])
-            if items:
-                return items[0].get("DOI")
-            return None
-    except Exception as e:
-        logger.debug(f"Crossref title search failed: {e}")
-        return None
+    doi: Optional[str] = None
+    for attempt in range(2):
+        _crossref_wait()
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                items = data.get("message", {}).get("items", [])
+                doi = items[0].get("DOI") if items else None
+            break
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                retry_after = int(e.headers.get("Retry-After", "10"))
+                logger.warning(f"⏳ HTTP 429 on title search — waiting {retry_after}s")
+                time.sleep(retry_after)
+                continue
+            logger.debug(f"Crossref title search HTTP error: {e}")
+            break
+        except Exception as e:
+            logger.debug(f"Crossref title search failed: {e}")
+            break
+
+    _title_cache[cache_key] = doi
+    return doi

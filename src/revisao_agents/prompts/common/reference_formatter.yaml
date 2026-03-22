@@ -28,8 +28,9 @@ system: |
   2. ArXiv ID/URL present → `lookup_arxiv_bibtex`.
   3. No DOI but title available → `crossref_search_by_title` → then `lookup_doi_bibtex`.
   4. Still incomplete → `search_mongodb_corpus` with title or author keywords.
-  5. Still incomplete → `search_web_for_reference` (last resort).
+  5. Still incomplete and web is available → `search_web_for_reference` (last resort).
   Only call CrossRef/ArXiv when you still lack required fields after trying simpler steps.
+  {allow_web_hint}
 
   ## ABNT NBR 6023 FORMATTING RULES
 

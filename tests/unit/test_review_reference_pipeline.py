@@ -1,6 +1,7 @@
 """Unit tests for deterministic reference pipeline in review chat handlers."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 from gradio_app.handlers import (
     _classify_reference_intent,
@@ -146,8 +147,17 @@ def test_provided_format_guidance_when_web_disabled():
     user_text = """Formate estas fontes no padrão ABNT:
 - /tmp/arquivo_local_sem_metadado.pdf
 """
-    reply, meta = _handle_format_provided_references_request(user_text, allow_web=False)
-    # Agent always runs — may produce ABNT output or an informative message
+    with (
+        patch(
+            "gradio_app.handlers.run_reference_extractor_agent",
+            return_value="[1] TITLE: Test | AUTHORS: A. Author | YEAR: 2024 | DOI: N/A",
+        ),
+        patch(
+            "gradio_app.handlers.run_reference_formatter_agent",
+            return_value="[1] AUTHOR, A. **Test**. 2024.",
+        ),
+    ):
+        reply, meta = _handle_format_provided_references_request(user_text, allow_web=False)
     assert meta["intent"] == "format_provided"
     assert meta["agent"] == "reference_extractor+reference_formatter"
 
@@ -175,12 +185,22 @@ def test_reference_list_requires_confirmation_before_execution(tmp_path: Path):
     assert session_state.get("awaiting_reference_confirmation") is True
     assert "Responda **sim**" in history[-1]["content"]
 
-    history, session_state, status, _ = review_chat_turn(
-        "sim",
-        history,
-        session_state,
-        web_enabled=False,
-    )
+    with (
+        patch(
+            "gradio_app.handlers.run_reference_extractor_agent",
+            return_value="[1] TITLE: Título A | AUTHORS: AUTOR, A. | YEAR: N/A | DOI: N/A",
+        ),
+        patch(
+            "gradio_app.handlers.run_reference_formatter_agent",
+            return_value="[1] AUTOR, A. **Título A**. [s.d.].",
+        ),
+    ):
+        history, session_state, status, _ = review_chat_turn(
+            "sim",
+            history,
+            session_state,
+            web_enabled=False,
+        )
     assert "Referências listadas" in status
     assert session_state.get("awaiting_reference_confirmation") is False
     assert "Referências" in history[-1]["content"]

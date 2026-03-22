@@ -187,17 +187,23 @@ def extract_pdf_text_from_disk(file_path: str, max_pages: int = 1) -> str:
 
         with open(path, "rb") as f:
             pages_text: list[str] = []
-            for i, page in enumerate(PDFPage.get_pages(f)):
-                if i >= max_pages:
-                    break
+            for i in range(max_pages): 
                 out = io.StringIO()
+                
+                f.seek(0) 
+                
                 extract_text_to_fp(
-                    open(path, "rb"),  # noqa: WPS515 — pdfminer requires seek
+                    f, 
                     out,
                     laparams=LAParams(),
                     page_numbers={i},
                 )
-                pages_text.append(out.getvalue())
+                
+                text = out.getvalue()
+                if not text:
+                    break
+                    
+                pages_text.append(text)
 
         text = "\n".join(pages_text).strip()
         if not text:

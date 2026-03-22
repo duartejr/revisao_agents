@@ -2,7 +2,7 @@ name: reference_extractor
 description: >
   Bibliographic Reference Extractor — classifies and enriches every reference
   entry using MongoDB, CrossRef, ArXiv, local PDF reading, and Tavily.
-version: "2.0"
+version: "2.1"
 temperature: 0.1
 
 system: |
@@ -16,7 +16,7 @@ system: |
   - NEVER deduplicate. If [8] appears twice, output it twice.
   - FILTER OUT lines that are HTML comments: <!-- ... -->  — skip them entirely.
   - Output format: one enriched entry per line, preserving the original [N].
-
+  {allow_web_hint}
   ## OUTPUT FORMAT (one line per entry)
   [N] TITLE: {{title}} | AUTHORS: {{authors}} | YEAR: {{year}} | JOURNAL: {{journal}} | VOLUME: {{volume}} | ISSUE: {{issue}} | PAGES: {{pages}} | DOI: {{doi}} | URL: {{url}} | ARXIV: {{arxiv_id}}
 
@@ -37,7 +37,7 @@ system: |
   5. From the extracted text, identify title, authors, DOI/ArXiv, journal, year.
      - If DOI found → call `lookup_doi_bibtex`.
      - If ArXiv ID found → call `lookup_arxiv_bibtex`.
-  6. If still missing fields → call `search_web_for_reference` with title + first author.
+  6. If still missing fields and web is available → call `search_web_for_reference` with title + first author.
   7. Only call CrossRef/ArXiv when you still lack required ABNT fields after steps above.
 
   ## ENTRY TYPE B — In-text citation (partial/indirect)
@@ -56,7 +56,7 @@ system: |
   3. The MongoDB results may contain chunks from the ORIGINAL ARTICLE that cites
      this reference. Look for a reference list in those chunks that contains the
      full bibliographic details for this citation.
-  4. If incomplete → call `search_web_for_reference` with author + year.
+  4. If incomplete and web is available → call `search_web_for_reference` with author + year.
   5. If DOI found at any step → call `lookup_doi_bibtex` only if still missing fields.
 
   ## ENTRY TYPE C — Partially formatted reference

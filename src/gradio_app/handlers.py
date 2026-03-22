@@ -87,7 +87,7 @@ def get_llm_provider_status() -> str:
 def set_llm_provider(provider: str) -> tuple[str, str]:
     """Switch active provider globally for the current UI process.
 
-    Args;
+    Args:
         provider: The name of the provider to switch to (e.g., "gemini", "groq", "openai", "openrouter").
 
     Returns:
@@ -102,8 +102,11 @@ def set_llm_provider(provider: str) -> tuple[str, str]:
 
     os.environ["LLM_PROVIDER"] = normalized
 
-    if switched and os.getenv("LLM_MODEL"):
-        os.environ.pop("LLM_MODEL", None)
+    # Set LLM_MODEL to "" (not pop) so subsequent load_dotenv() calls cannot
+    # restore the old model from the .env file (load_dotenv skips vars that
+    # already exist, even if empty).
+    if switched:
+        os.environ["LLM_MODEL"] = ""
 
     status = get_llm_provider_status()
     if switched and "Model: <default>" in status:
@@ -187,12 +190,21 @@ class _StderrCapture:
         return self
 
     def __exit__(self, *_: Any) -> None:
+        """Restore original sys.stderr and flush any remaining buffer to the queue."""
         if self._buf.strip():
             self._q.put(self._buf.rstrip())
             self._buf = ""
         sys.stderr = self._original
 
     def write(self, text: str) -> int:
+        """Write text to the original stderr and also capture it in the buffer. 
+        
+        Args:
+            text: The string to write (may contain multiple lines).
+        
+        Returns:
+            The number of characters written.
+        """
         self._original.write(text)
         self._buf += text
         while "\n" in self._buf:
@@ -203,19 +215,29 @@ class _StderrCapture:
         return len(text)
 
     def flush(self) -> None:
+        """Flush the original stderr."""
         self._original.flush()
 
     @property
     def encoding(self) -> str:
+        """Return the encoding of the original stderr, defaulting to 'utf-8' if not available."""
         return getattr(self._original, "encoding", "utf-8")
 
 
 class _QueueLogHandler(logging.Handler):
+    """A logging handler that sends log records to a queue, allowing logs to be captured and 
+    streamed in real-time to the UI."""
     def __init__(self, q: "queue.Queue[str]"):
+        """Initialize the queue log handler with a queue to receive log messages."""
         super().__init__(level=logging.NOTSET)
         self._q = q
 
     def emit(self, record: logging.LogRecord) -> None:
+        """Format the log record and put it into the queue.
+        
+        Args:
+            record: The log record to emit.
+        """
         try:
             msg = self.format(record)
         except Exception:
@@ -231,16 +253,19 @@ class _LoggingCapture:
     """
 
     def __init__(self, q: "queue.Queue[str]"):
+        """Initialize the logging capture with a queue to receive log messages."""
         self._q = q
         self._handler = _QueueLogHandler(q)
         self._logger = logging.getLogger()
 
     def __enter__(self) -> "_LoggingCapture":
+        """Add the queue log handler to the root logger."""
         self._handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
         self._logger.addHandler(self._handler)
         return self
 
     def __exit__(self, *_: Any) -> None:
+        """Remove the queue log handler from the root logger."""
         self._logger.removeHandler(self._handler)
 
 
@@ -249,15 +274,40 @@ class _LoggingCapture:
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _list_md(folder: str) -> list[str]:
+    """List all .md files in the given folder.
+    
+    Args:
+        folder: The path to the folder to search for .md files.
+    
+    Returns:
+         A list of file paths to .md files in the folder."""
     return glob.glob(os.path.join(folder, "*.md"))
 
 
 def _find_newest_md(folder: str) -> str | None:
+    """Find the newest .md file in the given folder.
+    
+    Args:
+        folder: The path to the folder to search for .md files.
+    
+    Returns:
+        The file path to the newest .md file, or None if no .md files are found.
+    """
     files = _list_md(folder)
     return max(files, key=os.path.getmtime) if files else None
 
 
 def _read_md(path: str | None) -> str:
+    """Read the content of a markdown file, returning an empty string if the file does not 
+    exist or cannot be read.
+    
+    Args:
+        path: The file path to the markdown file to read.
+    
+    Returns:
+        The content of the markdown file as a string, or an empty string if the file does not 
+        exist or cannot be read.
+    """
     if not path or not os.path.exists(path):
         return ""
     try:
@@ -279,6 +329,18 @@ def start_planning(
 
     Returns (history, session_state, status_msg, rendered_plan).
     rendered_plan is empty until the workflow fully completes.
+
+    Args:
+        tema: The review topic/theme provided by the user.
+        tipo: The review type ("academico", "tecnico", or "ambos").
+        rodadas: The number of refinement rounds for HITL steps.
+    
+    Returns:
+        tuple: A tuple containing:
+            - history: A list of message dicts representing the conversation history.
+            - session_state: A dict containing the session state for continuing the workflow.
+            - status_msg: A string message indicating the current status or next steps.
+            - rendered_plan: A string with the rendered plan in markdown, empty until completion.
     """
     if not tema.strip():
         return [], {}, "❌ Please provide a topic before starting.", ""
@@ -371,7 +433,13 @@ def continue_planning(
 ) -> tuple[list, dict, str, str]:
     """Feed user response back into the HITL loop.
 
-    Returns (history, session_state, status_msg, rendered_plan).
+    Args:
+        user_msg: The message from the user responding to the agent's question.
+        history: The current conversation history, to which the user message will be appended.
+        session_state: The current session state containing the app and config needed to continue the workflow.
+
+    Returns:
+        history, session_state, status_msg, rendered_plan.
     """
     if not session_state or "app" not in session_state:
         return history, session_state, "❌ No active session.", ""
@@ -446,6 +514,7 @@ def continue_planning(
 # ═══════════════════════════════════════════════════════════════════════════
 
 def list_plan_files(mode: str) -> list[str]:
+    """List available plan files for the given mode (Academic or Technical)."""
     os.makedirs("plans", exist_ok=True)
     pattern = "plans/plano_revisao_tecnica_*.md" if mode == "Technical" else "plans/plano_revisao_*.md"
     files = sorted(glob.glob(pattern))
@@ -1205,15 +1274,27 @@ def _precheck_provided_requires_web(user_text: str) -> dict:
 
 
 def _build_reference_confirmation_prompt(intent: str, user_text: str, allow_web: bool) -> tuple[str, dict]:
+    """Builds a confirmation prompt for reference formatting requests, analyzing the user's input to determine 
+    the intent and whether additional web search is needed for incomplete metadata. The function first classifies 
+    the intent of the user's request (e.g., listing all references, formatting provided items, resolving citation 
+    numbers) and then checks for any explicitly provided reference items. It assesses the completeness of the metadata 
+    for these items and determines if a web search would be necessary to fill in missing information. Based on this 
+    analysis, it constructs a localized confirmation prompt that informs the user of the next steps and what will be 
+    formatted, while also providing details about any incomplete items that may require web search if allowed.
+
+    Args:
+    - intent: A string representing the classified intent of the user's reference request (e.g., "list_all", "format_provided", "resolve_numbers").
+
+    """
     language = _detect_user_language(user_text)
     fingerprint = _reference_request_fingerprint(user_text)
 
     if intent == "list_all":
         prompt = _localized_text(
             language,
-            "Vou listar as referências usadas no documento, sem repetição, em ABNT.\n\n"
+            "Vou listar as referências usadas no documento em ABNT.\n\n"
             "Responda **sim** para confirmar ou **não** para cancelar.",
-            "I will list the references used in the document, deduplicated, in ABNT.\n\n"
+            "I will list the references used in the document in ABNT.\n\n"
             "Reply **yes** to confirm or **no** to cancel.",
         )
         return prompt, {
@@ -1267,12 +1348,50 @@ _BIBTEX_FIELD_RE = re.compile(r'(\w+)\s*=\s*["{]([^"}]+)["}]', re.IGNORECASE)
 
 
 def _parse_bibtex_fields(bibtex: str) -> dict[str, str]:
+    """Parses a BibTeX entry string and extracts its fields into a dictionary. The function 
+    uses a regular expression to identify key-value pairs in the BibTeX format, where keys are 
+    typically alphanumeric identifiers (e.g., title, author, year) and values are enclosed in 
+    either double quotes or curly braces. The extracted keys are normalized to lowercase, and 
+    the values are stripped of leading/trailing whitespace. This allows for flexible parsing of 
+    BibTeX entries, even when they contain varying amounts of whitespace or different field orderings.
+    
+    Args:
+        - bibtex: A string containing the raw BibTeX entry, which may include various fields such 
+            as title, author, year, doi, and url.
+
+    Returns:
+        A dictionary where the keys are the normalized field names (in lowercase) and the values are 
+            the corresponding field values extracted from the BibTeX entry. If the input string is 
+            empty or does not contain valid BibTeX fields, an empty dictionary is returned.
+    """
     if not bibtex:
         return {}
     return {m.group(1).lower(): m.group(2).strip() for m in _BIBTEX_FIELD_RE.finditer(bibtex)}
 
 
 def _metadata_from_bibtex(number: int | None, bibtex: str) -> dict:
+    """Extracts metadata from a BibTeX entry string, attempting to identify the title, year, DOI, 
+    and URL. This function uses regular expressions to parse common BibTeX field patterns and 
+    normalizes the extracted values by stripping extraneous whitespace and punctuation. The 
+    resulting metadata dictionary is structured to facilitate comparison with reference entries 
+    in a document, allowing for more accurate matching even when the input BibTeX is incomplete or 
+    formatted inconsistently.
+    
+    Args:
+        number: An optional integer representing the reference number (e.g., from [1], [2], etc.).
+        bibtex: A string containing the raw BibTeX entry, which may include various fields such as title, year, doi, and url.
+    
+    Returns:
+        A dictionary with the following keys
+        - "number": The provided reference number.
+        - "raw": The original raw BibTeX string, stripped of leading/trailing whitespace.
+        - "title": The extracted title from the BibTeX entry, or an empty string if not found.
+        - "year": The extracted publication year from the BibTeX entry, or an empty string if not found.
+        - "url": The extracted URL from the BibTeX entry, stripped of extraneous punctuation, or an empty string if not found.
+        - "doi": The extracted DOI from the BibTeX entry, normalized to a standard format and stripped of extraneous punctuation, or an empty string if not found.
+        - "file_path": An empty string (reserved for potential future use if a file path can be derived from the BibTeX entry).
+        - "derived_from_path": A boolean set to False (reserved for potential future use to indicate whether the title was derived from a file path).
+    """
     fields = _parse_bibtex_fields(bibtex)
     title = fields.get("title", "")
     year = fields.get("year", "")
@@ -1282,7 +1401,7 @@ def _metadata_from_bibtex(number: int | None, bibtex: str) -> dict:
     doi_clean = doi_match.group(1).rstrip(".)],;") if doi_match else ""
     return {
         "number": number,
-        "raw": "",
+        "raw": bibtex.strip(),
         "title": title,
         "year": year,
         "url": url,
@@ -1708,6 +1827,9 @@ def _collect_all_raw_references_text(markdown: str) -> list[str]:
     or ``## Referências Bibliográficas`` — and collects every non-blank line below it
     until the next heading of the same or higher level.
 
+    Args:
+        - markdown: The full markdown content of the document, which may contain multiple reference or bibliography sections with varying heading levels and formats.
+
     Returns:
         List of collected reference lines (may be empty).
     """
@@ -1748,6 +1870,14 @@ def _collect_all_citation_paragraphs(markdown: str) -> dict[int, list[str]]:
     Returns a mapping ``{ref_number: [paragraph1, paragraph2]}`` (max 2 paragraphs
     per reference number) suitable for passing as ``citation_context`` to the
     extractor agent.
+
+    Args:
+        - markdown: The full markdown content of the document, which may contain paragraphs with in-text citations in the format [N].
+
+    Returns:
+        A dictionary mapping each cited reference number to a list of up to two paragraphs that contain citations
+        of that reference number. The paragraphs are extracted from the markdown content and are intended to provide 
+        context for the extractor agent when enriching reference metadata.
     """
     result: dict[int, list[str]] = {}
     for line in markdown.splitlines():
@@ -1762,7 +1892,57 @@ def _collect_all_citation_paragraphs(markdown: str) -> dict[int, list[str]]:
     return result
 
 
-def _handle_list_all_references_request(markdown: str, user_text: str) -> tuple[str, dict]:
+def _handle_resolve_numbers_request(markdown: str, user_text: str, allow_web: bool = True) -> tuple[str, dict]:
+    """Resolve specific numbered references via the extractor\u2192formatter agent pipeline.
+
+    Extracts the citation numbers from the user message, fetches their entries
+    from the reference inventory, and runs them through the same agent pipeline
+    used by ``_handle_list_all_references_request``.
+
+    Args:
+        - markdown: The full markdown content of the document.
+        - user_text: The original user message, used for language detection and localization.
+        - allow_web: Whether to allow web search for metadata enrichment in the extractor agent.
+
+    Returns:
+        A tuple containing the reply string with the formatted reference list for the requested 
+        numbers and a metadata dictionary
+    """
+    language = _detect_user_language(user_text)
+    requested = _extract_requested_citation_numbers(user_text)
+    inventory = _collect_reference_inventory(markdown)
+    references_by_number: dict[int, str] = inventory.get("references_by_number", {})
+
+    entries = (
+        {n: references_by_number[n] for n in requested if n in references_by_number}
+        if requested
+        else references_by_number
+    )
+
+    if not entries:
+        msg = _localized_text(
+            language,
+            "Nenhuma refer\u00eancia encontrada para os n\u00fameros solicitados.",
+            "No references found for the requested numbers.",
+        )
+        return msg, {"intent": "resolve_numbers", "count": 0, "agent": "none"}
+
+    raw_block = "\n".join(entries.values())
+    citation_context = _collect_all_citation_paragraphs(markdown)
+
+    enriched = run_reference_extractor_agent(raw_block, citation_context=citation_context, allow_web=allow_web)
+    abnt_list = run_reference_formatter_agent(enriched, allow_web=allow_web)
+
+    heading = _localized_text(language, "### Refer\u00eancias (ABNT)", "### References (ABNT)")
+    reply = f"{heading}\n\n{abnt_list}"
+    return reply, {
+        "intent": "resolve_numbers",
+        "count": len(entries),
+        "agent": "reference_extractor+reference_formatter",
+    }
+
+
+def _handle_list_all_references_request(markdown: str, user_text: str, allow_web: bool = True) -> tuple[str, dict]:
     """Collect every reference from the document, then run extractor→formatter
     agent pipeline for ABNT output.
 
@@ -1775,6 +1955,15 @@ def _handle_list_all_references_request(markdown: str, user_text: str) -> tuple[
     HTML comments (``<!-- ... -->``) are stripped before forwarding.
     Citation paragraphs from the full document body are collected and passed
     to the extractor agent as context for Type-B in-text citations.
+
+    Args:
+        - markdown: The full markdown content of the document.
+        - user_text: The original user message, used for language detection and localization.
+        - allow_web: Whether to allow web search for metadata enrichment in the extractor agent.
+
+    Returns:
+        A tuple containing the reply string with the formatted reference list and a metadata dictionary 
+        with details about the operation, such as intent, count of references processed, and agents used.   
     """
     language = _detect_user_language(user_text)
 
@@ -1822,11 +2011,11 @@ def _handle_list_all_references_request(markdown: str, user_text: str) -> tuple[
 
     # ── Extractor agent: enrich raw entries with full metadata ──
     enriched = run_reference_extractor_agent(
-        raw_block, citation_context=citation_context, allow_web=True
+        raw_block, citation_context=citation_context, allow_web=allow_web
     )
 
     # ── Formatter agent: apply ABNT NBR 6023 formatting ──
-    abnt_list = run_reference_formatter_agent(enriched, allow_web=True)
+    abnt_list = run_reference_formatter_agent(enriched, allow_web=allow_web)
 
     heading = _localized_text(
         language,
@@ -2476,6 +2665,7 @@ def review_chat_turn(
                 reply, ref_meta = _handle_list_all_references_request(
                     markdown,
                     str(pending_reference_action.get("original_message") or ""),
+                    allow_web=allow_web,
                 )
                 status_msg = _localized_text(language, "✅ Referências listadas", "✅ References listed")
                 trace_action = "reference_pipeline_list_all"
@@ -2578,8 +2768,8 @@ def review_chat_turn(
         session_state["awaiting_reference_confirmation"] = True
         return history, session_state, _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"), _read_md(working_copy)
 
-    if reference_intent == "resolve_numbers" or _is_reference_request(user_msg):
-        reply, ref_meta = _handle_reference_request(markdown, user_msg, allow_web=allow_web)
+    if reference_intent == "resolve_numbers":
+        reply, ref_meta = _handle_resolve_numbers_request(markdown, user_msg, allow_web=allow_web)
         history = history + [
             {"role": "user", "content": user_msg},
             {"role": "assistant", "content": reply},

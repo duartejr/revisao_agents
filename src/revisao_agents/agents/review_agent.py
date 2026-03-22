@@ -8,6 +8,7 @@ and produce structured actions (answer, edit proposal, confirm/cancel).
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -52,10 +53,8 @@ def _normalize_tool_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]
         if isinstance(value, str):
             stripped = value.strip()
             if re.fullmatch(r"[-+]?\d+", stripped):
-                try:
+                with contextlib.suppress(Exception):
                     normalized[key] = int(stripped)
-                except Exception:
-                    pass
 
     return normalized
 

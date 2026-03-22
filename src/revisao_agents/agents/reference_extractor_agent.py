@@ -20,7 +20,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain.agents import create_agent
 
 from ..tools.reference_tools import get_reference_tools
-from ..utils.llm_utils.llm_providers import get_llm
+from ..utils.llm_utils.llm_providers import get_llm, create_agent_easy
 from ..utils.llm_utils.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -77,6 +77,12 @@ def run_reference_extractor_agent(
     else:
         citation_context_text = "(no citation context provided)"
 
+    allow_web_hint = (
+        "## WEB SEARCH DISABLED\n"
+        "  The `search_web_for_reference` tool is NOT available in this session.\n"
+        "  Skip ALL web search steps — do NOT attempt to call `search_web_for_reference`.\n"
+    ) if not allow_web else ""
+
     try:
         prompt = load_prompt(
             "common/reference_extractor",
@@ -84,18 +90,18 @@ def run_reference_extractor_agent(
             total_items=str(total_items),
             raw_references=raw_references,
             citation_context=citation_context_text,
+            allow_web_hint=allow_web_hint,
         )
     except Exception as exc:
         logger.error("Failed to load reference_extractor prompt: %s", exc)
         return f"Extractor prompt load error: {exc}"
 
     tools = get_reference_tools(allow_web=allow_web)
-    llm = get_llm(temperature=prompt.temperature)
 
-    agent = create_agent(
-        model=llm,
+    agent = create_agent_easy(
         tools=tools,
         system_prompt=prompt.text,
+        temperature=prompt.temperature,
         name="reference_extractor",
     )
 
