@@ -43,12 +43,14 @@ SNIPPET_MIN_SCORE = float(os.getenv("SNIPPET_MIN_SCORE", "0.3"))
 # ─────────────────────────────────────────────────────────────────────────────
 TECHNICAL_MAX_RESULTS = int(os.getenv("TECHNICAL_MAX_RESULTS", "5"))
 PRIORITY_DOMAINS = [
-    "github.com", "arxiv.org", "researchgate.net",
-    "tensorflow.org", "pytorch.org", "huggingface.co"
+    "github.com",
+    "arxiv.org",
+    "researchgate.net",
+    "tensorflow.org",
+    "pytorch.org",
+    "huggingface.co",
 ]
-BLOCKED_DOMAINS_EXTRACT = [
-    "paywall", "paywalled", "subscription", "pdf"
-]
+BLOCKED_DOMAINS_EXTRACT = ["paywall", "paywalled", "subscription", "pdf"]
 MAX_IMAGES_SECTION = int(os.getenv("MAX_IMAGES_SECTION", "5"))
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -30,7 +30,7 @@ _ARXIV_MIN_INTERVAL = 1.0
 _arxiv_lock = threading.Lock()
 _arxiv_last_call: float = 0.0
 
-_arxiv_cache: dict[str, Optional[str]] = {}   # arxiv_id -> bibtex or None
+_arxiv_cache: dict[str, Optional[str]] = {}  # arxiv_id -> bibtex or None
 
 
 def _arxiv_wait() -> None:
@@ -45,12 +45,13 @@ def _arxiv_wait() -> None:
 
 # ---------------------------------------------------------------------------
 
+
 def extract_arxiv_id(file_path: str) -> Optional[str]:
     """Return the ArXiv identifier embedded in *file_path*, or ``None``.
-    
+
     Args:
         file_path: a URL or file path that may contain an ArXiv ID.
-    
+
     Returns:
         The ArXiv ID as a string, or ``None`` if not found.
     """
@@ -58,12 +59,12 @@ def extract_arxiv_id(file_path: str) -> Optional[str]:
         return None
 
     arxiv_match = re.search(
-        r'arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})', file_path, re.IGNORECASE
+        r"arxiv\.org/(?:abs|pdf)/(\d{4}\.\d{4,5})", file_path, re.IGNORECASE
     )
     if arxiv_match:
         return arxiv_match.group(1)
 
-    arxiv_id_match = re.search(r'(\d{4}\.\d{4,5})', file_path)
+    arxiv_id_match = re.search(r"(\d{4}\.\d{4,5})", file_path)
     if arxiv_id_match:
         return arxiv_id_match.group(1)
 
@@ -96,15 +97,15 @@ def get_bibtex_from_arxiv(arxiv_id: str, timeout: int = 10) -> Optional[str]:
         try:
             req = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
             with urllib.request.urlopen(req, timeout=timeout) as response:
-                xml_data = response.read().decode('utf-8')
+                xml_data = response.read().decode("utf-8")
 
-                title_match = re.search(r'<title>([^<]+)</title>', xml_data)
-                author_match = re.findall(r'<name>([^<]+)</name>', xml_data)
-                published_match = re.search(r'<published>(\d{4})-', xml_data)
+                title_match = re.search(r"<title>([^<]+)</title>", xml_data)
+                author_match = re.findall(r"<name>([^<]+)</name>", xml_data)
+                published_match = re.search(r"<published>(\d{4})-", xml_data)
 
                 if title_match and author_match and published_match:
                     title = title_match.group(1).strip()
-                    authors = ' and '.join(author_match[:3])
+                    authors = " and ".join(author_match[:3])
                     year = published_match.group(1)
                     bibtex = (
                         f"@article{{arxiv{clean_id.replace('.', '')},\n"

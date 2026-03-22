@@ -16,6 +16,6 @@ def test_get_all_tools_returns_list():
 def test_tools_are_callable():
     tools = get_all_tools()
     for tool in tools:
-        assert callable(tool) or hasattr(tool, "invoke"), (
-            f"Tool {tool!r} is not callable and has no .invoke()"
-        )
+        assert callable(tool) or hasattr(
+            tool, "invoke"
+        ), f"Tool {tool!r} is not callable and has no .invoke()"

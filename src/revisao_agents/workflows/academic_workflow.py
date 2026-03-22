@@ -27,12 +27,15 @@ def build_academic_workflow():
 
     builder.set_entry_point("vector_search")
     builder.add_edge("vector_search", "initial_plan")
-    builder.add_edge("initial_plan",     "interview")
-    builder.add_edge("interview",        "human_pause")
-    builder.add_edge("human_pause",       "refine_search")
-    builder.add_edge("refine_search",  "refine_plan")
-    builder.add_conditional_edges("refine_plan", interview_router,
-        {"continue": "interview", "finalize": "finalize_plan"})
+    builder.add_edge("initial_plan", "interview")
+    builder.add_edge("interview", "human_pause")
+    builder.add_edge("human_pause", "refine_search")
+    builder.add_edge("refine_search", "refine_plan")
+    builder.add_conditional_edges(
+        "refine_plan",
+        interview_router,
+        {"continue": "interview", "finalize": "finalize_plan"},
+    )
     builder.add_edge("finalize_plan", END)
 
     return builder.compile(checkpointer=MemorySaver(), interrupt_before=["human_pause"])

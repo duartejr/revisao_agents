@@ -26,6 +26,7 @@ def make_checkpointer(backend: str = "memory", **kwargs):
     if backend == "sqlite":
         try:
             from langgraph.checkpoint.sqlite import SqliteSaver
+
             db_path = kwargs.get("db_path", "checkpoints.db")
             return SqliteSaver.from_conn_string(db_path)
         except ImportError as e:
@@ -37,6 +38,7 @@ def make_checkpointer(backend: str = "memory", **kwargs):
     if backend == "postgres":
         try:
             from langgraph.checkpoint.postgres import PostgresSaver
+
             conn_string = kwargs["conn_string"]  # required
             return PostgresSaver.from_conn_string(conn_string)
         except ImportError as e:

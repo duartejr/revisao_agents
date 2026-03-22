@@ -187,22 +187,22 @@ def extract_pdf_text_from_disk(file_path: str, max_pages: int = 1) -> str:
 
         with open(path, "rb") as f:
             pages_text: list[str] = []
-            for i in range(max_pages): 
+            for i in range(max_pages):
                 out = io.StringIO()
-                
-                f.seek(0) 
-                
+
+                f.seek(0)
+
                 extract_text_to_fp(
-                    f, 
+                    f,
                     out,
                     laparams=LAParams(),
                     page_numbers={i},
                 )
-                
+
                 text = out.getvalue()
                 if not text:
                     break
-                    
+
                 pages_text.append(text)
 
         text = "\n".join(pages_text).strip()

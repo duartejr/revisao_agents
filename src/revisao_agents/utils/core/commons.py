@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 
+
 def get_clean_key(env_var):
     """
     Load an environment variable and clean it from common export patterns.
@@ -8,7 +9,7 @@ def get_clean_key(env_var):
 
     Args:
         env_var: The name of the environment variable to load.
-    
+
     Returns:
         The cleaned value of the environment variable, or an empty string if not found.
     """

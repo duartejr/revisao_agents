@@ -78,10 +78,14 @@ def run_reference_extractor_agent(
         citation_context_text = "(no citation context provided)"
 
     allow_web_hint = (
-        "## WEB SEARCH DISABLED\n"
-        "  The `search_web_for_reference` tool is NOT available in this session.\n"
-        "  Skip ALL web search steps — do NOT attempt to call `search_web_for_reference`.\n"
-    ) if not allow_web else ""
+        (
+            "## WEB SEARCH DISABLED\n"
+            "  The `search_web_for_reference` tool is NOT available in this session.\n"
+            "  Skip ALL web search steps — do NOT attempt to call `search_web_for_reference`.\n"
+        )
+        if not allow_web
+        else ""
+    )
 
     try:
         prompt = load_prompt(

@@ -116,7 +116,9 @@ class TestSessionLifecycle:
         from gradio_app.handlers import start_review_session
 
         history, state, status, content = start_review_session(
-            review_dir, [], {},
+            review_dir,
+            [],
+            {},
         )
         assert "✅" in status
         assert state["working_copy_path"]
@@ -134,7 +136,9 @@ class TestSessionLifecycle:
             f = tmp_path / "evil.md"
             f.write_text("bad")
             history, state, status, _ = start_review_session(
-                "evil.md", [], {},
+                "evil.md",
+                [],
+                {},
             )
             assert "❌" in status
         finally:
@@ -149,7 +153,9 @@ class TestChatTurn:
         from gradio_app.handlers import start_review_session
 
         history, state, status, content = start_review_session(
-            review_dir, [], {},
+            review_dir,
+            [],
+            {},
         )
         return history, state
 
@@ -163,7 +169,9 @@ class TestChatTurn:
             return_value=_mock_agent_answer("Here are the references:\n[1] Smith"),
         ):
             hist, st, status, md = review_chat_turn(
-                "liste as referencias", history, state,
+                "liste as referencias",
+                history,
+                state,
             )
 
         assert len(hist) > len(history)
@@ -179,13 +187,16 @@ class TestChatTurn:
         with patch(
             "gradio_app.handlers.run_review_agent",
             return_value=_mock_agent_edit_proposal(
-                "1. Introduction", 0,
+                "1. Introduction",
+                0,
                 "Climate models have evolved significantly in recent years.",
                 "Climate models have evolved dramatically in the last decade.",
             ),
         ):
             hist, st, status, md = review_chat_turn(
-                "edit first paragraph of section 1", history, state,
+                "edit first paragraph of section 1",
+                history,
+                state,
             )
 
         assert st.get("pending_edit")
@@ -203,7 +214,9 @@ class TestChatTurn:
         md = open(working, encoding="utf-8").read()
         # Find the introduction paragraph
         intro_start = md.index("Climate models have evolved")
-        intro_end = intro_start + len("Climate models have evolved significantly in recent years.")
+        intro_end = intro_start + len(
+            "Climate models have evolved significantly in recent years."
+        )
 
         with patch(
             "gradio_app.handlers.run_review_agent",
@@ -260,7 +273,10 @@ class TestChatTurn:
             hist, st, status, _ = cancel_review_edit(history, state)
 
         assert not st.get("pending_edit")
-        assert "cancelada" in hist[-1]["content"].lower() or "cancel" in hist[-1]["content"].lower()
+        assert (
+            "cancelada" in hist[-1]["content"].lower()
+            or "cancel" in hist[-1]["content"].lower()
+        )
 
     def test_original_file_unchanged_after_edit(self, review_dir):
         from gradio_app.handlers import review_chat_turn, confirm_review_edit
@@ -270,7 +286,9 @@ class TestChatTurn:
 
         md = open(state["working_copy_path"], encoding="utf-8").read()
         intro_start = md.index("Climate models have evolved")
-        intro_end = intro_start + len("Climate models have evolved significantly in recent years.")
+        intro_end = intro_start + len(
+            "Climate models have evolved significantly in recent years."
+        )
 
         with patch(
             "gradio_app.handlers.run_review_agent",
@@ -315,7 +333,9 @@ class TestWebGateHandler:
             return_value=_mock_agent_answer("searched the web"),
         ) as mock_agent:
             review_chat_turn(
-                "find more sources about climate", history, state,
+                "find more sources about climate",
+                history,
+                state,
                 web_enabled=True,
             )
 
@@ -334,7 +354,9 @@ class TestWebGateHandler:
             return_value=_mock_agent_answer("searched the web"),
         ) as mock_agent:
             review_chat_turn(
-                "search on the internet for sources", history, state,
+                "search on the internet for sources",
+                history,
+                state,
                 web_enabled=False,
             )
 
@@ -353,7 +375,9 @@ class TestWebGateHandler:
             return_value=_mock_agent_answer("local only"),
         ) as mock_agent:
             review_chat_turn(
-                "find more sources about climate", history, state,
+                "find more sources about climate",
+                history,
+                state,
                 web_enabled=False,
             )
 

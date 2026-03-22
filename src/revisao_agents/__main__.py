@@ -89,14 +89,18 @@ def main():
             writer_config = WriterConfig.academic(language=lang_opt)
         else:
             writer_config = WriterConfig.technical(language=lang_opt)
-        print(f"   ✔  Language: {'Portuguese (pt-BR)' if lang_opt == 'pt' else 'English'}")
+        print(
+            f"   ✔  Language: {'Portuguese (pt-BR)' if lang_opt == 'pt' else 'English'}"
+        )
 
         # --- Minimum distinct sources per section ---
         default_min = 4 if select_mode == "b" else 0
         print("\n" + "-" * 70)
         print("MINIMUM NUMBER OF DISTINCT SOURCES PER SECTION:")
         print(f"  (default = {default_min}; 0 = no restriction)")
-        min_src_input = input(f"\nMinimum sources per section [{default_min}]: ").strip()
+        min_src_input = input(
+            f"\nMinimum sources per section [{default_min}]: "
+        ).strip()
         try:
             min_src = int(min_src_input) if min_src_input else default_min
         except ValueError:
@@ -185,7 +189,11 @@ def main():
             break
         choice = ""  # Clear to order again
         print("Enter 1, 2, or 3.")
-    review_types = {"1": ["academic"], "2": ["technical"], "3": ["academic", "technical"]}[e]
+    review_types = {
+        "1": ["academic"],
+        "2": ["technical"],
+        "3": ["academic", "technical"],
+    }[e]
 
     max_p = 3
     try:
@@ -202,18 +210,18 @@ def main():
         print("-" * 70)
 
         state_init: ReviewState = {
-            "theme":                   theme,
-            "review_type":             review_type,
-            "relevant_chunks":      [],
-            "technical_snippets":      [],
-            "technical_urls":          [],
-            "current_plan":            "",
-            "interview_history":   [],
-            "questions_asked":       0,
-            "max_questions":          max_p,
-            "final_plan":            "",
-            "final_plan_path":       "",
-            "status":                 "starting",
+            "theme": theme,
+            "review_type": review_type,
+            "relevant_chunks": [],
+            "technical_snippets": [],
+            "technical_urls": [],
+            "current_plan": "",
+            "interview_history": [],
+            "questions_asked": 0,
+            "max_questions": max_p,
+            "final_plan": "",
+            "final_plan_path": "",
+            "status": "starting",
         }
         config = {"configurable": {"thread_id": f"review_{review_type}_{theme[:20]}"}}
 
@@ -229,6 +237,7 @@ def main():
             break
         except Exception as ex:
             import traceback
+
             print("\nError:", str(ex))
             traceback.print_exc()
 

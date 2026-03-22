@@ -3,7 +3,7 @@ from typing import Any
 
 def run_hitl_loop(app: Any, config: dict, state_init: dict) -> None:
     """Loop of human-in-the-loop interaction for refining plans until completion.
-    
+
     Args:
         app: compiled LangGraph graph to run
         config: graph execution config dict
@@ -26,15 +26,17 @@ def run_hitl_loop(app: Any, config: dict, state_init: dict) -> None:
             if role == "assistant":
                 print("\n🤖", c)
                 break
-        p  = state.values.get("questions_asked", 0)
+        p = state.values.get("questions_asked", 0)
         mp = state.values.get("max_questions", 3)
         tp = state.values.get("review_type", "academic")
         print(f"\n   [Round {p}/{mp} — {tp} — ok to finish]")
         resp = input("👤 ").strip() or "Keep the current plan."
         hist = state.values.get("interview_history", [])
-        app.update_state(config,
+        app.update_state(
+            config,
             {"interview_history": hist + [("user", resp)]},
-            as_node="human_pause")
+            as_node="human_pause",
+        )
         print("\n[Refining plan...]")
         for _ in app.stream(None, config):
             pass

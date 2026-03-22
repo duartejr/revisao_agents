@@ -59,7 +59,7 @@ BUILTIN_PATTERNS = {"abnt", "apa", "ieee", "vancouver", "mla", "chicago"}
 
 def _format_abnt(fields: Dict[str, Any]) -> str:
     """ABNT NBR 6023 formatting from a field dict.
-    
+
     Args:
         fields: Dictionary containing bibliographic information.
 
@@ -71,14 +71,14 @@ def _format_abnt(fields: Dict[str, Any]) -> str:
         'Silva, J.. **Exemplo**, 2020.'
     """
     author = fields.get("author", "")
-    title  = fields.get("title", "Sem título")
+    title = fields.get("title", "Sem título")
     journal = fields.get("journal", "")
-    year   = fields.get("year", "s.d.")
+    year = fields.get("year", "s.d.")
     volume = fields.get("volume", "")
     number = fields.get("number", "")
-    pages  = fields.get("pages", "")
-    doi    = fields.get("doi", "")
-    url    = fields.get("url", "")
+    pages = fields.get("pages", "")
+    doi = fields.get("doi", "")
+    url = fields.get("url", "")
     publisher = fields.get("publisher", "")
 
     # Author: LAST, First Name. or keep as-is if already formatted
@@ -112,7 +112,7 @@ def _format_abnt(fields: Dict[str, Any]) -> str:
 
 def _format_apa(fields: Dict[str, Any]) -> str:
     """APA 7th Edition formatting.
-    
+
     Args:
         fields: Dictionary containing bibliographic information.
 
@@ -120,14 +120,14 @@ def _format_apa(fields: Dict[str, Any]) -> str:
         Formatted citation string.
     """
     author = fields.get("author", "")
-    title  = fields.get("title", "Sem título")
+    title = fields.get("title", "Sem título")
     journal = fields.get("journal", "")
-    year   = fields.get("year", "n.d.")
+    year = fields.get("year", "n.d.")
     volume = fields.get("volume", "")
     number = fields.get("number", "")
-    pages  = fields.get("pages", "")
-    doi    = fields.get("doi", "")
-    url    = fields.get("url", "")
+    pages = fields.get("pages", "")
+    doi = fields.get("doi", "")
+    url = fields.get("url", "")
     publisher = fields.get("publisher", "")
 
     citation = f"{author} ({year}). " if author else f"({year}). "
@@ -164,14 +164,14 @@ def _format_ieee(fields: Dict[str, Any]) -> str:
         Formatted citation string.
     """
     author = fields.get("author", "")
-    title  = fields.get("title", "Untitled")
+    title = fields.get("title", "Untitled")
     journal = fields.get("journal", "")
-    year   = fields.get("year", "")
+    year = fields.get("year", "")
     volume = fields.get("volume", "")
     number = fields.get("number", "")
-    pages  = fields.get("pages", "")
-    doi    = fields.get("doi", "")
-    url    = fields.get("url", "")
+    pages = fields.get("pages", "")
+    doi = fields.get("doi", "")
+    url = fields.get("url", "")
     publisher = fields.get("publisher", "")
 
     citation = f"{author}, " if author else ""
@@ -211,14 +211,14 @@ def _format_vancouver(fields: Dict[str, Any]) -> str:
         Formatted citation string.
     """
     author = fields.get("author", "")
-    title  = fields.get("title", "Untitled")
+    title = fields.get("title", "Untitled")
     journal = fields.get("journal", "")
-    year   = fields.get("year", "")
+    year = fields.get("year", "")
     volume = fields.get("volume", "")
     number = fields.get("number", "")
-    pages  = fields.get("pages", "")
-    doi    = fields.get("doi", "")
-    url    = fields.get("url", "")
+    pages = fields.get("pages", "")
+    doi = fields.get("doi", "")
+    url = fields.get("url", "")
 
     citation = f"{author}. " if author else ""
     citation += f"{title}."
@@ -255,14 +255,14 @@ def _format_mla(fields: Dict[str, Any]) -> str:
         Formatted citation string.
     """
     author = fields.get("author", "")
-    title  = fields.get("title", "Untitled")
+    title = fields.get("title", "Untitled")
     journal = fields.get("journal", "")
-    year   = fields.get("year", "")
+    year = fields.get("year", "")
     volume = fields.get("volume", "")
     number = fields.get("number", "")
-    pages  = fields.get("pages", "")
-    doi    = fields.get("doi", "")
-    url    = fields.get("url", "")
+    pages = fields.get("pages", "")
+    doi = fields.get("doi", "")
+    url = fields.get("url", "")
     publisher = fields.get("publisher", "")
 
     citation = f"{author}. " if author else ""
@@ -301,14 +301,14 @@ def _format_chicago(fields: Dict[str, Any]) -> str:
         Formatted citation string.
     """
     author = fields.get("author", "")
-    title  = fields.get("title", "Untitled")
+    title = fields.get("title", "Untitled")
     journal = fields.get("journal", "")
-    year   = fields.get("year", "")
+    year = fields.get("year", "")
     volume = fields.get("volume", "")
     number = fields.get("number", "")
-    pages  = fields.get("pages", "")
-    doi    = fields.get("doi", "")
-    url    = fields.get("url", "")
+    pages = fields.get("pages", "")
+    doi = fields.get("doi", "")
+    url = fields.get("url", "")
     publisher = fields.get("publisher", "")
 
     citation = f"{author}. " if author else ""
@@ -338,12 +338,12 @@ def _format_chicago(fields: Dict[str, Any]) -> str:
 
 
 _BUILTIN_FORMATTERS = {
-    "abnt":      _format_abnt,
-    "apa":       _format_apa,
-    "ieee":      _format_ieee,
+    "abnt": _format_abnt,
+    "apa": _format_apa,
+    "ieee": _format_ieee,
     "vancouver": _format_vancouver,
-    "mla":       _format_mla,
-    "chicago":   _format_chicago,
+    "mla": _format_mla,
+    "chicago": _format_chicago,
 }
 
 
@@ -356,26 +356,29 @@ _BIBTEX_FIELD_RE = re.compile(r'(\w+)\s*=\s*["{]([^"}]+)["}]', re.IGNORECASE)
 
 def _parse_bibtex_fields(bibtex: str) -> Dict[str, str]:
     """Extract key=value fields from a BibTeX string into a plain dict.
-    
+
     Args:
         bibtex: Raw BibTeX entry as a string.
-    
+
     Returns:
         Dictionary of fields extracted from the BibTeX entry."""
-    return {m.group(1).lower(): m.group(2).strip()
-            for m in _BIBTEX_FIELD_RE.finditer(bibtex)}
+    return {
+        m.group(1).lower(): m.group(2).strip()
+        for m in _BIBTEX_FIELD_RE.finditer(bibtex)
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Custom / unknown pattern support
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _fetch_pattern_rules(pattern_url: str) -> str:
     """Fetch the text content of a pattern-rules page (best-effort).
-    
+
     Args:
         pattern_url: URL of the page containing the formatting rules for a custom pattern.
-    
+
     Returns:
         Text content of the page, stripped of HTML tags, to be used as context for LLM formatting.
     """
@@ -387,8 +390,8 @@ def _fetch_pattern_rules(pattern_url: str) -> str:
         with urllib.request.urlopen(req, timeout=15) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
         # Strip HTML tags for a cleaner context string
-        text = re.sub(r'<[^>]+>', ' ', raw)
-        text = re.sub(r'\s{2,}', ' ', text)
+        text = re.sub(r"<[^>]+>", " ", raw)
+        text = re.sub(r"\s{2,}", " ", text)
         return text[:8000]  # cap to avoid huge prompts
     except Exception as exc:
         logger.warning(f"Could not fetch pattern rules from {pattern_url}: {exc}")
@@ -411,7 +414,8 @@ def _format_with_llm(fields: Dict[str, Any], pattern: str, rules_text: str) -> s
 
     rules_section = (
         f"\n\nFormatting rules (from {rules_text[:200]}…):\n{rules_text[:3000]}"
-        if rules_text else ""
+        if rules_text
+        else ""
     )
 
     prompt_obj = load_prompt(
@@ -426,12 +430,13 @@ def _format_with_llm(fields: Dict[str, Any], pattern: str, rules_text: str) -> s
         return result.strip()
     except Exception as exc:
         logger.warning(f"LLM formatting failed: {exc}")
-        return _format_abnt(fields)   # fallback to ABNT
+        return _format_abnt(fields)  # fallback to ABNT
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Core per-reference resolution
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _resolve_reference(
     entry: Dict[str, Any],
@@ -450,12 +455,12 @@ def _resolve_reference(
         entry: The raw reference entry from the input file.
         mongo_corpus: Optional MongoDB corpus instance for REACT agent.
         tavily_enabled: Whether to allow Tavily web searches in the REACT agent.
-    
+
     Returns:
         A dictionary of resolved fields for this reference, ready for formatting.
     """
-    doi  = entry.get("doi", "").strip() if entry.get("doi") else ""
-    url  = entry.get("url", "").strip() if entry.get("url") else ""
+    doi = entry.get("doi", "").strip() if entry.get("doi") else ""
+    url = entry.get("url", "").strip() if entry.get("url") else ""
 
     # Detect manual-fields entries: have at least author + title
     has_manual = bool(entry.get("author") and entry.get("title"))
@@ -510,8 +515,8 @@ def _resolve_reference(
             if v and k not in ("url", "doi"):
                 fields[k] = v
 
-        fields["url"]    = url
-        fields["doi"]    = fields.get("doi") or ref_data.get("doi") or doi
+        fields["url"] = url
+        fields["doi"] = fields.get("doi") or ref_data.get("doi") or doi
         fields["source"] = ref_data.get("source", "unknown")
         return fields
 
@@ -522,6 +527,7 @@ def _resolve_reference(
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def format_references_from_file(
     input_path: str,
@@ -552,10 +558,12 @@ def format_references_from_file(
         raise ValueError(f"Unsupported file format: {path.suffix} (use .yaml or .json)")
 
     if not isinstance(data, dict):
-        raise ValueError("Input file must be a mapping with 'pattern' and 'references' keys.")
+        raise ValueError(
+            "Input file must be a mapping with 'pattern' and 'references' keys."
+        )
 
-    pattern: str       = str(data.get("pattern", "abnt")).lower().strip()
-    pattern_url: str   = str(data.get("pattern_url", "")).strip()
+    pattern: str = str(data.get("pattern", "abnt")).lower().strip()
+    pattern_url: str = str(data.get("pattern_url", "")).strip()
     entries: List[Any] = data.get("references", [])
 
     if not entries:
@@ -602,7 +610,7 @@ def format_references_from_file(
             print(f"  ⚠️  Entry {i} is not a mapping — skipping")
             continue
 
-        label = (entry.get("doi") or entry.get("url") or entry.get("title") or f"#{i}")
+        label = entry.get("doi") or entry.get("url") or entry.get("title") or f"#{i}"
         short_label = str(label)[:60]
         print(f"  [{i:2d}/{total}] {short_label}")
 
@@ -613,9 +621,16 @@ def format_references_from_file(
             fields = dict(entry) | {"source": "error"}
 
         source = fields.get("source", "?")
-        icon = {"crossref_doi": "🔗", "crossref_title": "🔗", "arxiv": "📄",
-                "mongo_chunks": "🗄️", "tavily": "🌐", "manual": "✏️",
-                "fallback": "📎", "error": "❌"}.get(source, "❓")
+        icon = {
+            "crossref_doi": "🔗",
+            "crossref_title": "🔗",
+            "arxiv": "📄",
+            "mongo_chunks": "🗄️",
+            "tavily": "🌐",
+            "manual": "✏️",
+            "fallback": "📎",
+            "error": "❌",
+        }.get(source, "❓")
         print(f"        {icon} source={source}")
 
         # Format according to pattern
@@ -666,12 +681,13 @@ def format_references_from_file(
 # Interactive CLI (called from __main__.py)
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def run_reference_formatter() -> None:
     """Interactive menu for the Reference Formatting Agent.
-    
+
     Args:
         None (all input is via prompts)
-    
+
     Returns:
         None (prints formatted references and saves to file)
     """
@@ -710,7 +726,9 @@ def run_reference_formatter() -> None:
     print("\n(Opcional) Caminho de saída para o arquivo .md formatado.")
     print("  Pressione Enter para usar o nome padrão em reviews/")
     output_path_raw = input("📝 Saída [Enter = automático]: ").strip()
-    output_path: Optional[str] = os.path.expanduser(output_path_raw) if output_path_raw else None
+    output_path: Optional[str] = (
+        os.path.expanduser(output_path_raw) if output_path_raw else None
+    )
 
     print("\n" + "=" * 70)
 

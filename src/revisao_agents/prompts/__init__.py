@@ -18,7 +18,9 @@ def load_prompt(name: str, version: str = "latest") -> Dict:
     base = Path(__file__).parent
     # Suporta subpastas com "."
     parts = name.split(".")
-    file_path = base / "/".join(parts) / f"{parts[-1]}.yaml"   # technical_writing/writer_judge.yaml
+    file_path = (
+        base / "/".join(parts) / f"{parts[-1]}.yaml"
+    )  # technical_writing/writer_judge.yaml
 
     if not file_path.exists():
         raise FileNotFoundError(f"Prompt não encontrado: {file_path}")

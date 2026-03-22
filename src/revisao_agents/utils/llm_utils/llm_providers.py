@@ -38,11 +38,13 @@ load_dotenv()
 # ENUM OF PROVIDERS
 # ============================================================================
 
+
 class LLMProvider(Enum):
     """Identifiers of supported providers."""
-    GEMINI    = "gemini"
-    GROQ      = "groq"
-    OPENAI    = "openai"
+
+    GEMINI = "gemini"
+    GROQ = "groq"
+    OPENAI = "openai"
     OPENROUTER = "openrouter"
 
 
@@ -50,13 +52,14 @@ class LLMProvider(Enum):
 # BASE CLASS
 # ============================================================================
 
+
 class BaseLLMProvider(ABC):
     """Common interface for all LLM providers."""
 
     def __init__(self, temperature: float = 0.2, model_name: Optional[str] = None):
         self.temperature = temperature
-        self.model_name  = model_name or self.get_default_model()
-        self._llm        = None
+        self.model_name = model_name or self.get_default_model()
+        self._llm = None
 
     @abstractmethod
     def get_default_model(self) -> str:
@@ -76,24 +79,23 @@ class BaseLLMProvider(ABC):
             self._llm = self.create_llm()
         return self._llm
 
-    def create_agent_with_tools(self, tools: List, system_prompt: str, name: str|None) -> Any:
+    def create_agent_with_tools(
+        self, tools: List, system_prompt: str, name: str | None
+    ) -> Any:
         """Creates a ReAct agent with linked tools.
-        
+
         Args:
             tools: List of LangChain tools to bind to the LLM.
             system_prompt: The system prompt to use for the agent.
             name: An optional name for the `CompiledStateGraph`
-        
+
         Returns:
             An agent instance with the LLM and tools ready for use.
         """
         llm = self.get_llm()
         llm_with_tools = llm.bind_tools(tools)
         return create_agent(
-            model=llm_with_tools,
-            tools=tools,
-            system_prompt=system_prompt,
-            name=name
+            model=llm_with_tools, tools=tools, system_prompt=system_prompt, name=name
         )
 
 
@@ -101,14 +103,15 @@ class BaseLLMProvider(ABC):
 # CONCRETE PROVIDERS
 # ============================================================================
 
+
 class GeminiProvider(BaseLLMProvider):
     """Google Gemini via langchain-google-genai."""
 
     def get_default_model(self) -> str:
         """Popular Gemini models:
-                gemini-2.5-flash (versatile, good for writing and general tasks)
-                gemini-2.5-pro (more capable, ideal for dense scientific writing)"""
-        print('default model: gemini-2.5-flash')
+        gemini-2.5-flash (versatile, good for writing and general tasks)
+        gemini-2.5-pro (more capable, ideal for dense scientific writing)"""
+        print("default model: gemini-2.5-flash")
         return "gemini-2.5-flash"
 
     def get_api_key(self) -> str:
@@ -132,9 +135,9 @@ class GroqProvider(BaseLLMProvider):
 
     def get_default_model(self) -> str:
         """Groq's llama-3.3-70b-versatile is a strong open-source option for writing tasks.
-            Popular models:
-                llama-3.3-70b-versatile (open-source, strong for writing)
-                mixtral-8x7b-32768 (fast, good for structured tasks)
+        Popular models:
+            llama-3.3-70b-versatile (open-source, strong for writing)
+            mixtral-8x7b-32768 (fast, good for structured tasks)
         """
         return os.getenv("LLM_MODEL") or "llama-3.3-70b-versatile"
 
@@ -159,7 +162,7 @@ class OpenAIProvider(BaseLLMProvider):
     OpenAI via langchain-openai.
 
     Suggested models:
-        gtp-5.1          → More advanced, ideal for dense and creative writing. 
+        gtp-5.1          → More advanced, ideal for dense and creative writing.
         gpt-4.1          → more capable, ideal for dense scientific writing
         gpt-4.1-mini     → faster and more economical, good for structured tasks
         gpt-4o           → good cost/quality ratio
@@ -173,12 +176,12 @@ class OpenAIProvider(BaseLLMProvider):
 
     def get_default_model(self) -> str:
         """Returns the default OpenAI model, which can be overridden by the LLM_MODEL environment variable.
-            Popular models:
-                gpt-4.1 (more capable, ideal for dense scientific writing)
-                gpt-4.1-mini (faster and more economical, good for structured tasks
+        Popular models:
+            gpt-4.1 (more capable, ideal for dense scientific writing)
+            gpt-4.1-mini (faster and more economical, good for structured tasks
         """
         model = os.getenv("LLM_MODEL") or "gpt-4.1"
-        print(f'default model: {model}')
+        print(f"default model: {model}")
         return model
 
     def get_api_key(self) -> str:
@@ -216,7 +219,7 @@ class OpenRouterProvider(BaseLLMProvider):
     def get_default_model(self) -> str:
         """Returns the default OpenRouter model, which can be overridden by the LLM_MODEL environment variable."""
         model = os.getenv("LLM_MODEL") or "google/gemini-2.0-flash-001"
-        print(f'default model: {model}')
+        print(f"default model: {model}")
         return model
 
     def get_api_key(self) -> str:
@@ -235,8 +238,8 @@ class OpenRouterProvider(BaseLLMProvider):
             base_url="https://openrouter.ai/api/v1",
             default_headers={
                 "HTTP-Referer": "https://github.com/duartejr/paper_reviwer",
-                "X-Title": "Paper Reviewer"
-            }
+                "X-Title": "Paper Reviewer",
+            },
         )
 
 
@@ -244,13 +247,14 @@ class OpenRouterProvider(BaseLLMProvider):
 # FACTORY
 # ============================================================================
 
+
 class LLMFactory:
     """Creates LLM providers via enum or environment variable."""
 
     _providers = {
-        LLMProvider.GEMINI:     GeminiProvider,
-        LLMProvider.GROQ:       GroqProvider,
-        LLMProvider.OPENAI:     OpenAIProvider,
+        LLMProvider.GEMINI: GeminiProvider,
+        LLMProvider.GROQ: GroqProvider,
+        LLMProvider.OPENAI: OpenAIProvider,
         LLMProvider.OPENROUTER: OpenRouterProvider,
     }
 
@@ -268,7 +272,7 @@ class LLMFactory:
             provider    : LLMProvider.GEMINI | .GROQ | .OPENAI | .OPENROUTER
             temperature : 0.0 – 1.0 (default 0.2)
             model_name  : overrides the provider's default model (optional)
-        
+
         Returns:
             An instance of the selected LLM provider, ready to create LLMs and agents.
         """
@@ -289,10 +293,10 @@ class LLMFactory:
             LLM_PROVIDER    : "gemini" | "groq" | "openai" | "openrouter"  (default: gemini)
             LLM_MODEL       : model name (optional)
             LLM_TEMPERATURE : float 0.0–1.0 (optional, default: 0.2)
-        
+
         Args:
             None (reads from environment)
-        
+
         Returns:
             An instance of the LLM provider specified in the environment variables.
         """
@@ -308,7 +312,7 @@ class LLMFactory:
             )
             provider = LLMProvider.GEMINI
 
-        model_name  = os.getenv("LLM_MODEL") or None
+        model_name = os.getenv("LLM_MODEL") or None
         temperature = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 
         return cls.create_provider(provider, temperature, model_name)
@@ -317,6 +321,7 @@ class LLMFactory:
 # ============================================================================
 # Convenience Functions (Public API of the module)
 # ============================================================================
+
 
 def get_llm(
     provider: Optional[LLMProvider] = None,
@@ -357,7 +362,7 @@ def create_agent_easy(
     provider: Optional[LLMProvider] = None,
     temperature: float = 0.2,
     model_name: Optional[str] = None,
-    name: Optional[str] = None
+    name: Optional[str] = None,
 ) -> Any:
     """
     Creates an agent with linked tools.
@@ -371,7 +376,7 @@ def create_agent_easy(
         temperature: Sampling temperature for the LLM (default 0.2)
         model_name: Specific model name to use (overrides provider default, optional)
         name: An optional name for the `CompiledStateGraph`
-    
+
     Returns:
         An agent instance with the LLM and tools ready for use.
 
@@ -385,9 +390,9 @@ def create_agent_easy(
         llm_provider = LLMFactory.from_env()
     else:
         llm_provider = LLMFactory.create_provider(provider, temperature, model_name)
-    return llm_provider.create_agent_with_tools(tools=tools,
-                                                system_prompt=system_prompt,
-                                                name=name)
+    return llm_provider.create_agent_with_tools(
+        tools=tools, system_prompt=system_prompt, name=name
+    )
 
 
 T = TypeVar("T")
@@ -427,6 +432,7 @@ def parse_json_safe(texto: str) -> dict | None:
     """Extract JSON from an LLM response even when surrounded by other text."""
     import json as _json
     import re as _re
+
     match = _re.search(r"\{[\s\S]*\}", texto)
     if match:
         try:
@@ -446,21 +452,34 @@ if __name__ == "__main__":
     print("=" * 60)
 
     tests = [
-        ("1️⃣  Via environment variable (LLM_PROVIDER)",  None,                  None,         None),
-        ("2️⃣  Gemini (default)",                         LLMProvider.GEMINI,   None,         None),
-        ("3️⃣  Groq (default)",                           LLMProvider.GROQ,     None,         None),
-        ("4️⃣  OpenAI — gpt-4.1 (default)",               LLMProvider.OPENAI,   None,         None),
-        ("5️⃣  OpenAI — gpt-4o-mini (explicit)",          LLMProvider.OPENAI,   "gpt-4o-mini", 0.5),
-        ("6️⃣  OpenRouter — google/gemini-2.0 (default)", LLMProvider.OPENROUTER, None,       None),
+        ("1️⃣  Via environment variable (LLM_PROVIDER)", None, None, None),
+        ("2️⃣  Gemini (default)", LLMProvider.GEMINI, None, None),
+        ("3️⃣  Groq (default)", LLMProvider.GROQ, None, None),
+        ("4️⃣  OpenAI — gpt-4.1 (default)", LLMProvider.OPENAI, None, None),
+        (
+            "5️⃣  OpenAI — gpt-4o-mini (explicit)",
+            LLMProvider.OPENAI,
+            "gpt-4o-mini",
+            0.5,
+        ),
+        (
+            "6️⃣  OpenRouter — google/gemini-2.0 (default)",
+            LLMProvider.OPENROUTER,
+            None,
+            None,
+        ),
     ]
 
     for description, prov, model, temp in tests:
         print(f"\n{description}")
         try:
             kwargs: dict = {}
-            if prov  is not None: kwargs["provider"]    = prov
-            if model is not None: kwargs["model_name"]  = model
-            if temp  is not None: kwargs["temperature"] = temp
+            if prov is not None:
+                kwargs["provider"] = prov
+            if model is not None:
+                kwargs["model_name"] = model
+            if temp is not None:
+                kwargs["temperature"] = temp
             llm = get_llm(**kwargs)
             model_name = getattr(llm, "model_name", getattr(llm, "model", "?"))
             print(f"   ✅ {type(llm).__name__} — model: {model_name}")

@@ -21,7 +21,7 @@ import sys
 # sys.path bootstrap — needed when launched from the project root
 # ---------------------------------------------------------------------------
 _HERE = os.path.dirname(os.path.abspath(__file__))
-_SRC  = os.path.join(_HERE, "..")
+_SRC = os.path.join(_HERE, "..")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
@@ -90,12 +90,13 @@ body, .gradio-container {
 # Helper: refresh plan file list based on mode selection
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def refresh_plan_list(mode: str) -> gr.update:
     """Refresh the list of available plan files based on the selected mode (Technical/Academic).
-    
+
     Args:
         mode: The selected writing mode, expected to be "Technical" or "Academic".
-    
+
     Returns:
         A gr.update object with the updated choices and default value for the plan dropdown.
     """
@@ -105,11 +106,11 @@ def refresh_plan_list(mode: str) -> gr.update:
 
 def _auto_refresh_plan_list(mode: str, current_value: str | None) -> gr.update:
     """Auto-refresh plan dropdown preserving current selection when possible.
-    
+
     Args:
         mode: The selected writing mode, expected to be "Technical" or "Academic".
         current_value: The currently selected plan file path (if any).
-    
+
     Returns:
         A gr.update object with the updated choices and value for the plan dropdown.
     """
@@ -125,12 +126,13 @@ def _auto_refresh_plan_list(mode: str, current_value: str | None) -> gr.update:
 # Helpers: list and load output files for the View tab
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _list_output_files(folder: str) -> list[str]:
     """Return sorted .md files from plans/ or reviews/.
-    
+
     Args:
         folder: The folder to list files from, expected to be "plans" or "reviews".
-    
+
     Returns:
         A list of file paths for .md files in the specified folder, sorted alphabetically.
     """
@@ -141,10 +143,10 @@ def _list_output_files(folder: str) -> list[str]:
 
 def _load_file(path: str) -> str:
     """Read and return the markdown content of a file.
-    
+
     Args:
         path: The file path to read.
-    
+
     Returns:
         The content of the file as a string, or an error message if the file cannot be read.
     """
@@ -158,10 +160,10 @@ def _load_file(path: str) -> str:
 
 def _refresh_file_list(folder: str) -> gr.update:
     """Refresh the file list for the View tab based on the selected folder.
-    
+
     Args:
         folder: The selected folder, expected to be "plans" or "reviews".
-    
+
     Returns:
         A gr.update object with the updated choices and default value for the file dropdown.
     """
@@ -171,10 +173,10 @@ def _refresh_file_list(folder: str) -> gr.update:
 
 def _auto_refresh_review_list(current_value: str | None) -> gr.update:
     """Auto-refresh review dropdown preserving current selection when possible.
-    
+
     Args:
         current_value: The currently selected review file path (if any).
-    
+
     Returns:
         A gr.update object with the updated choices and value for the review dropdown.
     """
@@ -188,11 +190,11 @@ def _auto_refresh_review_list(current_value: str | None) -> gr.update:
 
 def _auto_refresh_view_file_list(folder: str, current_value: str | None) -> gr.update:
     """Auto-refresh view file dropdown preserving current selection when possible.
-    
+
     Args:
         folder: The selected folder, expected to be "plans" or "reviews".
         current_value: The currently selected file path (if any).
-    
+
     Returns:
         A gr.update object with the updated choices and value for the view file dropdown.
     """
@@ -208,6 +210,7 @@ def _auto_refresh_view_file_list(folder: str, current_value: str | None) -> gr.u
 # Build Gradio App
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def build_app() -> gr.Blocks:
     """Build the Gradio app with multiple tabs for planning, writing, and reviewing."""
     with gr.Blocks(title="Literature Review Agent") as demo:
@@ -216,14 +219,12 @@ def build_app() -> gr.Blocks:
         auto_refresh_timer = gr.Timer(value=3.0)
 
         # ── Header ─────────────────────────────────────────────────────────
-        gr.HTML(
-            """
+        gr.HTML("""
             <div id="app-header">
               <h1>🔬 Literature Review Agent</h1>
               <p>Plan, write and manage academic and technical reviews with AI</p>
             </div>
-            """
-        )
+            """)
 
         with gr.Row(elem_id="llm-switch-bar"):
             llm_provider_selector = gr.Dropdown(
@@ -275,7 +276,10 @@ def build_app() -> gr.Blocks:
                     )
                     plan_rodadas = gr.Slider(
                         label="Refinement rounds",
-                        minimum=1, maximum=6, step=1, value=3,
+                        minimum=1,
+                        maximum=6,
+                        step=1,
+                        value=3,
                     )
                     plan_start_btn = gr.Button("🚀 Start Planning", variant="primary")
 
@@ -297,7 +301,9 @@ def build_app() -> gr.Blocks:
                         lines=3,
                         visible=False,
                     )
-                    plan_reply_btn = gr.Button("💬 Reply", variant="secondary", visible=False)
+                    plan_reply_btn = gr.Button(
+                        "💬 Reply", variant="secondary", visible=False
+                    )
                     plan_rendered = gr.Markdown(
                         label="Generated Plan",
                         value="*(the plan will appear here when planning is complete)*",
@@ -311,7 +317,9 @@ def build_app() -> gr.Blocks:
             # ── Wire up ──────────────────────────────────────────────────
 
             def _on_start(tema, tipo, rodadas):
-                history, state, status, rendered = start_planning(tema, tipo, int(rodadas))
+                history, state, status, rendered = start_planning(
+                    tema, tipo, int(rodadas)
+                )
                 has_session = bool(state)
                 has_rendered = bool(rendered)
                 return (
@@ -327,11 +335,21 @@ def build_app() -> gr.Blocks:
             plan_start_btn.click(
                 fn=_on_start,
                 inputs=[plan_tema, plan_tipo, plan_rodadas],
-                outputs=[plan_chatbot, plan_session, plan_status, plan_user_input, plan_reply_btn, plan_user_input, plan_rendered],
+                outputs=[
+                    plan_chatbot,
+                    plan_session,
+                    plan_status,
+                    plan_user_input,
+                    plan_reply_btn,
+                    plan_user_input,
+                    plan_rendered,
+                ],
             )
 
             def _on_reply(user_msg, history, state):
-                history, state, status, rendered = continue_planning(user_msg, history, state)
+                history, state, status, rendered = continue_planning(
+                    user_msg, history, state
+                )
                 has_session = bool(state)
                 has_rendered = bool(rendered)
                 return (
@@ -347,12 +365,28 @@ def build_app() -> gr.Blocks:
             plan_reply_btn.click(
                 fn=_on_reply,
                 inputs=[plan_user_input, plan_chatbot, plan_session],
-                outputs=[plan_chatbot, plan_session, plan_status, plan_user_input, plan_reply_btn, plan_user_input, plan_rendered],
+                outputs=[
+                    plan_chatbot,
+                    plan_session,
+                    plan_status,
+                    plan_user_input,
+                    plan_reply_btn,
+                    plan_user_input,
+                    plan_rendered,
+                ],
             )
             plan_user_input.submit(
                 fn=_on_reply,
                 inputs=[plan_user_input, plan_chatbot, plan_session],
-                outputs=[plan_chatbot, plan_session, plan_status, plan_user_input, plan_reply_btn, plan_user_input, plan_rendered],
+                outputs=[
+                    plan_chatbot,
+                    plan_session,
+                    plan_status,
+                    plan_user_input,
+                    plan_reply_btn,
+                    plan_user_input,
+                    plan_rendered,
+                ],
             )
 
         # ══════════════════════════════════════════════════════════════════
@@ -383,7 +417,10 @@ def build_app() -> gr.Blocks:
                     )
                     write_min_src = gr.Slider(
                         label="Min. sources per section",
-                        minimum=0, maximum=10, step=1, value=0,
+                        minimum=0,
+                        maximum=10,
+                        step=1,
+                        value=0,
                     )
                     write_tavily = gr.Checkbox(
                         label="Allow web search (Tavily)",
@@ -423,12 +460,21 @@ def build_app() -> gr.Blocks:
             )
 
             def _on_write(plan, mode, lang, min_src, tavily, history):
-                for h, s, rendered in start_writing(plan, mode, lang, min_src, tavily, history):
+                for h, s, rendered in start_writing(
+                    plan, mode, lang, min_src, tavily, history
+                ):
                     yield h, s, rendered
 
             write_start_btn.click(
                 fn=_on_write,
-                inputs=[write_plan, write_mode, write_lang, write_min_src, write_tavily, write_chatbot],
+                inputs=[
+                    write_plan,
+                    write_mode,
+                    write_lang,
+                    write_min_src,
+                    write_tavily,
+                    write_chatbot,
+                ],
                 outputs=[write_chatbot, write_status, write_rendered],
             )
 
@@ -511,18 +557,42 @@ def build_app() -> gr.Blocks:
             )
 
             def _on_review_send(user_msg, chatbot, session, web_toggle):
-                history, session_state, status, preview = review_chat_turn(user_msg, chatbot, session, web_toggle)
+                history, session_state, status, preview = review_chat_turn(
+                    user_msg, chatbot, session, web_toggle
+                )
                 return history, session_state, status, preview, gr.update(value="")
 
             review_send.click(
                 fn=_on_review_send,
-                inputs=[review_input, review_chatbot, review_session, review_web_toggle],
-                outputs=[review_chatbot, review_session, review_status, review_preview, review_input],
+                inputs=[
+                    review_input,
+                    review_chatbot,
+                    review_session,
+                    review_web_toggle,
+                ],
+                outputs=[
+                    review_chatbot,
+                    review_session,
+                    review_status,
+                    review_preview,
+                    review_input,
+                ],
             )
             review_input.submit(
                 fn=_on_review_send,
-                inputs=[review_input, review_chatbot, review_session, review_web_toggle],
-                outputs=[review_chatbot, review_session, review_status, review_preview, review_input],
+                inputs=[
+                    review_input,
+                    review_chatbot,
+                    review_session,
+                    review_web_toggle,
+                ],
+                outputs=[
+                    review_chatbot,
+                    review_session,
+                    review_status,
+                    review_preview,
+                    review_input,
+                ],
             )
 
             review_confirm.click(
@@ -562,7 +632,9 @@ def build_app() -> gr.Blocks:
                     view_file = gr.Dropdown(
                         label="File",
                         choices=initial_review_files,
-                        value=initial_review_files[-1] if initial_review_files else None,
+                        value=(
+                            initial_review_files[-1] if initial_review_files else None
+                        ),
                         allow_custom_value=True,
                     )
                     view_refresh_btn = gr.Button("🔄 Refresh list", size="sm")
@@ -690,9 +762,10 @@ def build_app() -> gr.Blocks:
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def main(share: bool = False, port: int = 7860):
     """Launch the Gradio app.
-    
+
     Args:
         share: Whether to create a public share link (useful when running in a remote environment)
         port: The local port to serve the app on (default: 7860)

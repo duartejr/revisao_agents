@@ -18,8 +18,8 @@ import pdfplumber
 from ...config import EXTRACT_MIN_CHARS
 from .mongodb_corpus import CorpusMongoDB
 
-
 # ── Text Extraction ─────────────────────────────────────────────────────────
+
 
 def _extract_pdf_text(pdf_path: Path) -> str:
     """
@@ -48,6 +48,7 @@ def _extract_pdf_text(pdf_path: Path) -> str:
 
 # ── Main Function ──────────────────────────────────────────────────────────
 
+
 def ingest_pdf_folder(folder_path: str) -> dict:
     """
     Processes all PDFs in a folder (recursively) and indexes them in MongoDB.
@@ -73,7 +74,13 @@ def ingest_pdf_folder(folder_path: str) -> dict:
     pdf_files = sorted(folder_path.rglob("*.pdf"))
     if not pdf_files:
         print(f"   ℹ️  No PDFs found in: {folder_path}")
-        return {"indexed": 0, "skipped": 0, "already": 0, "total_chunks": 0, "errors": 0}
+        return {
+            "indexed": 0,
+            "skipped": 0,
+            "already": 0,
+            "total_chunks": 0,
+            "errors": 0,
+        }
 
     print(f"\n📂 Folder: {folder_path}")
     print(f"   {len(pdf_files)} PDF(s) found\n")
@@ -102,16 +109,20 @@ def ingest_pdf_folder(folder_path: str) -> dict:
             continue
 
         if len(text) < EXTRACT_MIN_CHARS:
-            print(f"      ⚠️  Text too short ({len(text)} chars < {EXTRACT_MIN_CHARS}) — ignored")
+            print(
+                f"      ⚠️  Text too short ({len(text)} chars < {EXTRACT_MIN_CHARS}) — ignored"
+            )
             counts["skipped"] += 1
             continue
 
         print(f"      ✅ {len(text):,} chars extracted")
-        extracted_documents.append({
-            "url": abs_path,
-            "content": text,
-            "title": filename,
-        })
+        extracted_documents.append(
+            {
+                "url": abs_path,
+                "content": text,
+                "title": filename,
+            }
+        )
         counts["indexed"] += 1
 
     if not extracted_documents:

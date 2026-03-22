@@ -13,4 +13,4 @@ class Chunk(NamedTuple):
     title: str
     source_idx: int
     file_path: Optional[str] = None  # optional, for compatibility
-    chunk_idx: str = ""              # identifies the specific chunk
+    chunk_idx: str = ""  # identifies the specific chunk

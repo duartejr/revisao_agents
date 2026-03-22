@@ -26,15 +26,15 @@ def _extract_main_anchor(block: str) -> Optional[str]:
 
     Args:
         block: text block to search for anchors
-    
+
     Returns:
         longest valid anchor text, or None if no valid anchors found
     """
     anchors = _ANCHORS_PATTERN.findall(block)
     valid_anchors = [
-        a.strip() for a in anchors  
-        if len(a.strip()) >= 20
-        and not re.match(r'^[\\\$\{\}\[\]_\^]+', a.strip())
+        a.strip()
+        for a in anchors
+        if len(a.strip()) >= 20 and not re.match(r"^[\\\$\{\}\[\]_\^]+", a.strip())
     ]
     if not valid_anchors:
         return None
@@ -49,7 +49,7 @@ def _extract_citation_anchor(text: str, anchor: str) -> Optional[int]:
     Args:
         text: the full text to search within
         anchor: the exact anchor text to find and extract citation for
-    
+
     Returns:
         the citation number N if found, or None if not found
     """
@@ -65,8 +65,8 @@ def _extract_citation_anchor(text: str, anchor: str) -> Optional[int]:
     # Fallback: citation within 50 chars after anchor text
     anchor_pos = text.find(anchor)
     if anchor_pos >= 0:
-        subsequent_text = text[anchor_pos: anchor_pos + 50]
-        cit_match = re.compile(r'\[(\d+)\]').search(subsequent_text)
+        subsequent_text = text[anchor_pos : anchor_pos + 50]
+        cit_match = re.compile(r"\[(\d+)\]").search(subsequent_text)
         if cit_match:
             return int(cit_match.group(1))
     return None
@@ -77,7 +77,7 @@ def _extract_all_anchors_with_citations(block: str) -> List[Tuple[str, Optional[
 
     Args:
         block: text block to search for anchors and citations
-    
+
     Returns:
         list of (anchor_text, citation_number) pairs, where citation_number may be None if
     """
@@ -96,10 +96,10 @@ def _extract_all_anchors_with_citations(block: str) -> List[Tuple[str, Optional[
 
 def _clean_anchors(text: str) -> str:
     """Remove all anchor tags from *text* and normalize whitespace.
-    
+
     Args:
         text: the text containing anchor tags to clean
-    
+
     Returns:
         the cleaned text with anchor tags removed
     """

@@ -9,7 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 from typing import Literal
 
-
 WritingMode = Literal["technical", "academic"]
 CorpusStrategy = Literal["web_first", "corpus_first"]
 ReviewLanguage = Literal["pt", "en"]
@@ -57,6 +56,7 @@ class WriterConfig:
         Output language for the review. "pt" = Brazilian Portuguese, "en" = English.
         All generated text (sections, intro, conclusion) must be in this language.
     """
+
     mode: WritingMode = "technical"
     prompt_dir: str = "technical_writing"
     corpus_strategy: CorpusStrategy = "web_first"
@@ -85,11 +85,11 @@ class WriterConfig:
     @classmethod
     def technical(cls, language: str = "pt", min_sources: int = 0) -> "WriterConfig":
         """Default technical writing configuration.
-        
+
         Args:
             language: Output language for the review. "pt" = Brazilian Portuguese, "en" = English.
             min_sources: Minimum number of sources per section.
-        
+
         Returns:
             WriterConfig: Configured writer settings for technical writing.
         """
@@ -110,7 +110,7 @@ class WriterConfig:
         Args:
             language: Output language for the review. "pt" = Brazilian Portuguese, "en" = English.
             min_sources: Minimum number of sources per section.
-        
+
         Returns:
             WriterConfig: Configured writer settings for academic writing.
         """

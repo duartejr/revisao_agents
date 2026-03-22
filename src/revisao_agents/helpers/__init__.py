@@ -8,7 +8,6 @@ from .anchor_helpers import (
     _extract_main_anchor,
 )
 
-
 __all__ = [
     "_ANCHORS_PATTERN",
     "_extract_all_anchors_with_citations",

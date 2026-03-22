@@ -15,18 +15,22 @@ if TYPE_CHECKING:
     from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
 
 from ...config import (
-    llm_call, parse_json_safe,
-    EXTRACT_MIN_CHARS, MAX_URLS_EXTRACT, CTX_ABSTRACT_CHARS, 
-    MIN_SECTION_PARAGRAPHS, TOP_K_OBSERVATION,
+    llm_call,
+    parse_json_safe,
+    EXTRACT_MIN_CHARS,
+    MAX_URLS_EXTRACT,
+    CTX_ABSTRACT_CHARS,
+    MIN_SECTION_PARAGRAPHS,
+    TOP_K_OBSERVATION,
 )
 from ...core.schemas.techinical_writing import SectionAnswer
 from ...utils.llm_utils.prompt_loader import load_prompt
 from ...utils.search_utils.tavily_client import search_web, extract_urls, score_url
 
-
 # ---------------------------------------------------------------------------
 # Phase 1: Thought (planning)
 # ---------------------------------------------------------------------------
+
 
 def _thought_phase(
     theme: str,
@@ -37,14 +41,14 @@ def _thought_phase(
     language: str = "pt",
 ) -> dict:
     """Phase 1: generate search queries and list of required information.
-    
+
     Args:
         theme: The overall theme of the chapter or document.
         title: The specific section title being planned.
         objective: The specific content objectives for this section.
         resources: Any mandatory resources or references to include.
         prompt_dir: Directory where the LLM prompt templates are stored.
-    
+
     Returns:
         A dict containing:
         - necessary_information: List of key information points needed for the section.
@@ -53,7 +57,10 @@ def _thought_phase(
     """
     prompt = load_prompt(
         f"{prompt_dir}/thought_phase",
-        theme=theme, title=title, objective=objective, resources=resources,
+        theme=theme,
+        title=title,
+        objective=objective,
+        resources=resources,
         language=language,
     )
     ans = llm_call(prompt.text, temperature=prompt.temperature)
@@ -71,6 +78,7 @@ def _thought_phase(
 # Phase 5: Observation (corpus-sufficiency check)
 # ---------------------------------------------------------------------------
 
+
 def _observation_phase(
     necessary_information: List[str],
     corpus: "CorpusMongoDB",
@@ -78,13 +86,13 @@ def _observation_phase(
     language: str = "pt",
 ) -> dict:
     """Phase 5: decide if the existing corpus is sufficient to write the section.
-    
+
     Args:
         necessary_information: List of key information points needed for the section (from thought phase).
         corpus: The CorpusMongoDB instance to query for relevant sources.
         prompt_dir: Directory where the LLM prompt templates are stored.
         language: The language to use for the prompts.
-    
+
     Returns:
         A dict containing:
         - sufficient: bool indicating if the corpus is sufficient.
@@ -96,7 +104,9 @@ def _observation_phase(
         return {
             "sufficient": False,
             "gaps": necessary_information,
-            "complementary_query": necessary_information[0] if necessary_information else "",
+            "complementary_query": (
+                necessary_information[0] if necessary_information else ""
+            ),
             "summary": "Corpus vazio.",
         }
 
@@ -127,6 +137,7 @@ def _observation_phase(
 # Phase 6: Draft (anchored draft generation)
 # ---------------------------------------------------------------------------
 
+
 def _draft_phase(
     theme: str,
     title: str,
@@ -144,7 +155,7 @@ def _draft_phase(
     min_sources: int = 0,
 ) -> tuple:
     """Phase 6: generate the anchored draft for one section using the LLM.
-    
+
     Args:
         theme: The overall theme of the chapter or document.
         title: The specific section title being drafted.
@@ -160,7 +171,7 @@ def _draft_phase(
         prompt_dir: Directory where the LLM prompt templates are stored.
         language: The language to use for the prompts.
         min_sources: The minimum number of sources to include in the draft.
-    
+
     Returns:
         A tuple containing:
         - draft: The generated draft text for the section.
@@ -175,8 +186,7 @@ def _draft_phase(
         )
 
     all_txt = "\n".join(
-        f"  {'→ ' if i == pos else '  '}{i+1}. {t}"
-        for i, t in enumerate(all_titles)
+        f"  {'→ ' if i == pos else '  '}{i+1}. {t}" for i, t in enumerate(all_titles)
     )
 
     instructions = load_prompt(
@@ -196,9 +206,7 @@ def _draft_phase(
         f"SOURCE CORPUS — {n_extracted} indexed documents "
         f"(below: most relevant excerpts retrieved by similarity)\n"
         f"{'━'*60}\n"
-        f"{corpus}\n\n"
-        + instructions.text
-        + f"\n## {title}\n"
+        f"{corpus}\n\n" + instructions.text + f"\n## {title}\n"
     )
     result: SectionAnswer = llm_call(
         prompt, temperature=instructions.temperature, response_schema=SectionAnswer
@@ -212,6 +220,7 @@ def _draft_phase(
 # ---------------------------------------------------------------------------
 # URL extraction helper (phases 2-4)
 # ---------------------------------------------------------------------------
+
 
 def _extract_with_fallback(
     results: List[dict],
@@ -230,7 +239,7 @@ def _extract_with_fallback(
         - queries_fallback: List of alternative search queries to try if initial extraction fails.
         - urls_attempted: Set of URLs that have already been attempted for extraction (to avoid duplicates).
         - corpus: The CorpusMongoDB instance to check for existing URLs.
-    
+
     Returns:
         - valid_extracted: List of dicts with 'url' and 'content' for successfully extracted sources.
         - enriched_results: The original results list, potentially enriched with fallback results.
@@ -240,9 +249,12 @@ def _extract_with_fallback(
         [
             (
                 r.get("url", ""),
-                score_url(r.get("url", ""), r.get("snippet", ""), float(r.get("score", 0))),
+                score_url(
+                    r.get("url", ""), r.get("snippet", ""), float(r.get("score", 0))
+                ),
             )
-            for r in results if r.get("url")
+            for r in results
+            if r.get("url")
         ],
         key=lambda x: x[1],
         reverse=True,

@@ -16,6 +16,7 @@ from functools import lru_cache
 
 try:
     from rich.logging import RichHandler
+
     _RICH_AVAILABLE = True
 except ImportError:
     _RICH_AVAILABLE = False

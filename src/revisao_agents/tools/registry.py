@@ -31,6 +31,7 @@ TOOLS: List[BaseTool] = [
     extract_tavily,
 ]
 
+
 def get_all_tools() -> List[BaseTool]:
     """Returns all tools ready for bind_tools() or agent."""
     return TOOLS

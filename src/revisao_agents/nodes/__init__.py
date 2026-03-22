@@ -10,7 +10,7 @@ from .academic import (
     initial_academic_plan_node,
     refine_academic_search_node,
     refine_academic_plan_node,
-    finalize_academic_plan_node
+    finalize_academic_plan_node,
 )
 
 from .technical import (
@@ -21,17 +21,9 @@ from .technical import (
     finalize_technical_plan_node,
 )
 
-from .common import (
-    human_pause_node,
-    interview_node,
-    interview_router
-)
+from .common import human_pause_node, interview_node, interview_router
 
-from .technical_writing import (
-    parse_plan_node,
-    write_sections_node,
-    consolidate_node
-)
+from .technical_writing import parse_plan_node, write_sections_node, consolidate_node
 
 __all__ = [
     # Academic agents
@@ -54,5 +46,5 @@ __all__ = [
     # Technical writing agents
     "parse_plan_node",
     "write_sections_node",
-    "consolidate_node"
+    "consolidate_node",
 ]

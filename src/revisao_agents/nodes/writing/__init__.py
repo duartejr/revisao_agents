@@ -11,6 +11,7 @@ parser_node      : parse_plan_node — parses a plan file and extracts sections.
 writer_node      : sections_writer_node — writes sections with search and verification.
 consolidate_node : consolidate_node — consolidates written sections into a final document.
 """
+
 from .text_filters import (
     _ANCHORS_PATTERN,
     _strip_justification_blocks,

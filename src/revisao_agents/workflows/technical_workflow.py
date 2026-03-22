@@ -39,4 +39,3 @@ def build_technical_workflow():
     builder.add_edge("finalize_technical_plan", END)
 
     return builder.compile(checkpointer=MemorySaver(), interrupt_before=["human_pause"])
-
