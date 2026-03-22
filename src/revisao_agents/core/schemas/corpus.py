@@ -2,7 +2,7 @@
 core/schemas/corpus.py - Data schemas for document corpus and retrieval.
 """
 
-from typing import Optional, NamedTuple
+from typing import NamedTuple
 
 
 class Chunk(NamedTuple):
@@ -12,5 +12,5 @@ class Chunk(NamedTuple):
     url: str
     title: str
     source_idx: int
-    file_path: Optional[str] = None  # optional, for compatibility
-    chunk_idx: str = ""              # identifies the specific chunk
+    file_path: str | None = None  # optional, for compatibility
+    chunk_idx: str = ""  # identifies the specific chunk

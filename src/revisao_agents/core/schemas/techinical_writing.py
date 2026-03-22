@@ -1,6 +1,6 @@
 # src/revisao_agents/core/schemas/techinical_writing.py
+
 from pydantic import BaseModel, Field
-from typing import List
 
 
 # ── Schema de saída ───────────────────────────────────────────────────────────
@@ -23,6 +23,6 @@ class SectionAnswer(BaseModel):
             "and citations [N] embedded inline, in Markdown."
         )
     )
-    used_sources: List[Source] = Field(
+    used_sources: list[Source] = Field(
         description="Only the sources actually cited in the draft, without repetition."
     )

@@ -10,15 +10,12 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from revisao_agents.agents.review_agent import (
     _extract_edit_proposal,
     _parse_agent_response,
     _structure_summary,
     run_review_agent,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -52,7 +49,6 @@ def _make_sections():
     """Parse the sample markdown into sections — reuse the handler parser."""
     # We inline a minimal parser here so the test doesn't depend on handlers.py
     import re
-    from typing import Optional
 
     lines = SAMPLE_MARKDOWN.splitlines(keepends=True)
     line_offsets: list[int] = []
@@ -74,14 +70,16 @@ def _make_sections():
         sec_end = line_offsets[next_sl] if next_sl < len(line_offsets) else len(SAMPLE_MARKDOWN)
         section_text = SAMPLE_MARKDOWN[sec_start:sec_end]
 
-        refs_line: Optional[int] = None
+        refs_line: int | None = None
         for i in range(start_line + 1, next_sl):
             if lines[i].strip().lower().startswith("### referências desta seção"):
                 refs_line = i
                 break
 
         body_end_line = refs_line if refs_line is not None else next_sl
-        body_start = line_offsets[start_line + 1] if start_line + 1 < len(line_offsets) else sec_start
+        body_start = (
+            line_offsets[start_line + 1] if start_line + 1 < len(line_offsets) else sec_start
+        )
         body_end = line_offsets[body_end_line] if body_end_line < len(line_offsets) else sec_end
 
         references: list[str] = []
@@ -93,14 +91,20 @@ def _make_sections():
 
         paragraphs: list[dict] = []
         current_lines: list[str] = []
-        current_start: Optional[int] = None
+        current_start: int | None = None
         for i in range(start_line + 1, body_end_line):
             stripped = lines[i].strip()
             if not stripped or stripped.startswith("<!--") or stripped.startswith("### "):
                 if current_lines:
                     para_text = "".join(current_lines).strip()
                     if para_text:
-                        paragraphs.append({"text": para_text, "start": current_start, "end": line_offsets[i]})
+                        paragraphs.append(
+                            {
+                                "text": para_text,
+                                "start": current_start,
+                                "end": line_offsets[i],
+                            }
+                        )
                     current_lines = []
                     current_start = None
                 continue
@@ -112,15 +116,17 @@ def _make_sections():
             if para_text:
                 paragraphs.append({"text": para_text, "start": current_start, "end": body_end})
 
-        sections.append({
-            "title": title,
-            "start": sec_start,
-            "end": sec_end,
-            "text": section_text,
-            "body": SAMPLE_MARKDOWN[body_start:body_end].strip(),
-            "paragraphs": paragraphs,
-            "references": references,
-        })
+        sections.append(
+            {
+                "title": title,
+                "start": sec_start,
+                "end": sec_end,
+                "text": section_text,
+                "body": SAMPLE_MARKDOWN[body_start:body_end].strip(),
+                "paragraphs": paragraphs,
+                "references": references,
+            }
+        )
 
     return sections
 
@@ -153,7 +159,9 @@ class TestStructureSummary:
 class TestParseAgentResponse:
     def test_plain_answer(self):
         result = _parse_agent_response(
-            "Here are the main findings...", SECTIONS, None,
+            "Here are the main findings...",
+            SECTIONS,
+            None,
         )
         assert result["action"] == "answer"
         assert result["edit_proposal"] is None
@@ -161,25 +169,33 @@ class TestParseAgentResponse:
 
     def test_apply_edit_action(self):
         result = _parse_agent_response(
-            "ACTION: APPLY_EDIT\nDone.", SECTIONS, {"section_title": "x"},
+            "ACTION: APPLY_EDIT\nDone.",
+            SECTIONS,
+            {"section_title": "x"},
         )
         assert result["action"] == "apply_edit"
 
     def test_cancel_edit_action(self):
         result = _parse_agent_response(
-            "ACTION: CANCEL_EDIT\nCancelled.", SECTIONS, {"section_title": "x"},
+            "ACTION: CANCEL_EDIT\nCancelled.",
+            SECTIONS,
+            {"section_title": "x"},
         )
         assert result["action"] == "cancel_edit"
 
     def test_implicit_confirm_with_pending_edit(self):
         result = _parse_agent_response(
-            "confirm", SECTIONS, {"section_title": "x"},
+            "confirm",
+            SECTIONS,
+            {"section_title": "x"},
         )
         assert result["action"] == "apply_edit"
 
     def test_implicit_cancel_with_pending_edit(self):
         result = _parse_agent_response(
-            "cancel", SECTIONS, {"section_title": "x"},
+            "cancel",
+            SECTIONS,
+            {"section_title": "x"},
         )
         assert result["action"] == "cancel_edit"
 
@@ -252,7 +268,9 @@ class TestExtractEditProposal:
 # ── run_review_agent: scenario-driven routing ─────────────────────────────
 
 
-def _run_agent_with_mock_llm(user_message: str, llm_reply: str, *, allow_web=False, pending_edit=None):
+def _run_agent_with_mock_llm(
+    user_message: str, llm_reply: str, *, allow_web=False, pending_edit=None
+):
     """Helper: run the review agent with a mocked LLM that returns a fixed reply."""
     fake_response = _fake_llm_response(llm_reply)
     fake_llm = MagicMock()
@@ -299,7 +317,8 @@ class TestAgentScenarios:
             "[3] Garcia (2024)"
         )
         result = _run_agent_with_mock_llm(
-            "liste todas as referencias usadas", llm_reply,
+            "liste todas as referencias usadas",
+            llm_reply,
         )
         assert result["action"] == "answer"
         # Must contain references, not a findings summary
@@ -321,7 +340,8 @@ class TestAgentScenarios:
             "[3] Garcia (2024)"
         )
         result = _run_agent_with_mock_llm(
-            "what papers are cited in section 2?", llm_reply,
+            "what papers are cited in section 2?",
+            llm_reply,
         )
         assert result["action"] == "answer"
         assert "Amazon" in result["reply"]
@@ -444,12 +464,15 @@ class TestToolCallTrace:
         fake_llm.bind_tools.return_value = fake_llm
         fake_llm.invoke.side_effect = [first_resp, final_resp]
 
-        with patch(
-            "revisao_agents.agents.review_agent.get_raw_llm",
-            return_value=fake_llm,
-        ), patch(
-            "revisao_agents.agents.review_agent.get_review_tools",
-            return_value=[],
+        with (
+            patch(
+                "revisao_agents.agents.review_agent.get_raw_llm",
+                return_value=fake_llm,
+            ),
+            patch(
+                "revisao_agents.agents.review_agent.get_review_tools",
+                return_value=[],
+            ),
         ):
             result = run_review_agent(
                 document_content=SAMPLE_MARKDOWN,

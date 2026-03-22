@@ -1,89 +1,132 @@
+# 1. Standard Library Imports
 import os
-from typing import Any, Optional, Type, TypeVar, Union
+from typing import Any, TypeVar
 
 from dotenv import load_dotenv
+
+# 2. Third-Party Imports
+from pydantic import BaseModel
 
 load_dotenv()
 
 
 def _env_clean(name: str, default: str = "") -> str:
     """Read env var and strip accidental wrapping quotes/whitespace.
-    
+
     Args:
         name: name of the environment variable to read
         default: default value if env var is not set
-    
+
     Returns:
         The cleaned value of the environment variable.
     """
     return os.getenv(name, default).strip().strip("'").strip('"')
 
+
 # Caminhos e modelos
-VECTOR_DB_PATH   = _env_clean("VECTOR_DB_PATH", "./vector_db_suelen/vector_index")
+VECTOR_DB_PATH = _env_clean("VECTOR_DB_PATH", "./vector_db_suelen/vector_index")
 EMBEDDINGS_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 # MongoDB Atlas
-MONGODB_URI        = _env_clean("MONGODB_URI", "")
-MONGODB_DB         = _env_clean("MONGODB_DB", "review_agent")
+MONGODB_URI = _env_clean("MONGODB_URI", "")
+MONGODB_DB = _env_clean("MONGODB_DB", "review_agent")
 MONGODB_COLLECTION = _env_clean("MONGODB_COLLECTION", "chunks")
-VECTOR_INDEX_NAME  = "vector_index"
+VECTOR_INDEX_NAME = "vector_index"
 
 # OpenAI
-OPENAI_API_KEY         = _env_clean("OPENAI_API_KEY", "")
+OPENAI_API_KEY = _env_clean("OPENAI_API_KEY", "")
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 
 # Parâmetros de busca técnica
-TECHNICAL_MAX_RESULTS  = 10
-MAX_URLS_EXTRACT     = 7
-CTX_PLAN_CHARS      = 1200
-CTX_ABSTRACT_CHARS     = 1400
+TECHNICAL_MAX_RESULTS = 10
+MAX_URLS_EXTRACT = 7
+CTX_PLAN_CHARS = 1200
+CTX_ABSTRACT_CHARS = 1400
 MIN_SECTION_PARAGRAPHS = 8
-MAX_IMAGES_SECTION  = 6
-DELAY_BETWEEN_SECTIONS   = 5
+MAX_IMAGES_SECTION = 6
+DELAY_BETWEEN_SECTIONS = 5
 MAX_REACT_ITERATIONS = 2
-EXTRACT_MIN_CHARS    = 500
-SNIPPET_MIN_SCORE    = 0.7
+EXTRACT_MIN_CHARS = 500
+SNIPPET_MIN_SCORE = 0.7
 
 # Chunking e embeddings
-CHUNK_SIZE        = 2400
-CHUNK_OVERLAP     = 480
-TOP_K_WRITER      = 6
+CHUNK_SIZE = 2400
+CHUNK_OVERLAP = 480
+TOP_K_WRITER = 6
 TOP_K_OBSERVATION = 5
 TOP_K_VERIFICATION = 6
 MAX_CORPUS_PROMPT = 25000
-CHUNK_MAX_CHARS   = 600
-MAX_CHUNKS_TOTAL  = 100
-CHUNKS_CACHE_DIR  = _env_clean("CHUNKS_CACHE_DIR", "./chunks_cache")
+CHUNK_MAX_CHARS = 600
+MAX_CHUNKS_TOTAL = 100
+CHUNKS_CACHE_DIR = _env_clean("CHUNKS_CACHE_DIR", "./chunks_cache")
 
 # Anchors verify similarity threshold (cosine similarity)
 ANCHOR_MIN_SIM = 0.82
 
-HIST_MAX_TURNS   = 6
-PLAN_MAX_CHARS  = 3000
+HIST_MAX_TURNS = 6
+PLAN_MAX_CHARS = 3000
 CHUNKS_PER_QUERY = 5
-JUDGE_TOP_K       = 12
+JUDGE_TOP_K = 12
 JUDGE_MAX_CORPUS_CHARS = 8000
 
 # Domínios
 PRIORITY_DOMAINS = [
-    ".pdf", "doi.org", "scielo", "copernicus", "arxiv.org",
-    "researchgate.net", "springer.com", "elsevier.com", "mdpi.com",
-    "nature.com", "wiley.com", "tandfonline.com", "cambridge.org",
-    "ieee.org", "sciencedirect.com", "semanticscholar.org",
-    "bvsalud.org", "repositorio", "teses.usp", "bdtd",
-    "ufsc.br", "usp.br", "unicamp.br", "ufrj.br", "inpe.br",
-    "ufrgs.br", "ufmg.br", "ufc.br", "ufpe.br",
+    ".pdf",
+    "doi.org",
+    "scielo",
+    "copernicus",
+    "arxiv.org",
+    "researchgate.net",
+    "springer.com",
+    "elsevier.com",
+    "mdpi.com",
+    "nature.com",
+    "wiley.com",
+    "tandfonline.com",
+    "cambridge.org",
+    "ieee.org",
+    "sciencedirect.com",
+    "semanticscholar.org",
+    "bvsalud.org",
+    "repositorio",
+    "teses.usp",
+    "bdtd",
+    "ufsc.br",
+    "usp.br",
+    "unicamp.br",
+    "ufrj.br",
+    "inpe.br",
+    "ufrgs.br",
+    "ufmg.br",
+    "ufc.br",
+    "ufpe.br",
 ]
 
 BLOCKED_DOMAINS_EXTRACT = [
-    "jstor.org", "proquest.com", "web.b.ebscohost.com",
+    "jstor.org",
+    "proquest.com",
+    "web.b.ebscohost.com",
 ]
 
 # closing remarks
 CLOSING_REMARKS = {
-    "ok", "pronto", "pode continuar", "esta bom", "ta bom", "suficiente",
-    "chega", "finalizar", "encerrar", "avancar", "proximo", "continua",
-    "continuar", "aceito", "aprovado", "finaliza", "terminar",
+    "ok",
+    "pronto",
+    "pode continuar",
+    "esta bom",
+    "ta bom",
+    "suficiente",
+    "chega",
+    "finalizar",
+    "encerrar",
+    "avancar",
+    "proximo",
+    "continua",
+    "continuar",
+    "aceito",
+    "aprovado",
+    "finaliza",
+    "terminar",
 }
 
 
@@ -99,10 +142,10 @@ _PROVIDER_ENV_KEYS = {
 
 def get_runtime_config_summary() -> dict:
     """Return concise runtime config status used by CLI/UI startup diagnostics.
-    
+
     Args:
         None
-    
+
     Returns:
         Dict with keys:
             - llm_provider: normalized provider name (lowercase)
@@ -157,14 +200,14 @@ def validate_runtime_config(
     strict: bool = False,
 ) -> list[str]:
     """Validate runtime requirements and optionally raise on missing config.
-    
+
     Args:
         require_mongodb: if True, MONGODB_URI must be set
         require_tavily: if True, TAVILY_API_KEY must be set
         require_openai_embeddings: if True, OPENAI_API_KEY must be set
         strict: if True, raise ValueError on any missing requirement; otherwise return list of issues
-    
-    Returns:    
+
+    Returns:
         List of strings describing any configuration issues found (empty if all good)
     """
     issues: list[str] = []
@@ -198,28 +241,30 @@ def validate_runtime_config(
 
 # ── LLM helpers ──────────────────────────────────────────────────────────────
 
+
 def get_llm(temperature: float = 0.3) -> Any:
     """
     Returns a language model configured with available tools based on environment variables.
 
-    This function attempts to load a provider-specific LLM (Gemini, Groq, OpenAI, or 
-    OpenRouter) and bind all discovered tools to it. If the primary utility 
+    This function attempts to load a provider-specific LLM (Gemini, Groq, OpenAI, or
+    OpenRouter) and bind all discovered tools to it. If the primary utility
     module is missing, it falls back to a default Google Generative AI instance.
 
     Args:
-        temperature (float): The sampling temperature to use, ranging from 0.0 to 1.0. 
+        temperature (float): The sampling temperature to use, ranging from 0.0 to 1.0.
             Defaults to 0.3.
 
     Returns:
         Any: A LangChain-compatible LLM object (BaseChatModel) with bound tools.
     """
     try:
-        from .utils.llm_utils.llm_providers import get_llm as _get_llm, LLMProvider
         from .tools import get_all_tools
-        
+        from .utils.llm_utils.llm_providers import LLMProvider
+        from .utils.llm_utils.llm_providers import get_llm as _get_llm
+
         provider_map = {
             "GEMINI": LLMProvider.GEMINI,
-            "GROQ":   LLMProvider.GROQ,
+            "GROQ": LLMProvider.GROQ,
             "OPENAI": LLMProvider.OPENAI,
             "OPENROUTER": LLMProvider.OPENROUTER,
         }
@@ -229,13 +274,14 @@ def get_llm(temperature: float = 0.3) -> Any:
         )
         print(f"   🤖 Using LLM: {provider.name} (temp={temperature})")
         llm = _get_llm(provider=provider, temperature=temperature)
-        
+
         # Bind all available tools to the LLM
         tools = get_all_tools()
         llm_with_tools = llm.bind_tools(tools)
         return llm_with_tools
     except ImportError:
         from langchain_google_genai import ChatGoogleGenerativeAI
+
         llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash",
             temperature=temperature,
@@ -244,13 +290,12 @@ def get_llm(temperature: float = 0.3) -> Any:
         # Also bind tools even in fallback
         try:
             from .tools import get_all_tools
+
             tools = get_all_tools()
             return llm.bind_tools(tools)
-        except:
+        except Exception:
             return llm
 
-
-from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -262,43 +307,44 @@ class LLMInvocationError(RuntimeError):
 def llm_call(
     prompt: str,
     temperature: float = 0.2,
-    response_schema: Optional[Type[T]] = None,
-) -> Union[str, T]:
+    response_schema: type[T] | None = None,
+) -> str | T:
     """
     Wrapper for LLM calls with multi-provider support and structured output.
 
-    This function routes requests to the configured provider, automatically 
-    injects date context, and handles structured data extraction if a 
+    This function routes requests to the configured provider, automatically
+    injects date context, and handles structured data extraction if a
     response schema is provided.
 
     Environment Variables:
         LLM_PROVIDER: 'openai' | 'gemini' | 'groq' | 'openrouter' (default: 'groq')
-        LLM_MODEL: Specific model name (e.g., 'gpt-4o', 'gemini-2.0-flash', 
+        LLM_MODEL: Specific model name (e.g., 'gpt-4o', 'gemini-2.0-flash',
                   'llama-3.3-70b-versatile', 'anthropic/claude-3.5-sonnet')
 
     Args:
         prompt (str): The text instruction or question for the LLM.
         temperature (float): Sampling temperature (0.0 to 1.0). Defaults to 0.2.
-        response_schema (Optional[Type[T]]): A Pydantic model or class for 
+        response_schema (Optional[Type[T]]): A Pydantic model or class for
             structured output. If provided, the return type will match the schema.
 
     Returns:
-        Union[str, T]: The string content from the LLM or an instance of 
+        Union[str, T]: The string content from the LLM or an instance of
             the response_schema.
 
     Raises:
         LLMInvocationError: If the provider fails or an import error occurs.
     """
     from .utils.llm_utils.date_context import add_date_context_to_prompt
-    
+
     provider = os.getenv("LLM_PROVIDER", "groq").lower().strip()
     model = os.getenv("LLM_MODEL", "") or "<default>"
-    
+
     # Add current date context to ensure agents know today's date
     prompt_with_date = add_date_context_to_prompt(prompt)
 
     try:
         from .utils.llm_utils.llm_providers import get_llm as _provider_get_llm
+
         llm = _provider_get_llm(temperature=temperature)
 
         if response_schema is not None:
@@ -317,19 +363,21 @@ def llm_call(
 def parse_json_safe(texto: str) -> dict | None:
     """
     Safely extracts and parses a JSON object from a string, even if surrounded by text.
-    
-    This is particularly useful for cleaning LLM outputs where the model might 
-    include conversational filler or markdown blocks (e.g., ```json ... ```) 
+
+    This is particularly useful for cleaning LLM outputs where the model might
+    include conversational filler or markdown blocks (e.g., ```json ... ```)
     alongside the raw JSON.
 
     Args:
         text (str): The raw string content received from the LLM.
 
     Returns:
-        Optional[Dict[str, Any]]: A dictionary representing the parsed JSON if 
+        Optional[Dict[str, Any]]: A dictionary representing the parsed JSON if
             successful; None if no valid JSON structure is found or if parsing fails.
     """
-    import re, json
+    import json
+    import re
+
     match = re.search(r"\{[\s\S]*\}", texto)
     if match:
         try:

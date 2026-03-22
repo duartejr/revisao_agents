@@ -10,14 +10,13 @@ Used by the reference extractor and formatter agents.
 from __future__ import annotations
 
 import os
-import re
 
 from langchain_core.tools import tool
 
-from ..utils.bib_utils.doi_utils import get_bibtex_from_doi, search_crossref_by_title
 from ..utils.bib_utils.arxiv_utils import extract_arxiv_id, get_bibtex_from_arxiv
+from ..utils.bib_utils.doi_utils import get_bibtex_from_doi, search_crossref_by_title
 from ..utils.vector_utils.vector_store import search_chunk_records
-from .tavily_web_search import search_tavily_incremental, extract_tavily
+from .tavily_web_search import extract_tavily, search_tavily_incremental
 
 
 @tool
@@ -112,9 +111,7 @@ def search_web_for_reference(query: str, max_results: int = 4) -> str:
     Returns:
         Snippets with title, URL, and brief content from web results.
     """
-    web = search_tavily_incremental(
-        query=query[:400], previous_urls=[], max_results=max_results
-    )
+    web = search_tavily_incremental(query=query[:400], previous_urls=[], max_results=max_results)
     urls = web.get("new_urls", [])[:3]
     if not urls:
         return f"No web results found for: '{query[:80]}'"
@@ -180,29 +177,29 @@ def extract_pdf_text_from_disk(file_path: str, max_pages: int = 1) -> str:
         return f"File not found on disk: {path!r}"
 
     try:
+        import io
+
         from pdfminer.high_level import extract_text_to_fp
         from pdfminer.layout import LAParams
-        from pdfminer.pdfpage import PDFPage
-        import io
 
         with open(path, "rb") as f:
             pages_text: list[str] = []
-            for i in range(max_pages): 
+            for i in range(max_pages):
                 out = io.StringIO()
-                
-                f.seek(0) 
-                
+
+                f.seek(0)
+
                 extract_text_to_fp(
-                    f, 
+                    f,
                     out,
                     laparams=LAParams(),
                     page_numbers={i},
                 )
-                
+
                 text = out.getvalue()
                 if not text:
                     break
-                    
+
                 pages_text.append(text)
 
         text = "\n".join(pages_text).strip()

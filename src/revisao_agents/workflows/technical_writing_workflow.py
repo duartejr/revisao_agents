@@ -1,7 +1,11 @@
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 
+from ..nodes.technical_writing import (
+    consolidate_node,
+    parse_plan_node,
+    write_sections_node,
+)
 from ..state import TechnicalWriterState
-from ..nodes.technical_writing import parse_plan_node, write_sections_node, consolidate_node
 
 
 def build_technical_writing_workflow():

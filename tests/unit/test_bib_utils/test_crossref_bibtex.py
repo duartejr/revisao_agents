@@ -2,7 +2,6 @@
 Unit tests for bibliography REACT fallback behavior.
 """
 
-from pathlib import Path
 from unittest.mock import patch
 
 from revisao_agents.core.schemas.corpus import Chunk
@@ -50,7 +49,10 @@ def test_search_doi_in_mongo_chunks_with_dict_chunks():
 
 
 @patch("revisao_agents.utils.bib_utils.crossref_bibtex.bibtex_to_abnt", return_value="ABNT")
-@patch("revisao_agents.utils.bib_utils.crossref_bibtex.get_bibtex_from_doi", return_value="@article{a}")
+@patch(
+    "revisao_agents.utils.bib_utils.crossref_bibtex.get_bibtex_from_doi",
+    return_value="@article{a}",
+)
 def test_get_reference_data_react_url_doi_path(mock_bibtex, mock_abnt):
     result = get_reference_data_react(
         "https://doi.org/10.1590/s1678-86212019000200316",
@@ -65,8 +67,14 @@ def test_get_reference_data_react_url_doi_path(mock_bibtex, mock_abnt):
 
 
 @patch("revisao_agents.utils.bib_utils.crossref_bibtex.bibtex_to_abnt", return_value="ABNT")
-@patch("revisao_agents.utils.bib_utils.crossref_bibtex.get_bibtex_from_doi", return_value="@article{mongo}")
-@patch("revisao_agents.utils.bib_utils.crossref_bibtex.search_doi_in_mongo_chunks", return_value="10.2000/mongo")
+@patch(
+    "revisao_agents.utils.bib_utils.crossref_bibtex.get_bibtex_from_doi",
+    return_value="@article{mongo}",
+)
+@patch(
+    "revisao_agents.utils.bib_utils.crossref_bibtex.search_doi_in_mongo_chunks",
+    return_value="10.2000/mongo",
+)
 def test_get_reference_data_react_local_pdf_uses_mongo(
     mock_search_mongo,
     mock_get_bibtex,
@@ -88,9 +96,18 @@ def test_get_reference_data_react_local_pdf_uses_mongo(
     assert result["abnt"] == "ABNT"
 
 
-@patch("revisao_agents.utils.bib_utils.crossref_bibtex._generate_fallback_abnt", return_value="FALLBACK")
-@patch("revisao_agents.utils.bib_utils.crossref_bibtex.search_crossref_by_title", return_value=None)
-@patch("revisao_agents.utils.bib_utils.crossref_bibtex.search_doi_in_mongo_chunks", return_value=None)
+@patch(
+    "revisao_agents.utils.bib_utils.crossref_bibtex._generate_fallback_abnt",
+    return_value="FALLBACK",
+)
+@patch(
+    "revisao_agents.utils.bib_utils.crossref_bibtex.search_crossref_by_title",
+    return_value=None,
+)
+@patch(
+    "revisao_agents.utils.bib_utils.crossref_bibtex.search_doi_in_mongo_chunks",
+    return_value=None,
+)
 def test_get_reference_data_react_fallback_when_no_doi(
     mock_mongo,
     mock_crossref,

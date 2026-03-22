@@ -2,15 +2,13 @@
 Unit tests for review_tools.py – tool contracts and error handling.
 """
 
+import os
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch
-import tempfile
-import os
-
-import pytest
-
 
 # ── search_evidence ──────────────────────────────────────────────────────
+
 
 class TestSearchEvidence:
     """Tool: search_evidence"""
@@ -59,6 +57,7 @@ class TestSearchEvidence:
 
 # ── search_web_sources ───────────────────────────────────────────────────
 
+
 class TestSearchWebSources:
     """Tool: search_web_sources"""
 
@@ -80,12 +79,15 @@ class TestSearchWebSources:
                 "failed": [],
             }
         )
-        with patch(
-            "revisao_agents.tools.review_tools.search_tavily_incremental",
-            return_value=fake_tavily,
-        ), patch(
-            "revisao_agents.tools.review_tools.extract_tavily",
-            fake_extract_tool,
+        with (
+            patch(
+                "revisao_agents.tools.review_tools.search_tavily_incremental",
+                return_value=fake_tavily,
+            ),
+            patch(
+                "revisao_agents.tools.review_tools.extract_tavily",
+                fake_extract_tool,
+            ),
         ):
             from revisao_agents.tools.review_tools import search_web_sources
 
@@ -112,6 +114,7 @@ class TestSearchWebSources:
 
 
 # ── search_evidence_sources ──────────────────────────────────────────────
+
 
 class TestSearchEvidenceSources:
     """Tool: search_evidence_sources"""
@@ -226,12 +229,15 @@ class TestExtractWebTextFromUrl:
 
 class TestGetBibtexForReference:
     def test_gets_bibtex_from_title_lookup(self):
-        with patch(
-            "revisao_agents.tools.review_tools.search_crossref_by_title",
-            return_value="10.1234/abcd",
-        ), patch(
-            "revisao_agents.tools.review_tools.get_bibtex_from_doi",
-            return_value="@article{key,title={Paper}}",
+        with (
+            patch(
+                "revisao_agents.tools.review_tools.search_crossref_by_title",
+                return_value="10.1234/abcd",
+            ),
+            patch(
+                "revisao_agents.tools.review_tools.get_bibtex_from_doi",
+                return_value="@article{key,title={Paper}}",
+            ),
         ):
             from revisao_agents.tools.review_tools import get_bibtex_for_reference
 
@@ -253,6 +259,7 @@ class TestGetBibtexForReference:
 
 
 # ── get_review_tools ─────────────────────────────────────────────────────
+
 
 class TestGetReviewTools:
     def test_local_only_excludes_web_tool(self):

@@ -13,16 +13,20 @@ import os
 import re
 
 from langchain_core.tools import tool
-from typing import List
 
-from ..utils.vector_utils.vector_store import search_chunks, search_chunk_records
-from ..tools.tavily_web_search import search_tavily_incremental, extract_tavily, search_tavily_images
+from ..tools.tavily_web_search import (
+    extract_tavily,
+    search_tavily_images,
+    search_tavily_incremental,
+)
 from ..utils.bib_utils.doi_utils import (
     extract_doi_from_url,
     get_bibtex_from_doi,
     search_crossref_by_title,
+    search_doi_in_text,
 )
-from ..utils.bib_utils.doi_utils import search_doi_in_text
+from ..utils.vector_utils.vector_store import search_chunk_records, search_chunks
+
 
 @tool
 def search_evidence(query: str, k: int = 6) -> str:
@@ -40,10 +44,10 @@ def search_evidence(query: str, k: int = 6) -> str:
         Formatted string with numbered evidence chunks, or a
         'no results' message.
     """
-    chunks: List[str] = search_chunks(query[:600], k=min(k, 10))
+    chunks: list[str] = search_chunks(query[:600], k=min(k, 10))
     if not chunks:
         return "No relevant evidence found in the academic corpus."
-    parts = [f"[Chunk {i+1}]:\n{c}" for i, c in enumerate(chunks)]
+    parts = [f"[Chunk {i + 1}]:\n{c}" for i, c in enumerate(chunks)]
     return "\n\n---\n\n".join(parts)
 
 
@@ -64,13 +68,15 @@ def search_web_sources(query: str, max_results: int = 5) -> str:
         or a 'no results' message.
     """
     web = search_tavily_incremental(
-        query=query[:400], previous_urls=[], max_results=max_results,
+        query=query[:400],
+        previous_urls=[],
+        max_results=max_results,
     )
     urls = web.get("new_urls", [])[:3]
     if not urls:
         return "No web results found."
     extracted = extract_tavily.invoke({"urls": urls, "include_images": False})
-    results: List[str] = []
+    results: list[str] = []
     for item in extracted.get("extracted", [])[:3]:
         results.append(
             f"Title: {item.get('title', '')}\n"
@@ -98,7 +104,7 @@ def search_evidence_sources(query: str, k: int = 6) -> str:
     if not records:
         return "No evidence sources found in the academic corpus."
 
-    lines: List[str] = []
+    lines: list[str] = []
     for idx, record in enumerate(records, start=1):
         title = record.get("source_title", "") or "(untitled source)"
         url = record.get("source_url", "")
@@ -187,7 +193,7 @@ def search_near_chunks(query: str, n: int = 2) -> str:
 
     for idx, path in selected:
         try:
-            with open(path, "r", encoding="utf-8") as file_handle:
+            with open(path, encoding="utf-8") as file_handle:
                 text = file_handle.read().strip()
         except Exception:
             text = ""
@@ -207,24 +213,26 @@ def search_near_chunks(query: str, n: int = 2) -> str:
 @tool
 def search_web_images(query: str, max_results: int = 8) -> str:
     """Search images via Tavily and return image URLs with context.
-    
+
     Args:
         query: Search query for images (e.g., "stable diffusion architecture diagram").
         max_results: Maximum number of image results to return (default 8).
-    
+
     Returns:
         Formatted string with image URLs, source page, title, and description,
         or a 'no images found' message.
     """
-    result = search_tavily_images.invoke({
-        "queries": [query[:400]],
-        "max_results": max_results,
-    })
+    result = search_tavily_images.invoke(
+        {
+            "queries": [query[:400]],
+            "max_results": max_results,
+        }
+    )
     images = result.get("images", []) if isinstance(result, dict) else []
     if not images:
         return "No web images found."
 
-    lines: List[str] = []
+    lines: list[str] = []
     for idx, item in enumerate(images[:8], start=1):
         lines.append(
             "\n".join(
@@ -243,10 +251,10 @@ def search_web_images(query: str, max_results: int = 8) -> str:
 @tool
 def extract_web_text_from_url(url: str) -> str:
     """Extract main text from a single URL via Tavily Extract API.
-    
+
     Args:
         url: The URL of the web page to extract text from.
-    
+
     Returns:
         Extracted text content from the URL, or an error message if extraction fails.
     """
@@ -254,10 +262,12 @@ def extract_web_text_from_url(url: str) -> str:
     if not cleaned:
         return "Empty URL provided."
 
-    result = extract_tavily.invoke({
-        "urls": [cleaned],
-        "include_images": False,
-    })
+    result = extract_tavily.invoke(
+        {
+            "urls": [cleaned],
+            "include_images": False,
+        }
+    )
     extracted = result.get("extracted", []) if isinstance(result, dict) else []
     if not extracted:
         return "No extractable content found for the URL."
@@ -280,7 +290,7 @@ def get_bibtex_for_reference(query_or_doi: str) -> str:
 
     Args:
         query_or_doi: A DOI string, a URL containing a DOI, or an article title.
-    
+
     Returns:
         A string containing the resolved DOI and its BibTeX entry, or an error message if not found.
     """
@@ -356,7 +366,7 @@ def fetch_reference_metadata(
     if resolved_doi:
         bibtex = get_bibtex_from_doi(resolved_doi)
 
-    lines: List[str] = ["=== Reference Metadata ==="]
+    lines: list[str] = ["=== Reference Metadata ==="]
     lines.append(f"Provided title : {title or '(none)'}")
     lines.append(f"Provided DOI   : {doi or '(none)'}")
     lines.append(f"Provided URL   : {url or '(none)'}")
@@ -369,9 +379,7 @@ def fetch_reference_metadata(
             "in the requested citation style (ABNT, APA, etc.)."
         )
     else:
-        lines.append(
-            "\nBibTeX: (not available — Crossref lookup failed or yielded no match)"
-        )
+        lines.append("\nBibTeX: (not available — Crossref lookup failed or yielded no match)")
         if url and not url.startswith("/"):
             lines.append(
                 f"\nSUGGESTION: Call extract_web_text_from_url('{url}') to "
@@ -416,7 +424,7 @@ def search_article_online(title: str) -> str:
         return f"No web results found for title: {title}"
 
     extracted = extract_tavily.invoke({"urls": urls, "include_images": False})
-    results: List[str] = []
+    results: list[str] = []
     for item in extracted.get("extracted", [])[:3]:
         url_found = item.get("url", "")
         content = str(item.get("content", ""))
@@ -425,32 +433,41 @@ def search_article_online(title: str) -> str:
         doi_in_url = extract_doi_from_url(url_found)
         doi = doi_in_content or doi_in_url or ""
         results.append(
-            "\n".join([
-                f"Title: {item.get('title', '')}",
-                f"URL: {url_found}",
-                f"DOI found: {doi or '(not found in page)'}",
-                f"Snippet: {content[:600]}",
-            ])
+            "\n".join(
+                [
+                    f"Title: {item.get('title', '')}",
+                    f"URL: {url_found}",
+                    f"DOI found: {doi or '(not found in page)'}",
+                    f"Snippet: {content[:600]}",
+                ]
+            )
         )
     return "\n\n---\n\n".join(results) if results else "No content extracted."
+
 
 def get_review_tools(allow_web: bool = False) -> list:
     """Return the list of tools available to the review agent.
 
     Args:
         allow_web: If True, include the web search tool.
-    
+
     Returns:
         List of tool functions to bind to the review agent.
     """
-    tools = [search_evidence, search_evidence_sources, search_near_chunks,
-             fetch_reference_metadata]
+    tools = [
+        search_evidence,
+        search_evidence_sources,
+        search_near_chunks,
+        fetch_reference_metadata,
+    ]
     if allow_web:
-        tools.extend([
-            search_web_sources,
-            search_web_images,
-            extract_web_text_from_url,
-            get_bibtex_for_reference,
-                    search_article_online,
-        ])
+        tools.extend(
+            [
+                search_web_sources,
+                search_web_images,
+                extract_web_text_from_url,
+                get_bibtex_for_reference,
+                search_article_online,
+            ]
+        )
     return tools

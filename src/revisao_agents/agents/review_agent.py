@@ -69,7 +69,7 @@ def _recover_tool_call_from_exception(exc: Exception) -> dict[str, Any] | None:
 
     Args:
         exc: The exception raised by the LLM provider, which may contain a failed_generation payload
-    
+
     Returns:
         A dict with 'name' and 'args' keys if a tool call was successfully recovered, or None otherwise.
     """
@@ -102,7 +102,7 @@ def _recover_tool_call_from_exception(exc: Exception) -> dict[str, Any] | None:
         tool_name = match.group(1)
         raw_args = match.group(2)
 
-    raw_args = raw_args.replace("\\\"", '"')
+    raw_args = raw_args.replace('\\"', '"')
     raw_args = raw_args.replace("\\n", " ").strip()
 
     if not raw_args.startswith("{"):
@@ -237,12 +237,14 @@ def run_review_agent(
 
             result_str = _clip_text(result_str, tool_result_limit)
 
-            trace.append({
-                "iteration": iteration,
-                "tool": tool_name,
-                "args": tool_args,
-                "result_length": len(result_str),
-            })
+            trace.append(
+                {
+                    "iteration": iteration,
+                    "tool": tool_name,
+                    "args": tool_args,
+                    "result_length": len(result_str),
+                }
+            )
             messages.append(
                 ToolMessage(content=result_str, tool_call_id=tc["id"]),
             )
@@ -287,14 +289,14 @@ def _build_system_prompt(
     include_full_document: bool = True,
 ) -> str:
     """Load and render the system prompt from YAML with contextualized placeholders.
-    
+
     Args:
         document_content: Full markdown text of the document under review.
         sections: List of section dicts with titles and paragraph counts.
         allow_web: Whether web search tools are available in this turn.
         pending_edit: Dict with pending edit details, or None if no pending edit.
         include_full_document: Whether to include the full document content in the prompt (defaults to True).
-    
+
     Returns:
         Rendered system prompt string ready to send to the LLM.
     """
@@ -407,10 +409,10 @@ def _compact_chat_history(
 
 def _structure_summary(sections: list[dict]) -> str:
     """One-line-per-section summary with paragraph counts and reference counts.
-    
+
     Args:
         sections: List of section dicts, each with 'title', 'paragraphs', and 'references' keys.
-        
+
     Returns:
         A formatted string summarizing the document structure, or "(empty document)" if no sections.
     """
@@ -462,13 +464,13 @@ def _parse_agent_response(
     target_hint: dict | None = None,
 ) -> dict:
     """Parse the LLM reply text into a structured result dict.
-    
+
     Args:
         text: The raw text content of the LLM's reply.
         sections: List of document sections for context in parsing edit proposals.
         pending_edit: Current pending edit dict, or None if no pending edit.
         target_hint: Optional dict with hints about the target section/paragraph for edit proposals.
-    
+
     Returns:
         A dict with keys:
         - 'reply': the original text reply from the LLM
@@ -495,13 +497,33 @@ def _parse_agent_response(
     # Also detect implicit confirm/cancel in short replies
     stripped = text.strip().lower()
     if pending_edit and stripped in {
-        "confirm", "yes", "apply", "apply edit", "confirm edit",
-        "confirmar", "confirmar edição", "confirmar edicao", "sim", "aplicar", "aplicar edição", "aplicar edicao",
+        "confirm",
+        "yes",
+        "apply",
+        "apply edit",
+        "confirm edit",
+        "confirmar",
+        "confirmar edição",
+        "confirmar edicao",
+        "sim",
+        "aplicar",
+        "aplicar edição",
+        "aplicar edicao",
     }:
         return {"reply": text, "edit_proposal": None, "action": "apply_edit"}
     if pending_edit and stripped in {
-        "cancel", "no", "discard", "cancel edit",
-        "cancelar", "cancelar edição", "cancelar edicao", "não", "nao", "descartar", "descartar edição", "descartar edicao",
+        "cancel",
+        "no",
+        "discard",
+        "cancel edit",
+        "cancelar",
+        "cancelar edição",
+        "cancelar edicao",
+        "não",
+        "nao",
+        "descartar",
+        "descartar edição",
+        "descartar edicao",
     }:
         return {"reply": text, "edit_proposal": None, "action": "cancel_edit"}
 
@@ -536,7 +558,7 @@ def _extract_edit_proposal(
         text: The raw text content of the LLM's reply.
         sections: List of document sections for context in parsing edit proposals.
         target_hint: Optional dict with hints about the target section/paragraph for edit proposals.
-    
+
     Returns:
         A dict with edit proposal details if an edit was proposed, or None if no valid proposal was found.
     """

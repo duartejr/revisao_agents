@@ -11,15 +11,14 @@ pipeline.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
 
 import pdfplumber
 
 from ...config import EXTRACT_MIN_CHARS
 from .mongodb_corpus import CorpusMongoDB
 
-
 # ── Text Extraction ─────────────────────────────────────────────────────────
+
 
 def _extract_pdf_text(pdf_path: Path) -> str:
     """
@@ -33,7 +32,7 @@ def _extract_pdf_text(pdf_path: Path) -> str:
     Returns:
         Extracted text from all pages, concatenated with double newlines.
     """
-    pages: List[str] = []
+    pages: list[str] = []
     try:
         with pdfplumber.open(pdf_path) as pdf:
             for page in pdf.pages:
@@ -47,6 +46,7 @@ def _extract_pdf_text(pdf_path: Path) -> str:
 
 
 # ── Main Function ──────────────────────────────────────────────────────────
+
 
 def ingest_pdf_folder(folder_path: str) -> dict:
     """
@@ -73,13 +73,19 @@ def ingest_pdf_folder(folder_path: str) -> dict:
     pdf_files = sorted(folder_path.rglob("*.pdf"))
     if not pdf_files:
         print(f"   ℹ️  No PDFs found in: {folder_path}")
-        return {"indexed": 0, "skipped": 0, "already": 0, "total_chunks": 0, "errors": 0}
+        return {
+            "indexed": 0,
+            "skipped": 0,
+            "already": 0,
+            "total_chunks": 0,
+            "errors": 0,
+        }
 
     print(f"\n📂 Folder: {folder_path}")
     print(f"   {len(pdf_files)} PDF(s) found\n")
 
     corpus = CorpusMongoDB()
-    extracted_documents: List[dict] = []
+    extracted_documents: list[dict] = []
 
     counts = {"indexed": 0, "skipped": 0, "already": 0, "errors": 0}
 
@@ -97,7 +103,7 @@ def ingest_pdf_folder(folder_path: str) -> dict:
         text = _extract_pdf_text(pdf_path)
 
         if not text:
-            print(f"      ❌ Empty text — invalid or protected file")
+            print("      ❌ Empty text — invalid or protected file")
             counts["errors"] += 1
             continue
 
@@ -107,11 +113,13 @@ def ingest_pdf_folder(folder_path: str) -> dict:
             continue
 
         print(f"      ✅ {len(text):,} chars extracted")
-        extracted_documents.append({
-            "url": abs_path,
-            "content": text,
-            "title": filename,
-        })
+        extracted_documents.append(
+            {
+                "url": abs_path,
+                "content": text,
+                "title": filename,
+            }
+        )
         counts["indexed"] += 1
 
     if not extracted_documents:

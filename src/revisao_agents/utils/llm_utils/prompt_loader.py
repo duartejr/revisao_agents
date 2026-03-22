@@ -28,6 +28,7 @@ _PROMPTS_ROOT = Path(__file__).parent.parent.parent / "prompts"
 @dataclass
 class Prompt:
     """Rendered prompt ready to send to an LLM."""
+
     name: str
     text: str
     temperature: float = 0.3
@@ -61,8 +62,7 @@ def load_prompt(prompt_path: str, **variables: Any) -> Prompt:
 
     if not yaml_path.exists():
         raise FileNotFoundError(
-            f"Prompt file not found: {yaml_path}\n"
-            f"  Searched under: {_PROMPTS_ROOT}"
+            f"Prompt file not found: {yaml_path}\n  Searched under: {_PROMPTS_ROOT}"
         )
 
     raw = _load_yaml_raw(yaml_path)
@@ -73,8 +73,17 @@ def load_prompt(prompt_path: str, **variables: Any) -> Prompt:
 
     # Collect all extra top-level string fields (e.g. instructions_academic)
     extra_fields = {
-        k: v for k, v in raw.items()
-        if k not in {"name", "description", "version", "temperature", "system", "last_updated"}
+        k: v
+        for k, v in raw.items()
+        if k
+        not in {
+            "name",
+            "description",
+            "version",
+            "temperature",
+            "system",
+            "last_updated",
+        }
         and isinstance(v, str)
     }
     all_vars = {**extra_fields, **variables}

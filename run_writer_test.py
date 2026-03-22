@@ -9,19 +9,21 @@ Monitors all phases, logs progress to stdout, and runs post-execution
 quality checks on the generated review file.
 """
 
+import glob
 import os
+import re
 import sys
 import time
-import re
-import glob
 from datetime import datetime
 from pathlib import Path
+
+from revisao_agents.state import TechnicalWriterState
 
 # ── Resolve package path ─────────────────────────────────────────────────────
 AGENT_DIR = Path(__file__).parent
 SRC_DIR = AGENT_DIR / "src"
 sys.path.insert(0, str(SRC_DIR))
-os.chdir(AGENT_DIR)          # reviews/ and plans/ are relative to this dir
+os.chdir(AGENT_DIR)  # reviews/ and plans/ are relative to this dir
 
 PLAN_FILE = str(AGENT_DIR / "plans" / "plano_revisao_tecnica_capítulo_test.md")
 
@@ -32,13 +34,9 @@ print("=" * 70)
 
 # 1. Import check
 try:
-    from revisao_agents.nodes.technical_writing import (
-        parsear_plano_node, escrever_secoes_node, consolidar_node,
-        _fase_pensamento, _juiz_paragrafo_melhorado,
-        _buscar_conteudo_complementar,
-    )
     from revisao_agents.utils.llm_utils.prompt_loader import load_prompt
     from revisao_agents.workflows.technical_writing_workflow import build_workflow
+
     print("✅ All imports OK")
 except ImportError as e:
     print(f"❌ Import failed: {e}")
@@ -46,24 +44,36 @@ except ImportError as e:
 
 # 2. YAML prompt resolution check
 try:
-    p = load_prompt("technical_writing/fase_pensamento",
-                    tema="test", titulo="test", cont_esp="test", recursos="test")
+    p = load_prompt(
+        "technical_writing/fase_pensamento",
+        tema="test",
+        titulo="test",
+        cont_esp="test",
+        recursos="test",
+    )
     print(f"✅ fase_pensamento.yaml resolved ({len(p.text)} chars, temp={p.temperature})")
 except Exception as e:
     print(f"❌ fase_pensamento.yaml failed: {e}")
     sys.exit(1)
 
 try:
-    p = load_prompt("technical_writing/writer_judge",
-                    paragrafo_limpo="test", titulo_secao="test", fontes="test")
+    p = load_prompt(
+        "technical_writing/writer_judge",
+        paragrafo_limpo="test",
+        titulo_secao="test",
+        fontes="test",
+    )
     print(f"✅ writer_judge.yaml resolved ({len(p.text)} chars)")
 except Exception as e:
     print(f"❌ writer_judge.yaml failed: {e}")
     sys.exit(1)
 
 try:
-    p = load_prompt("technical_writing/busca_complementar",
-                    titulo_secao="test", conteudo_esperado="test")
+    p = load_prompt(
+        "technical_writing/busca_complementar",
+        titulo_secao="test",
+        conteudo_esperado="test",
+    )
     print(f"✅ busca_complementar.yaml resolved ({len(p.text)} chars, temp={p.temperature})")
 except Exception as e:
     print(f"❌ busca_complementar.yaml failed: {e}")
@@ -78,7 +88,8 @@ print(f"✅ Plan file found: {Path(PLAN_FILE).name}")
 # 4. Parse plan sections
 try:
     from revisao_agents.utils.file_utils.helpers import parse_technical_plan
-    with open(PLAN_FILE, "r", encoding="utf-8") as f:
+
+    with open(PLAN_FILE, encoding="utf-8") as f:
         plan_text = f.read()
     tema, resumo, secoes = parse_technical_plan(plan_text)
     print(f"✅ Plan parsed: tema='{tema[:60]}' | {len(secoes)} section(s)")
@@ -88,7 +99,9 @@ try:
         print(f"        resources: {s['resources'][:80]}")
 except Exception as e:
     print(f"❌ Plan parse failed: {e}")
-    import traceback; traceback.print_exc()
+    import traceback
+
+    traceback.print_exc()
     sys.exit(1)
 
 if not secoes:
@@ -101,8 +114,6 @@ print(f"STARTING WRITER — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 print(f"Plan: {Path(PLAN_FILE).name}")
 print(f"Sections: {len(secoes)}")
 print("=" * 70)
-
-from revisao_agents.state import TechnicalWriterState
 
 state_init: TechnicalWriterState = {
     "theme": "",
@@ -142,6 +153,7 @@ except KeyboardInterrupt:
     sys.exit(1)
 except Exception as e:
     import traceback
+
     print(f"\n❌ Writer failed: {e}")
     traceback.print_exc()
     sys.exit(1)
@@ -169,14 +181,17 @@ print(f"\n📄 Output: {out_file}")
 file_size = os.path.getsize(out_file)
 print(f"   Size: {file_size:,} bytes")
 
-with open(out_file, "r", encoding="utf-8") as f:
+with open(out_file, encoding="utf-8") as f:
     md_content = f.read()
 
 n_lines = md_content.count("\n")
-n_paragraphs = len([p for p in md_content.split("\n\n") if p.strip() and not p.strip().startswith("#")])
+n_paragraphs = len(
+    [p for p in md_content.split("\n\n") if p.strip() and not p.strip().startswith("#")]
+)
 
 checks_passed = 0
 checks_total = 0
+
 
 def check(label, condition, detail=""):
     global checks_passed, checks_total
@@ -187,9 +202,13 @@ def check(label, condition, detail=""):
     suffix = f"  ({detail})" if detail else ""
     print(f"   {status} {label}{suffix}")
 
+
 check("File size > 5KB", file_size > 5000, f"{file_size:,} bytes")
 check("File has > 50 lines", n_lines > 50, f"{n_lines} lines")
-check("Contains expected section (5.0 Aplicação)", "5.0 Aplicação" in md_content or "Aplicação em Hidrologia" in md_content)
+check(
+    "Contains expected section (5.0 Aplicação)",
+    "5.0 Aplicação" in md_content or "Aplicação em Hidrologia" in md_content,
+)
 check("Has >= 4 text paragraphs", n_paragraphs >= 4, f"{n_paragraphs} paragraphs")
 check("Has References block", "Referências desta seção" in md_content)
 check("Has verification stats comment", "verificados" in md_content)
@@ -197,7 +216,10 @@ check("Has LaTeX equations ($$)", "$$" in md_content)
 check("Has algorithm/code blocks", "```" in md_content)
 check("Has intro section", "## Introdução" in md_content)
 check("Has conclusion section", "## Conclusão" in md_content)
-check("No stub markers", "Simplified:" not in md_content and "Full implementation" not in md_content)
+check(
+    "No stub markers",
+    "Simplified:" not in md_content and "Full implementation" not in md_content,
+)
 check("Verification blockquote present", "Verificação por parágrafo" in md_content)
 
 # URL check in references
@@ -210,7 +232,11 @@ section_match = re.search(r"## 5\.0 Aplicação.*?(?=\n##\s|\Z)", md_content, re
 if section_match:
     section_text = section_match.group(0)
     section_paragraphs = len([p for p in section_text.split("\n\n") if len(p.strip()) > 100])
-    check("Section 5.0 has >= 4 substantial paragraphs", section_paragraphs >= 4, f"{section_paragraphs} found")
+    check(
+        "Section 5.0 has >= 4 substantial paragraphs",
+        section_paragraphs >= 4,
+        f"{section_paragraphs} found",
+    )
 else:
     check("Section 5.0 found", False, "section not found in output")
 
@@ -222,7 +248,7 @@ if log_files:
     log_file = log_files[0]
     log_size = os.path.getsize(log_file)
     print(f"\n📋 Log: {log_file}  ({log_size:,} bytes)")
-    with open(log_file, "r", encoding="utf-8") as f:
+    with open(log_file, encoding="utf-8") as f:
         log_content = f.read()
     log_checks = [
         ("Log has APROVADO entries", "APROVADO" in log_content),
@@ -232,7 +258,8 @@ if log_files:
     for label, cond in log_checks:
         checks_total += 1
         status = "✅" if cond else "❌"
-        if cond: checks_passed += 1
+        if cond:
+            checks_passed += 1
         print(f"   {status} {label}")
 else:
     print("❌ No log file found")
@@ -240,7 +267,7 @@ else:
 # Stats from final state
 stats = final_state.get("verification_stats", [])
 if stats:
-    print(f"\n📊 Verification stats:")
+    print("\n📊 Verification stats:")
     for s in stats:
         t = s.get("total", 0)
         aprov = s.get("aprovados", 0)
@@ -249,12 +276,13 @@ if stats:
         anchors = s.get("anchors_usadas", 0)
         taxa = ((aprov + ajust) / t * 100) if t > 0 else 0
         print(f"   [{s.get('secao', '?')[:50]}]")
-        print(f"     {aprov+ajust}/{t} verified ({taxa:.0f}%) | "
-              f"✅{aprov} 🔵{ajust} 🔧{corr} | 🎯{anchors} anchors used")
+        print(
+            f"     {aprov+ajust}/{t} verified ({taxa:.0f}%) | "
+            f"✅{aprov} 🔵{ajust} 🔧{corr} | 🎯{anchors} anchors used"
+        )
 
 print(f"\n{'='*70}")
-print(f"FINAL: {checks_passed}/{checks_total} checks passed | "
-      f"Runtime: {elapsed_total:.0f}s")
+print(f"FINAL: {checks_passed}/{checks_total} checks passed | " f"Runtime: {elapsed_total:.0f}s")
 print(f"Output: {out_file}")
 print(f"{'='*70}\n")
 

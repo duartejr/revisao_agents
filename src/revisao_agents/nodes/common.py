@@ -10,9 +10,14 @@ Prompts are loaded from YAML files in prompts/common/.
 """
 
 from ..state import ReviewState
+from ..utils.file_utils.helpers import (
+    fmt_chunks,
+    fmt_snippets,
+    summarize_hist,
+    truncate,
+)
 from ..utils.llm_utils.llm_providers import get_llm
-from ..utils.file_utils.helpers import fmt_chunks, fmt_snippets, summarize_hist, truncate
-from ..utils.llm_utils.prompt_loader import load_prompt, get_prompt_field
+from ..utils.llm_utils.prompt_loader import get_prompt_field, load_prompt
 
 # Constants (may need to be moved to config)
 TERMINATION_PT = {"fim", "terminar", "sair", "encerrar", "pronto", "acabar"}
@@ -27,7 +32,7 @@ def human_pause_node(state: ReviewState) -> dict:
 
 def interview_node(state: ReviewState) -> dict:
     """Generates a question for the user based on the current plan.
-    
+
     Args:
         state (ReviewState): The current state of the review, expected to contain:
             - "theme": str, the review topic/theme.
@@ -35,24 +40,24 @@ def interview_node(state: ReviewState) -> dict:
             - "interview_history": list of (role, content) tuples representing the conversation history.
             - "questions_asked": int, number of questions asked so far.
             - "max_questions": int, maximum number of questions to ask before finalizing.
-    
+
     Returns:
         dict: Updated state with the new question added to the interview history and incremented question count.
     """
-    theme              = state["theme"]
-    review_type        = state.get("review_type", "academic")
-    questions_asked    = state["questions_asked"]
-    max_questions      = state["max_questions"]
-    current_plan       = truncate(state["current_plan"], 500)
-    current_history    = summarize_hist(state["interview_history"], 1)
+    theme = state["theme"]
+    review_type = state.get("review_type", "academic")
+    questions_asked = state["questions_asked"]
+    max_questions = state["max_questions"]
+    current_plan = truncate(state["current_plan"], 500)
+    current_history = summarize_hist(state["interview_history"], 1)
     remaining = max_questions - questions_asked
 
     if review_type in {"tecnico", "technical"}:
-        ctx_extra  = fmt_snippets(state.get("technical_snippets", [])[-3:], 400)
+        ctx_extra = fmt_snippets(state.get("technical_snippets", [])[-3:], 400)
         instructions = get_prompt_field("common/interview", "instructions_technical")
         type_label = "technical chapter"
     else:
-        ctx_extra  = fmt_chunks(state.get("relevant_chunks", [])[-16:], 400)
+        ctx_extra = fmt_chunks(state.get("relevant_chunks", [])[-16:], 400)
         instructions = get_prompt_field("common/interview", "instructions_academic")
         type_label = "literature review"
 
@@ -68,7 +73,7 @@ def interview_node(state: ReviewState) -> dict:
         remaining=remaining,
         instructions=instructions,
     )
-    ans     = get_llm(temperature=prompt.temperature).invoke(prompt.text)
+    ans = get_llm(temperature=prompt.temperature).invoke(prompt.text)
     question = ans.content if hasattr(ans, "content") else str(ans)
     return {
         "interview_history": [("assistant", question)],
@@ -79,13 +84,13 @@ def interview_node(state: ReviewState) -> dict:
 
 def interview_router(state: ReviewState) -> str:
     """Decide whether to continue the interview or end it.
-    
+
     Args:
         state (ReviewState): The current state of the review, expected to contain:
             - "questions_asked": int, number of questions asked so far.
             - "max_questions": int, maximum number of questions to ask before finalizing.
             - "interview_history": list of (role, content) tuples representing the conversation history.
-    
+
     Returns:
         str: "finish" if the interview should end, "continue" otherwise.
     """
@@ -97,4 +102,3 @@ def interview_router(state: ReviewState) -> str:
                 return "finish"
             break
     return "continue"
-

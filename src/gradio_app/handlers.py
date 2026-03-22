@@ -14,6 +14,7 @@ yields.  This produces true, line-by-line live output in the UI.
 
 from __future__ import annotations
 
+# 1. Standard Library Imports
 import glob
 import hashlib
 import logging
@@ -24,39 +25,51 @@ import shutil
 import sys
 import tempfile
 import threading
+from collections.abc import Generator
 from datetime import datetime
-from typing import Any, Generator, Optional
+from typing import Any
 
-_SRC = os.path.join(os.path.dirname(__file__), "..")
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
-
-from revisao_agents.state import ReviewState, TechnicalWriterState
-from revisao_agents.workflows import build_academic_workflow, build_technical_workflow
-from revisao_agents.workflows.technical_writing_workflow import (
-    build_technical_writing_workflow,
+# 2. Local Codebase Imports
+from revisao_agents.agents.reference_extractor_agent import (
+    run_reference_extractor_agent,
 )
+from revisao_agents.agents.reference_formatter_agent import (
+    run_reference_formatter_agent,
+)
+from revisao_agents.agents.review_agent import run_review_agent
 from revisao_agents.config import (
     get_runtime_config_summary,
     llm_call,
     validate_runtime_config,
 )
-from revisao_agents.utils.vector_utils.pdf_ingestor import ingest_pdf_folder
-from revisao_agents.utils.vector_utils.vector_store import search_chunks, search_chunk_records
-from revisao_agents.utils.llm_utils.prompt_loader import load_prompt
 from revisao_agents.core.schemas.writer_config import WriterConfig
-from revisao_agents.tools.tavily_web_search import extract_tavily, search_tavily_incremental
+from revisao_agents.state import ReviewState, TechnicalWriterState
 from revisao_agents.tools.reference_formatter import format_references_from_file
-from revisao_agents.agents.review_agent import run_review_agent
-from revisao_agents.agents.reference_extractor_agent import run_reference_extractor_agent
-from revisao_agents.agents.reference_formatter_agent import run_reference_formatter_agent
+from revisao_agents.tools.tavily_web_search import (
+    extract_tavily,
+    search_tavily_incremental,
+)
 from revisao_agents.utils.bib_utils.doi_utils import (
     extract_doi_from_url,
     get_bibtex_from_doi,
     search_crossref_by_title,
     search_doi_in_text,
 )
+from revisao_agents.utils.llm_utils.prompt_loader import load_prompt
+from revisao_agents.utils.vector_utils.pdf_ingestor import ingest_pdf_folder
+from revisao_agents.utils.vector_utils.vector_store import (
+    search_chunk_records,
+    search_chunks,
+)
+from revisao_agents.workflows import build_academic_workflow, build_technical_workflow
+from revisao_agents.workflows.technical_writing_workflow import (
+    build_technical_writing_workflow,
+)
 
+_SRC = os.path.join(os.path.dirname(__file__), "..")
+
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
 
 _SUPPORTED_LLM_PROVIDERS = ("gemini", "groq", "openai", "openrouter")
 
@@ -118,19 +131,20 @@ def set_llm_provider(provider: str) -> tuple[str, str]:
 # Live stdout capture
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 class _StdoutCapture:
     """
     Context manager that redirects sys.stdout to a queue so the caller
     can read lines as they are produced by any print() inside the block.
     """
 
-    def __init__(self, q: "queue.Queue[str]"):
+    def __init__(self, q: queue.Queue[str]):
         """Initialize the stdout capture with a queue to receive lines."""
         self._q = q
         self._buf = ""
         self._original: Any = None
 
-    def __enter__(self) -> "_StdoutCapture":
+    def __enter__(self) -> _StdoutCapture:
         """Redirect sys.stdout to this object, which funnels lines into the queue."""
         self._original = sys.stdout
         sys.stdout = self  # type: ignore[assignment]
@@ -144,11 +158,11 @@ class _StdoutCapture:
         sys.stdout = self._original
 
     def write(self, text: str) -> int:
-        """Write text to the original stdout and also capture it in the buffer. '          
-        
+        """Write text to the original stdout and also capture it in the buffer. '
+
         Args:
             text: The string to write (may contain multiple lines).
-        
+
         Returns:
             The number of characters written.
         """
@@ -177,13 +191,13 @@ class _StderrCapture:
     warnings and direct stderr writes also appear in the live UI stream.
     """
 
-    def __init__(self, q: "queue.Queue[str]"):
+    def __init__(self, q: queue.Queue[str]):
         """Initialize the stderr capture with a queue to receive lines."""
         self._q = q
         self._buf = ""
         self._original: Any = None
 
-    def __enter__(self) -> "_StderrCapture":
+    def __enter__(self) -> _StderrCapture:
         """Redirect sys.stderr to this object, which funnels lines into the queue."""
         self._original = sys.stderr
         sys.stderr = self  # type: ignore[assignment]
@@ -197,11 +211,11 @@ class _StderrCapture:
         sys.stderr = self._original
 
     def write(self, text: str) -> int:
-        """Write text to the original stderr and also capture it in the buffer. 
-        
+        """Write text to the original stderr and also capture it in the buffer.
+
         Args:
             text: The string to write (may contain multiple lines).
-        
+
         Returns:
             The number of characters written.
         """
@@ -225,16 +239,17 @@ class _StderrCapture:
 
 
 class _QueueLogHandler(logging.Handler):
-    """A logging handler that sends log records to a queue, allowing logs to be captured and 
+    """A logging handler that sends log records to a queue, allowing logs to be captured and
     streamed in real-time to the UI."""
-    def __init__(self, q: "queue.Queue[str]"):
+
+    def __init__(self, q: queue.Queue[str]):
         """Initialize the queue log handler with a queue to receive log messages."""
         super().__init__(level=logging.NOTSET)
         self._q = q
 
     def emit(self, record: logging.LogRecord) -> None:
         """Format the log record and put it into the queue.
-        
+
         Args:
             record: The log record to emit.
         """
@@ -252,13 +267,13 @@ class _LoggingCapture:
     logger so logging calls are streamed live to the UI.
     """
 
-    def __init__(self, q: "queue.Queue[str]"):
+    def __init__(self, q: queue.Queue[str]):
         """Initialize the logging capture with a queue to receive log messages."""
         self._q = q
         self._handler = _QueueLogHandler(q)
         self._logger = logging.getLogger()
 
-    def __enter__(self) -> "_LoggingCapture":
+    def __enter__(self) -> _LoggingCapture:
         """Add the queue log handler to the root logger."""
         self._handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
         self._logger.addHandler(self._handler)
@@ -273,12 +288,13 @@ class _LoggingCapture:
 # Shared helpers
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def _list_md(folder: str) -> list[str]:
     """List all .md files in the given folder.
-    
+
     Args:
         folder: The path to the folder to search for .md files.
-    
+
     Returns:
          A list of file paths to .md files in the folder."""
     return glob.glob(os.path.join(folder, "*.md"))
@@ -286,10 +302,10 @@ def _list_md(folder: str) -> list[str]:
 
 def _find_newest_md(folder: str) -> str | None:
     """Find the newest .md file in the given folder.
-    
+
     Args:
         folder: The path to the folder to search for .md files.
-    
+
     Returns:
         The file path to the newest .md file, or None if no .md files are found.
     """
@@ -298,20 +314,21 @@ def _find_newest_md(folder: str) -> str | None:
 
 
 def _read_md(path: str | None) -> str:
-    """Read the content of a markdown file, returning an empty string if the file does not 
+    """Read the content of a markdown file, returning an empty string if the file does not
     exist or cannot be read.
-    
+
     Args:
         path: The file path to the markdown file to read.
-    
+
     Returns:
-        The content of the markdown file as a string, or an empty string if the file does not 
+        The content of the markdown file as a string, or an empty string if the file does not
         exist or cannot be read.
     """
     if not path or not os.path.exists(path):
         return ""
     try:
-        return open(path, encoding="utf-8").read()
+        with open(path, encoding="utf-8") as f:
+            return f.read()
     except Exception:
         return ""
 
@@ -319,6 +336,7 @@ def _read_md(path: str | None) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 # Option 1 & 2 — Planning                                Human-in-the-Loop
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def start_planning(
     tema: str,
@@ -334,7 +352,7 @@ def start_planning(
         tema: The review topic/theme provided by the user.
         tipo: The review type ("academico", "tecnico", or "ambos").
         rodadas: The number of refinement rounds for HITL steps.
-    
+
     Returns:
         tuple: A tuple containing:
             - history: A list of message dicts representing the conversation history.
@@ -401,7 +419,12 @@ def start_planning(
     if not graph_state.next:
         plan_path = graph_state.values.get("final_plan_path", "")
         rendered = _read_md(plan_path)
-        history.append({"role": "assistant", "content": f"✅ {label} planning complete! Plan saved at `{plan_path}`"})
+        history.append(
+            {
+                "role": "assistant",
+                "content": f"✅ {label} planning complete! Plan saved at `{plan_path}`",
+            }
+        )
         return history, {}, "✅ Done", rendered
 
     agent_question = ""
@@ -410,9 +433,14 @@ def start_planning(
             agent_question = content
             break
 
-    p  = graph_state.values.get("questions_asked", 0)
+    p = graph_state.values.get("questions_asked", 0)
     mp = graph_state.values.get("max_questions", rodadas)
-    history.append({"role": "assistant", "content": f"[Round {p}/{mp} — {tipo_atual}]\n\n{agent_question}"})
+    history.append(
+        {
+            "role": "assistant",
+            "content": f"[Round {p}/{mp} — {tipo_atual}]\n\n{agent_question}",
+        }
+    )
 
     session_state = {
         "app": app,
@@ -444,10 +472,10 @@ def continue_planning(
     if not session_state or "app" not in session_state:
         return history, session_state, "❌ No active session.", ""
 
-    app    = session_state["app"]
+    app = session_state["app"]
     config = session_state["config"]
-    tipo   = session_state["tipo"]
-    label  = "ACADEMIC" if tipo == "academico" else "TECHNICAL"
+    tipo = session_state["tipo"]
+    label = "ACADEMIC" if tipo == "academico" else "TECHNICAL"
 
     history = history + [{"role": "user", "content": user_msg}]
 
@@ -480,7 +508,8 @@ def continue_planning(
         rendered = _read_md(plan_path)
         finished_msg = (
             f"✅ {label} planning complete! Plan saved at `{plan_path}`"
-            if plan_path else f"✅ {label} planning complete!"
+            if plan_path
+            else f"✅ {label} planning complete!"
         )
         history = history + [{"role": "assistant", "content": finished_msg}]
 
@@ -502,9 +531,14 @@ def continue_planning(
             agent_question = content
             break
 
-    p  = graph_state.values.get("questions_asked", 0)
+    p = graph_state.values.get("questions_asked", 0)
     mp = graph_state.values.get("max_questions", session_state.get("rodadas", 3))
-    history = history + [{"role": "assistant", "content": f"[Round {p}/{mp} — {tipo}]\n\n{agent_question}"}]
+    history = history + [
+        {
+            "role": "assistant",
+            "content": f"[Round {p}/{mp} — {tipo}]\n\n{agent_question}",
+        }
+    ]
 
     return history, session_state, f"🔄 {label} in progress — round {p}/{mp}", ""
 
@@ -513,10 +547,13 @@ def continue_planning(
 # Option 3 — Execute Writing from existing plan
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def list_plan_files(mode: str) -> list[str]:
     """List available plan files for the given mode (Academic or Technical)."""
     os.makedirs("plans", exist_ok=True)
-    pattern = "plans/plano_revisao_tecnica_*.md" if mode == "Technical" else "plans/plano_revisao_*.md"
+    pattern = (
+        "plans/plano_revisao_tecnica_*.md" if mode == "Technical" else "plans/plano_revisao_*.md"
+    )
     files = sorted(glob.glob(pattern))
     if not files:
         files = sorted(glob.glob("plans/plano_revisao_*.md"))
@@ -556,15 +593,29 @@ def start_writing(
     )
     if cfg_issues:
         yield (
-            history + [{"role": "assistant", "content": "❌ Configuração incompleta:\n- " + "\n- ".join(cfg_issues)}],
-            "❌ Erro", "",
+            history
+            + [
+                {
+                    "role": "assistant",
+                    "content": "❌ Configuração incompleta:\n- " + "\n- ".join(cfg_issues),
+                }
+            ],
+            "❌ Erro",
+            "",
         )
         return
 
     if not plan_path or not os.path.exists(plan_path):
         yield (
-            history + [{"role": "assistant", "content": f"❌ Plano não encontrado: `{plan_path}`"}],
-            "❌ Erro", "",
+            history
+            + [
+                {
+                    "role": "assistant",
+                    "content": f"❌ Plano não encontrado: `{plan_path}`",
+                }
+            ],
+            "❌ Erro",
+            "",
         )
         return
 
@@ -627,7 +678,10 @@ def start_writing(
     thread.start()
 
     history = history + [
-        {"role": "assistant", "content": f"▶ Iniciando escrita **{mode}** — `{os.path.basename(plan_path)}`"}
+        {
+            "role": "assistant",
+            "content": f"▶ Iniciando escrita **{mode}** — `{os.path.basename(plan_path)}`",
+        }
     ]
     yield history, "🔄 Iniciando…", ""
 
@@ -666,8 +720,7 @@ def start_writing(
     rendered = _read_md(output_file)
 
     link_msg = (
-        f"✅ Escrita concluída!  📄 `{output_file}`"
-        if output_file else "✅ Escrita concluída!"
+        f"✅ Escrita concluída!  📄 `{output_file}`" if output_file else "✅ Escrita concluída!"
     )
     history = history + [{"role": "assistant", "content": link_msg}]
     yield history, "✅ Concluído", rendered
@@ -676,6 +729,7 @@ def start_writing(
 # ═══════════════════════════════════════════════════════════════════════════
 # Option 4 — Index local PDFs
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def index_pdfs(folder_path: str) -> str:
     cfg_issues = validate_runtime_config(
@@ -708,6 +762,7 @@ def index_pdfs(folder_path: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 # Option 5 — Format References
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 def format_references(
     yaml_file_obj: Any,
@@ -744,6 +799,7 @@ def format_references(
 # Interactive Review Chatbot
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 def list_review_files() -> list[str]:
     os.makedirs("reviews", exist_ok=True)
     return sorted(glob.glob("reviews/*.md"))
@@ -759,7 +815,9 @@ def _working_copy_path(review_file: str) -> str:
 
 def _atomic_write(path: str, content: str) -> None:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", delete=False, encoding="utf-8", dir=os.path.dirname(path) or ".") as temp_file:
+    with tempfile.NamedTemporaryFile(
+        "w", delete=False, encoding="utf-8", dir=os.path.dirname(path) or "."
+    ) as temp_file:
         temp_file.write(content)
         tmp_path = temp_file.name
     os.replace(tmp_path, path)
@@ -784,12 +842,16 @@ def _split_sections(markdown: str) -> list[dict]:
 
     sections: list[dict] = []
     for header_idx, (start_line, title) in enumerate(headers):
-        next_start_line = headers[header_idx + 1][0] if header_idx + 1 < len(headers) else len(lines)
+        next_start_line = (
+            headers[header_idx + 1][0] if header_idx + 1 < len(headers) else len(lines)
+        )
         section_start = line_offsets[start_line]
-        section_end = line_offsets[next_start_line] if next_start_line < len(line_offsets) else len(markdown)
+        section_end = (
+            line_offsets[next_start_line] if next_start_line < len(line_offsets) else len(markdown)
+        )
         section_text = markdown[section_start:section_end]
 
-        references_start_line: Optional[int] = None
+        references_start_line: int | None = None
         for i in range(start_line + 1, next_start_line):
             if re.match(
                 r"^###\s+(?:References\s+for\s+this\s+section|Refer[êe]ncias\s+desta\s+se[çc][ãa]o)\s*$",
@@ -799,8 +861,12 @@ def _split_sections(markdown: str) -> list[dict]:
                 references_start_line = i
                 break
 
-        body_end_line = references_start_line if references_start_line is not None else next_start_line
-        body_start = line_offsets[start_line + 1] if start_line + 1 < len(line_offsets) else section_start
+        body_end_line = (
+            references_start_line if references_start_line is not None else next_start_line
+        )
+        body_start = (
+            line_offsets[start_line + 1] if start_line + 1 < len(line_offsets) else section_start
+        )
         body_end = line_offsets[body_end_line] if body_end_line < len(line_offsets) else section_end
         body_text = markdown[body_start:body_end].strip()
 
@@ -813,7 +879,7 @@ def _split_sections(markdown: str) -> list[dict]:
 
         paragraphs: list[dict] = []
         current_lines: list[str] = []
-        current_start: Optional[int] = None
+        current_start: int | None = None
         for i in range(start_line + 1, body_end_line):
             stripped = lines[i].strip()
             if not stripped or stripped.startswith("<!--") or stripped.startswith("### "):
@@ -860,7 +926,7 @@ def _split_sections(markdown: str) -> list[dict]:
     return sections
 
 
-def _resolve_section_index(user_text: str, sections: list[dict]) -> Optional[int]:
+def _resolve_section_index(user_text: str, sections: list[dict]) -> int | None:
     text = user_text.lower()
     sec_match = re.search(r"(?:section|sec|se[çc][ãa]o|chapter|cap[ií]tulo)\s*(\d+)", text)
     if sec_match:
@@ -876,7 +942,7 @@ def _resolve_section_index(user_text: str, sections: list[dict]) -> Optional[int
     return None
 
 
-def _resolve_paragraph_index(user_text: str, paragraph_count: int) -> Optional[int]:
+def _resolve_paragraph_index(user_text: str, paragraph_count: int) -> int | None:
     if paragraph_count <= 0:
         return None
     text = user_text.lower()
@@ -975,14 +1041,39 @@ def _resolve_target_hint(
 def _detect_user_language(user_text: str, fallback: str = "pt") -> str:
     padded = f" {user_text.lower()} "
     pt_markers = [
-        " seção ", " parágrafo ", " referências ", " referência ", " citação ",
-        " fonte ", " internet ", " confirmar ", " confirme ", " cancelar ",
-        " edição ", " achados ", " frase ", " trecho ", " artigos ", " mais ",
+        " seção ",
+        " parágrafo ",
+        " referências ",
+        " referência ",
+        " citação ",
+        " fonte ",
+        " internet ",
+        " confirmar ",
+        " confirme ",
+        " cancelar ",
+        " edição ",
+        " achados ",
+        " frase ",
+        " trecho ",
+        " artigos ",
+        " mais ",
     ]
     en_markers = [
-        " section ", " paragraph ", " references ", " reference ", " citation ",
-        " source ", " internet ", " confirm ", " cancel ", " edit ",
-        " findings ", " phrase ", " snippet ", " papers ", " more ",
+        " section ",
+        " paragraph ",
+        " references ",
+        " reference ",
+        " citation ",
+        " source ",
+        " internet ",
+        " confirm ",
+        " cancel ",
+        " edit ",
+        " findings ",
+        " phrase ",
+        " snippet ",
+        " papers ",
+        " more ",
     ]
     pt_score = sum(marker in padded for marker in pt_markers)
     en_score = sum(marker in padded for marker in en_markers)
@@ -1000,43 +1091,118 @@ def _localized_text(language: str, pt_text: str, en_text: str) -> str:
 def _intent(user_text: str) -> str:
     text = user_text.lower().strip()
     if text in {
-        "confirm", "confirm edit", "apply edit", "yes apply", "yes",
-        "confirmar", "confirmar edição", "aplicar edição", "aplicar edicao", "sim",
+        "confirm",
+        "confirm edit",
+        "apply edit",
+        "yes apply",
+        "yes",
+        "confirmar",
+        "confirmar edição",
+        "aplicar edição",
+        "aplicar edicao",
+        "sim",
     }:
         return "apply_pending_edit"
     if text in {
-        "cancel", "cancel edit", "discard edit", "no",
-        "cancelar", "cancelar edição", "cancelar edicao", "descartar edição", "descartar edicao", "não", "nao",
+        "cancel",
+        "cancel edit",
+        "discard edit",
+        "no",
+        "cancelar",
+        "cancelar edição",
+        "cancelar edicao",
+        "descartar edição",
+        "descartar edicao",
+        "não",
+        "nao",
     }:
         return "cancel_pending_edit"
-    if any(phrase in text for phrase in [
-        "main finding", "main findings", "key finding", "key findings",
-        "principais achados", "achado principal", "achados principais",
-    ]):
+    if any(
+        phrase in text
+        for phrase in [
+            "main finding",
+            "main findings",
+            "key finding",
+            "key findings",
+            "principais achados",
+            "achado principal",
+            "achados principais",
+        ]
+    ):
         return "summarize_main_findings"
-    if any(phrase in text for phrase in [
-        "cited in section", "papers are cited", "references in section", "sources in section",
-        "artigos citados", "referências na seção", "referencias na secao", "fontes na seção", "fontes na secao",
-    ]):
+    if any(
+        phrase in text
+        for phrase in [
+            "cited in section",
+            "papers are cited",
+            "references in section",
+            "sources in section",
+            "artigos citados",
+            "referências na seção",
+            "referencias na secao",
+            "fontes na seção",
+            "fontes na secao",
+        ]
+    ):
         return "list_section_citations"
-    if (
-        ("confirmed" in text and "paragraph" in text)
-        or ("confirmado" in text and ("parágrafo" in text or "paragrafo" in text))
+    if ("confirmed" in text and "paragraph" in text) or (
+        "confirmado" in text and ("parágrafo" in text or "paragrafo" in text)
     ):
         return "confirm_paragraph_by_authors"
-    if any(phrase in text for phrase in ["more documents", "more sources", "additional documents", "additional sources", "mais documentos", "mais fontes"]) and any(phrase in text for phrase in ["phrase", "excerpt", "snippet", "frase", "trecho"]):
+    if any(
+        phrase in text
+        for phrase in [
+            "more documents",
+            "more sources",
+            "additional documents",
+            "additional sources",
+            "mais documentos",
+            "mais fontes",
+        ]
+    ) and any(phrase in text for phrase in ["phrase", "excerpt", "snippet", "frase", "trecho"]):
         return "suggest_more_documents_for_phrase"
-    if any(word in text for word in ["edit", "fix", "add", "rewrite", "improve", "update", "modify", "replace", "remove", "melhore", "corrija", "adicionar", "reescreva", "atualize", "modifique", "substitua", "remova"]):
+    if any(
+        word in text
+        for word in [
+            "edit",
+            "fix",
+            "add",
+            "rewrite",
+            "improve",
+            "update",
+            "modify",
+            "replace",
+            "remove",
+            "melhore",
+            "corrija",
+            "adicionar",
+            "reescreva",
+            "atualize",
+            "modifique",
+            "substitua",
+            "remova",
+        ]
+    ):
         return "propose_targeted_edit"
     return "summarize_main_findings"
 
 
 def _explicit_web_request(user_text: str) -> bool:
     text = user_text.lower()
-    return any(k in text for k in [
-        "internet", "web", "online", "tavily", "search on internet", "search the web",
-        "busque na internet", "pesquise na internet", "busque online",
-    ])
+    return any(
+        k in text
+        for k in [
+            "internet",
+            "web",
+            "online",
+            "tavily",
+            "search on internet",
+            "search the web",
+            "busque na internet",
+            "pesquise na internet",
+            "busque online",
+        ]
+    )
 
 
 def _summarize_findings(markdown: str) -> str:
@@ -1080,7 +1246,7 @@ def _list_section_citations(markdown: str, user_text: str) -> str:
     return f"### {heading} {sections[sec_idx]['title']}\n\n" + "\n".join(refs)
 
 
-def _extract_citation_number(user_text: str) -> Optional[int]:
+def _extract_citation_number(user_text: str) -> int | None:
     match = re.search(r"\[(\d+)\]", user_text)
     if match:
         return int(match.group(1))
@@ -1105,24 +1271,59 @@ def _is_citation_usage_query(user_text: str) -> bool:
     # Queries with these words are about finding or replacing sources — let the
     # ReAct agent handle them.
     exclusions = [
-        "replace", "substitut", "alternative", "instead",
-        "find source", "find new", "new source", "search for",
-        "not yet used", "not used yet", "haven't been used",
-        "can be used to", "could replace", "suggest", "recommend",
-        "look for", "related with", "related to",
+        "replace",
+        "substitut",
+        "alternative",
+        "instead",
+        "find source",
+        "find new",
+        "new source",
+        "search for",
+        "not yet used",
+        "not used yet",
+        "haven't been used",
+        "can be used to",
+        "could replace",
+        "suggest",
+        "recommend",
+        "look for",
+        "related with",
+        "related to",
         # Portuguese source-search / rewrite intents
-        "procurar", "buscar", "busque", "pesquise", "pesquisar",
-        "ainda não usada", "ainda nao usada",
-        "não usada ainda", "nao usada ainda",
-        "fontes não usadas", "fontes nao usadas",
-        "novas fontes", "nova fonte",
-        "sugerir", "recomendar",
-        "substituir", "alternativa", "relacionado com", "relacionado a",
+        "procurar",
+        "buscar",
+        "busque",
+        "pesquise",
+        "pesquisar",
+        "ainda não usada",
+        "ainda nao usada",
+        "não usada ainda",
+        "nao usada ainda",
+        "fontes não usadas",
+        "fontes nao usadas",
+        "novas fontes",
+        "nova fonte",
+        "sugerir",
+        "recomendar",
+        "substituir",
+        "alternativa",
+        "relacionado com",
+        "relacionado a",
         # Rewrite / improve intents (Portuguese)
-        "reescreva", "reescrever", "melhore", "melhorar", "melhorar o",
-        "adicionando", "adicione", "adicionar",
+        "reescreva",
+        "reescrever",
+        "melhore",
+        "melhorar",
+        "melhorar o",
+        "adicionando",
+        "adicione",
+        "adicionar",
         # Rewrite / improve intents (English)
-        "rewrite", "improve", "add new", "new references", "abnt",
+        "rewrite",
+        "improve",
+        "add new",
+        "new references",
+        "abnt",
     ]
     if any(kw in text for kw in exclusions):
         return False
@@ -1130,15 +1331,45 @@ def _is_citation_usage_query(user_text: str) -> bool:
     # Require both a listing-intent word AND a usage-verb — avoids false
     # positives such as "what would be a good source for [2]?".
     listing_words = [
-        "paragraph", "paragraphs", "parágrafo", "parágrafos",
-        "paragrafo", "paragrafos", "where", "which", "what", "list", "show",
-        "onde", "qual", "quais", "listar", "mostre", "mostrar",
+        "paragraph",
+        "paragraphs",
+        "parágrafo",
+        "parágrafos",
+        "paragrafo",
+        "paragrafos",
+        "where",
+        "which",
+        "what",
+        "list",
+        "show",
+        "onde",
+        "qual",
+        "quais",
+        "listar",
+        "mostre",
+        "mostrar",
     ]
     usage_words = [
-        "using", "uses", "used", "cite", "cites", "cited",
-        "referência", "referencia", "referências", "referencias",
-        "mention", "mentions", "mentioned", "menciona", "mencionado",
-        "usando", r"\busa\b", "usado", "citado", "citam",
+        "using",
+        "uses",
+        "used",
+        "cite",
+        "cites",
+        "cited",
+        "referência",
+        "referencia",
+        "referências",
+        "referencias",
+        "mention",
+        "mentions",
+        "mentioned",
+        "menciona",
+        "mencionado",
+        "usando",
+        r"\busa\b",
+        "usado",
+        "citado",
+        "citam",
     ]
     return any(w in text for w in listing_words) and any(re.search(w, text) for w in usage_words)
 
@@ -1178,7 +1409,15 @@ def _classify_reference_intent(user_text: str) -> str | None:
     numbers = _extract_requested_citation_numbers(user_text)
 
     # 1) First, prioritize explicit "format provided list" requests.
-    format_keywords = ["abnt", "format", "formate", "formatar", "norma", "padrão", "padrao"]
+    format_keywords = [
+        "abnt",
+        "format",
+        "formate",
+        "formatar",
+        "norma",
+        "padrão",
+        "padrao",
+    ]
     has_format_keyword = any(_contains_keyword(text, keyword) for keyword in format_keywords)
     if has_format_keyword:
         provided_items = _extract_provided_reference_items(user_text)
@@ -1187,17 +1426,43 @@ def _classify_reference_intent(user_text: str) -> str | None:
 
     # 2) Then detect explicit "list references in document" requests.
     explicit_list_all_phrases = [
-        "todas as referências", "todas as referencias", "all references", "all sources",
-        "sem repetição", "sem repeticao", "without duplicates", "deduplicate",
-        "used in this document", "used in document", "usadas neste documento",
-        "referências usadas no documento", "referencias usadas no documento",
+        "todas as referências",
+        "todas as referencias",
+        "all references",
+        "all sources",
+        "sem repetição",
+        "sem repeticao",
+        "without duplicates",
+        "deduplicate",
+        "used in this document",
+        "used in document",
+        "usadas neste documento",
+        "referências usadas no documento",
+        "referencias usadas no documento",
     ]
-    list_all_action_words = ["liste", "listar", "list", "show", "mostre", "retorne", "return"]
-    has_explicit_phrase = any(_contains_keyword(text, phrase) for phrase in explicit_list_all_phrases)
+    list_all_action_words = [
+        "liste",
+        "listar",
+        "list",
+        "show",
+        "mostre",
+        "retorne",
+        "return",
+    ]
+    has_explicit_phrase = any(
+        _contains_keyword(text, phrase) for phrase in explicit_list_all_phrases
+    )
     has_list_action = any(_contains_keyword(text, keyword) for keyword in list_all_action_words)
     has_reference_word = any(
         _contains_keyword(text, keyword)
-        for keyword in ["referência", "referencias", "referências", "references", "fontes", "sources"]
+        for keyword in [
+            "referência",
+            "referencias",
+            "referências",
+            "references",
+            "fontes",
+            "sources",
+        ]
     )
     if has_explicit_phrase or (has_list_action and has_reference_word and "document" in text):
         return "list_all"
@@ -1217,7 +1482,11 @@ def _extract_provided_reference_items(user_text: str) -> list[str]:
         stripped = re.sub(r"^(?:[-*]|\d+[\).]|\[\d+\])\s*", "", line).strip()
         if not stripped:
             continue
-        if re.search(r"\b(formate|formatar|abnt|liste|listar|all references|todas as refer)\b", stripped, flags=re.IGNORECASE):
+        if re.search(
+            r"\b(formate|formatar|abnt|liste|listar|all references|todas as refer)\b",
+            stripped,
+            flags=re.IGNORECASE,
+        ):
             continue
         if ";" in stripped and len(stripped) > 30 and "http" not in stripped.lower():
             parts = [p.strip() for p in stripped.split(";") if p.strip()]
@@ -1273,13 +1542,15 @@ def _precheck_provided_requires_web(user_text: str) -> dict:
     }
 
 
-def _build_reference_confirmation_prompt(intent: str, user_text: str, allow_web: bool) -> tuple[str, dict]:
-    """Builds a confirmation prompt for reference formatting requests, analyzing the user's input to determine 
-    the intent and whether additional web search is needed for incomplete metadata. The function first classifies 
-    the intent of the user's request (e.g., listing all references, formatting provided items, resolving citation 
-    numbers) and then checks for any explicitly provided reference items. It assesses the completeness of the metadata 
-    for these items and determines if a web search would be necessary to fill in missing information. Based on this 
-    analysis, it constructs a localized confirmation prompt that informs the user of the next steps and what will be 
+def _build_reference_confirmation_prompt(
+    intent: str, user_text: str, allow_web: bool
+) -> tuple[str, dict]:
+    """Builds a confirmation prompt for reference formatting requests, analyzing the user's input to determine
+    the intent and whether additional web search is needed for incomplete metadata. The function first classifies
+    the intent of the user's request (e.g., listing all references, formatting provided items, resolving citation
+    numbers) and then checks for any explicitly provided reference items. It assesses the completeness of the metadata
+    for these items and determines if a web search would be necessary to fill in missing information. Based on this
+    analysis, it constructs a localized confirmation prompt that informs the user of the next steps and what will be
     formatted, while also providing details about any incomplete items that may require web search if allowed.
 
     Args:
@@ -1348,20 +1619,20 @@ _BIBTEX_FIELD_RE = re.compile(r'(\w+)\s*=\s*["{]([^"}]+)["}]', re.IGNORECASE)
 
 
 def _parse_bibtex_fields(bibtex: str) -> dict[str, str]:
-    """Parses a BibTeX entry string and extracts its fields into a dictionary. The function 
-    uses a regular expression to identify key-value pairs in the BibTeX format, where keys are 
-    typically alphanumeric identifiers (e.g., title, author, year) and values are enclosed in 
-    either double quotes or curly braces. The extracted keys are normalized to lowercase, and 
-    the values are stripped of leading/trailing whitespace. This allows for flexible parsing of 
+    """Parses a BibTeX entry string and extracts its fields into a dictionary. The function
+    uses a regular expression to identify key-value pairs in the BibTeX format, where keys are
+    typically alphanumeric identifiers (e.g., title, author, year) and values are enclosed in
+    either double quotes or curly braces. The extracted keys are normalized to lowercase, and
+    the values are stripped of leading/trailing whitespace. This allows for flexible parsing of
     BibTeX entries, even when they contain varying amounts of whitespace or different field orderings.
-    
+
     Args:
-        - bibtex: A string containing the raw BibTeX entry, which may include various fields such 
+        - bibtex: A string containing the raw BibTeX entry, which may include various fields such
             as title, author, year, doi, and url.
 
     Returns:
-        A dictionary where the keys are the normalized field names (in lowercase) and the values are 
-            the corresponding field values extracted from the BibTeX entry. If the input string is 
+        A dictionary where the keys are the normalized field names (in lowercase) and the values are
+            the corresponding field values extracted from the BibTeX entry. If the input string is
             empty or does not contain valid BibTeX fields, an empty dictionary is returned.
     """
     if not bibtex:
@@ -1370,17 +1641,17 @@ def _parse_bibtex_fields(bibtex: str) -> dict[str, str]:
 
 
 def _metadata_from_bibtex(number: int | None, bibtex: str) -> dict:
-    """Extracts metadata from a BibTeX entry string, attempting to identify the title, year, DOI, 
-    and URL. This function uses regular expressions to parse common BibTeX field patterns and 
-    normalizes the extracted values by stripping extraneous whitespace and punctuation. The 
-    resulting metadata dictionary is structured to facilitate comparison with reference entries 
-    in a document, allowing for more accurate matching even when the input BibTeX is incomplete or 
+    """Extracts metadata from a BibTeX entry string, attempting to identify the title, year, DOI,
+    and URL. This function uses regular expressions to parse common BibTeX field patterns and
+    normalizes the extracted values by stripping extraneous whitespace and punctuation. The
+    resulting metadata dictionary is structured to facilitate comparison with reference entries
+    in a document, allowing for more accurate matching even when the input BibTeX is incomplete or
     formatted inconsistently.
-    
+
     Args:
         number: An optional integer representing the reference number (e.g., from [1], [2], etc.).
         bibtex: A string containing the raw BibTeX entry, which may include various fields such as title, year, doi, and url.
-    
+
     Returns:
         A dictionary with the following keys
         - "number": The provided reference number.
@@ -1413,10 +1684,10 @@ def _metadata_from_bibtex(number: int | None, bibtex: str) -> dict:
 
 def _normalize_reference_key(raw: str) -> str:
     """Normalizes a raw reference string by removing leading numbering, condensing whitespace, stripping common metadata patterns (like DOIs and URLs), and removing punctuation. This function is designed to produce a clean, lowercase string that can be used for comparison or matching purposes, while ignoring common formatting variations and extraneous information that often accompanies reference entries.
-    
+
     Args:
         - raw: A string containing the raw reference text, which may include numbering (e.g., "[1]"), DOIs, URLs, and various punctuation.
-    
+
     Returns:
         A normalized string with numbering, DOIs, URLs, and punctuation removed, and whitespace condensed.
     """
@@ -1429,7 +1700,7 @@ def _normalize_reference_key(raw: str) -> str:
 
 def _title_from_file_path(path: str) -> str:
     """Given a file path, this function attempts to derive a clean title by extracting the base name, removing common delimiters and file extensions, and normalizing whitespace. This is particularly useful for cases where the reference metadata is incomplete but a file path (e.g., to a PDF) is available, allowing for a best-effort guess at the reference title.
-    
+
     Args:
         - path: A string representing the file path.
 
@@ -1446,7 +1717,7 @@ def _title_from_file_path(path: str) -> str:
 def _metadata_from_raw_reference(number: int | None, raw_reference: str) -> dict:
     """Extracts metadata from a raw reference string, attempting to identify the title, year, DOI,
       URL, and file path.
-    
+
     Args:
         - number: An optional integer representing the reference number (e.g., from [1], [2], etc.).
         - raw_reference: A string containing the raw reference text, which may include various formats and metadata.
@@ -1479,11 +1750,18 @@ def _metadata_from_raw_reference(number: int | None, raw_reference: str) -> dict
         text_no_url = re.sub(r"https?://\S+", "", body)
         text_no_doi = re.sub(r"10\.\d{4,9}/[^\s,;]+", "", text_no_url, flags=re.IGNORECASE)
         text_no_path = re.sub(r"/[^\n]*?\.pdf", "", text_no_doi, flags=re.IGNORECASE)
-        text_no_labels = re.sub(r"\b(?:dispon[ií]vel em|arquivo local|citado em)\b:?.*", "", text_no_path, flags=re.IGNORECASE)
+        text_no_labels = re.sub(
+            r"\b(?:dispon[ií]vel em|arquivo local|citado em)\b:?.*",
+            "",
+            text_no_path,
+            flags=re.IGNORECASE,
+        )
         title_guess = re.sub(r"\s+", " ", text_no_labels).strip(" .;,")
 
     # Clean title candidate from trailing metadata artifacts
-    title_guess = re.sub(r"\bDOI\b\s*:?\s*10\.\d{4,9}/[^\s,;]+", "", title_guess, flags=re.IGNORECASE)
+    title_guess = re.sub(
+        r"\bDOI\b\s*:?\s*10\.\d{4,9}/[^\s,;]+", "", title_guess, flags=re.IGNORECASE
+    )
     title_guess = re.sub(r"https?://\S+", "", title_guess)
     title_guess = re.sub(r"\s+", " ", title_guess).strip(" .;,")
 
@@ -1501,15 +1779,15 @@ def _metadata_from_raw_reference(number: int | None, raw_reference: str) -> dict
 
 def _is_metadata_complete(metadata: dict) -> bool:
     """Determines if the provided metadata dictionary contains sufficient information to be considered complete for ABNT formatting purposes.
-    
+
     Args:
         metadata: A dictionary containing reference metadata, which may include keys such as 'title', 'year',
              'doi', 'url', and 'derived_from_path'. The function evaluates the presence and validity of these
               fields to determine if the metadata is complete enough for formatting.
-    
+
     Returns:
-        A boolean value indicating whether the metadata is considered complete. The metadata is deemed 
-        complete if it contains a valid DOI, or if it has both a title and year (or title and URL) without 
+        A boolean value indicating whether the metadata is considered complete. The metadata is deemed
+        complete if it contains a valid DOI, or if it has both a title and year (or title and URL) without
         relying solely on a derived title from a file path. Incomplete metadata may lack critical information
         needed for proper ABNT formatting.
     """
@@ -1521,27 +1799,24 @@ def _is_metadata_complete(metadata: dict) -> bool:
 
     if doi:
         return True
-    if title and year and not derived_from_path:
-        return True
-    if title and url and not derived_from_path:
-        return True
-    return False
+    is_valid = bool(title and not derived_from_path and (year or url))
+    return is_valid
 
 
 def _format_abnt_entry(metadata: dict) -> str:
     """Formats a reference entry in ABNT style based on the provided metadata dictionary.
-    
+
     Args:
-        metadata: A dictionary containing reference metadata, which may include keys such as 'number', 
-            'title', 'year', 'doi', 'url', 'file_path', and 'raw'. The function will attempt to construct 
-            a properly formatted ABNT reference entry using this information, applying normalization and 
-            cleaning steps to handle common issues such as malformed DOIs, extraneous punctuation, and 
+        metadata: A dictionary containing reference metadata, which may include keys such as 'number',
+            'title', 'year', 'doi', 'url', 'file_path', and 'raw'. The function will attempt to construct
+            a properly formatted ABNT reference entry using this information, applying normalization and
+            cleaning steps to handle common issues such as malformed DOIs, extraneous punctuation, and
             missing fields.
-    
+
     Returns:
-        A string representing the formatted reference entry in ABNT style. The function will prioritize 
-        using the title, year, DOI, and URL from the metadata, while also handling cases where certain 
-        fields may be missing or incomplete. The output will be structured according to ABNT guidelines, 
+        A string representing the formatted reference entry in ABNT style. The function will prioritize
+        using the title, year, DOI, and URL from the metadata, while also handling cases where certain
+        fields may be missing or incomplete. The output will be structured according to ABNT guidelines,
         with appropriate punctuation and formatting based on the available metadata.
     """
     number = metadata.get("number")
@@ -1556,7 +1831,11 @@ def _format_abnt_entry(metadata: dict) -> str:
     doi_match = re.search(r"(10\.\d{4,9}/[^\s,;]+)", doi, flags=re.IGNORECASE)
     doi = doi_match.group(1).rstrip(".)],;") if doi_match else ""
     url = url.rstrip(".)],;")
-    year = re.search(r"\b(19|20)\d{2}\b", year).group(0) if re.search(r"\b(19|20)\d{2}\b", year) else ""
+    year = (
+        re.search(r"\b(19|20)\d{2}\b", year).group(0)
+        if re.search(r"\b(19|20)\d{2}\b", year)
+        else ""
+    )
     title = re.sub(r"\bDOI\b\s*:?.*$", "", title, flags=re.IGNORECASE).strip(" .;,")
     title = re.sub(r"\s+", " ", title).strip()
 
@@ -1604,11 +1883,11 @@ def _format_abnt_entry(metadata: dict) -> str:
 
 def _merge_metadata(base: dict, extra: dict) -> dict:
     """Merges two metadata dictionaries, giving priority to non-empty values in the base dictionary.
-    
+
     Args:
         base: The primary metadata dictionary, which may contain keys like 'title', 'doi', 'url', 'year', and 'file_path'. Values in this dictionary take precedence if they are non-empty.
         extra: The secondary metadata dictionary, which may provide additional information to fill in missing values in the base dictionary. This dictionary is consulted for keys that are missing or empty in the base.
-    
+
     Returns:
         A new dictionary that combines the information from both base and extra, where values from the base are retained if present, and values from extra are used to fill in any gaps. The resulting dictionary will have the same keys as the base, with values taken from either the base or extra as appropriate.
     """
@@ -1623,10 +1902,10 @@ def _extract_non_numbered_mentions(markdown: str) -> list[str]:
     """Extracts reference mentions from the markdown content that do not follow the numbered citation format.
     This includes author-year citations in the body text and non-numbered lines within reference blocks.
     The function uses regex patterns to identify potential reference mentions and applies cleaning and deduplication to
-    
+
     Args:
         markdown: The markdown content of the document, which may contain sections, paragraphs, and reference blocks.
-        
+
     Returns:
          A list of unique reference mentions extracted from the markdown, which may include author-year citations and other informal references that do not follow the numbered format.
     """
@@ -1649,7 +1928,11 @@ def _extract_non_numbered_mentions(markdown: str) -> list[str]:
     in_refs = False
     for line in lines:
         stripped = line.strip()
-        if re.match(r"^###\s+(?:References\s+for\s+this\s+section|Refer[êe]ncias\s+desta\s+se[çc][ãa]o)\s*$", stripped, flags=re.IGNORECASE):
+        if re.match(
+            r"^###\s+(?:References\s+for\s+this\s+section|Refer[êe]ncias\s+desta\s+se[çc][ãa]o)\s*$",
+            stripped,
+            flags=re.IGNORECASE,
+        ):
             in_refs = True
             continue
         if in_refs and re.match(r"^##\s+", stripped):
@@ -1661,7 +1944,12 @@ def _extract_non_numbered_mentions(markdown: str) -> list[str]:
         if re.match(r"^\[\d+\]", stripped):
             continue
         cleaned = re.sub(r"^[-*]\s+", "", stripped)
-        if cleaned and len(cleaned) <= 180 and "http" not in cleaned.lower() and "doi" not in cleaned.lower():
+        if (
+            cleaned
+            and len(cleaned) <= 180
+            and "http" not in cleaned.lower()
+            and "doi" not in cleaned.lower()
+        ):
             mentions.append(cleaned)
 
     # de-duplicate while preserving order
@@ -1677,14 +1965,14 @@ def _extract_non_numbered_mentions(markdown: str) -> list[str]:
 
 
 def _collect_reference_inventory(markdown: str) -> dict:
-    """Parses the markdown content to extract a structured inventory of references, 
-    including their numbering, associated paragraphs, and unique entries. 
-    This function identifies reference blocks, extracts citation numbers and their corresponding text, 
+    """Parses the markdown content to extract a structured inventory of references,
+    including their numbering, associated paragraphs, and unique entries.
+    This function identifies reference blocks, extracts citation numbers and their corresponding text,
     and organizes them for further processing such as enrichment or formatting.
 
     Args:
         markdown: The markdown content of the document, which may contain sections, paragraphs, and reference blocks.
-    
+
     Returns:
         A dictionary containing:
         - 'references_by_number': A mapping of citation numbers to their raw reference text extracted from the markdown.
@@ -1736,11 +2024,11 @@ def _collect_reference_inventory(markdown: str) -> dict:
 
 def _enrich_reference_from_mongo(number: int, paragraphs: list[str]) -> tuple[dict, dict]:
     """Attempts to enrich the reference metadata by performing a search in the MongoDB vector store using the paragraphs that cite the reference number.
-    
+
     Args:
         number: The citation number associated with the reference, used for metadata structuring.
         paragraphs: A list of text paragraphs that cite the reference number, used for performing the search in the MongoDB vector store.
-    
+
     Returns:
         Tuple containing the enriched metadata dictionary with fields such as 'title', 'doi', 'url', and 'file_path' if found, and a dictionary with counts of MongoDB queries and hits for tracking the enrichment process.
     """
@@ -1756,7 +2044,9 @@ def _enrich_reference_from_mongo(number: int, paragraphs: list[str]) -> tuple[di
         if not records:
             continue
         candidate = records[0]
-        if best is None or float(candidate.get("score", 0.0) or 0.0) > float(best.get("score", 0.0) or 0.0):
+        if best is None or float(candidate.get("score", 0.0) or 0.0) > float(
+            best.get("score", 0.0) or 0.0
+        ):
             best = candidate
 
     if not best:
@@ -1779,11 +2069,11 @@ def _enrich_reference_from_mongo(number: int, paragraphs: list[str]) -> tuple[di
 
 def _enrich_reference_from_web(number: int, query: str) -> tuple[dict, dict]:
     """Attempts to enrich the reference metadata by performing a web search using Tavily.
-    
+
     Args:
         number: The citation number associated with the reference, used for metadata structuring.
         query: The text query derived from the reference item, which may include title, raw text, or other metadata, used for performing the web search.
-    
+
     Returns:
         Tuple containing the enriched metadata dictionary with fields such as 'title', 'doi', 'url', and 'year' if found, and a dictionary with counts of web queries and hits for tracking the enrichment process.
     """
@@ -1876,7 +2166,7 @@ def _collect_all_citation_paragraphs(markdown: str) -> dict[int, list[str]]:
 
     Returns:
         A dictionary mapping each cited reference number to a list of up to two paragraphs that contain citations
-        of that reference number. The paragraphs are extracted from the markdown content and are intended to provide 
+        of that reference number. The paragraphs are extracted from the markdown content and are intended to provide
         context for the extractor agent when enriching reference metadata.
     """
     result: dict[int, list[str]] = {}
@@ -1892,7 +2182,9 @@ def _collect_all_citation_paragraphs(markdown: str) -> dict[int, list[str]]:
     return result
 
 
-def _handle_resolve_numbers_request(markdown: str, user_text: str, allow_web: bool = True) -> tuple[str, dict]:
+def _handle_resolve_numbers_request(
+    markdown: str, user_text: str, allow_web: bool = True
+) -> tuple[str, dict]:
     """Resolve specific numbered references via the extractor\u2192formatter agent pipeline.
 
     Extracts the citation numbers from the user message, fetches their entries
@@ -1905,7 +2197,7 @@ def _handle_resolve_numbers_request(markdown: str, user_text: str, allow_web: bo
         - allow_web: Whether to allow web search for metadata enrichment in the extractor agent.
 
     Returns:
-        A tuple containing the reply string with the formatted reference list for the requested 
+        A tuple containing the reply string with the formatted reference list for the requested
         numbers and a metadata dictionary
     """
     language = _detect_user_language(user_text)
@@ -1930,7 +2222,9 @@ def _handle_resolve_numbers_request(markdown: str, user_text: str, allow_web: bo
     raw_block = "\n".join(entries.values())
     citation_context = _collect_all_citation_paragraphs(markdown)
 
-    enriched = run_reference_extractor_agent(raw_block, citation_context=citation_context, allow_web=allow_web)
+    enriched = run_reference_extractor_agent(
+        raw_block, citation_context=citation_context, allow_web=allow_web
+    )
     abnt_list = run_reference_formatter_agent(enriched, allow_web=allow_web)
 
     heading = _localized_text(language, "### Refer\u00eancias (ABNT)", "### References (ABNT)")
@@ -1942,7 +2236,9 @@ def _handle_resolve_numbers_request(markdown: str, user_text: str, allow_web: bo
     }
 
 
-def _handle_list_all_references_request(markdown: str, user_text: str, allow_web: bool = True) -> tuple[str, dict]:
+def _handle_list_all_references_request(
+    markdown: str, user_text: str, allow_web: bool = True
+) -> tuple[str, dict]:
     """Collect every reference from the document, then run extractor→formatter
     agent pipeline for ABNT output.
 
@@ -1962,8 +2258,8 @@ def _handle_list_all_references_request(markdown: str, user_text: str, allow_web
         - allow_web: Whether to allow web search for metadata enrichment in the extractor agent.
 
     Returns:
-        A tuple containing the reply string with the formatted reference list and a metadata dictionary 
-        with details about the operation, such as intent, count of references processed, and agents used.   
+        A tuple containing the reply string with the formatted reference list and a metadata dictionary
+        with details about the operation, such as intent, count of references processed, and agents used.
     """
     language = _detect_user_language(user_text)
 
@@ -1977,10 +2273,7 @@ def _handle_list_all_references_request(markdown: str, user_text: str, allow_web
     primary_refs.extend(extra_lines)
 
     # ── Filter HTML comments ──
-    primary_refs = [
-        r for r in primary_refs
-        if not r.strip().startswith("<!--")
-    ]
+    primary_refs = [r for r in primary_refs if not r.strip().startswith("<!--")]
 
     if not primary_refs:
         msg = _localized_text(
@@ -2034,11 +2327,11 @@ def _handle_list_all_references_request(markdown: str, user_text: str, allow_web
 def _enrich_metadata_doi_first(metadata: dict, allow_web: bool) -> tuple[dict, dict]:
     """Attempts to enrich the metadata of a reference item, prioritizing DOI extraction and lookup.
     The function first tries to find a DOI from the raw text, URL, or title.
-    
+
     Args:
         metadata: A dictionary containing the initial metadata of the reference item, which may include 'raw', 'title', 'url', and 'doi'.
         allow_web: Whether to allow web search for metadata enrichment.
-    
+
     Returns:
         A tuple containing the enriched metadata dictionary and a dictionary with query and hit counts.
     """
@@ -2083,15 +2376,24 @@ def _enrich_metadata_doi_first(metadata: dict, allow_web: bool) -> tuple[dict, d
         bibtex = get_bibtex_from_doi(doi, timeout=10)
         if bibtex:
             web_hits += 1
-            metadata = _merge_metadata(metadata, _metadata_from_bibtex(metadata.get("number"), bibtex))
+            metadata = _merge_metadata(
+                metadata, _metadata_from_bibtex(metadata.get("number"), bibtex)
+            )
             metadata["doi"] = metadata.get("doi") or doi
             bibtex_success = True
 
-    weak_metadata = not (metadata.get("title") and (metadata.get("year") or metadata.get("doi") or metadata.get("url")))
-    should_try_tavily = allow_web and (not bibtex_success or not _is_metadata_complete(metadata) or weak_metadata)
+    weak_metadata = not (
+        metadata.get("title")
+        and (metadata.get("year") or metadata.get("doi") or metadata.get("url"))
+    )
+    should_try_tavily = allow_web and (
+        not bibtex_success or not _is_metadata_complete(metadata) or weak_metadata
+    )
 
     if should_try_tavily:
-        query_seed = query or metadata.get("title") or metadata.get("url") or metadata.get("doi") or ""
+        query_seed = (
+            query or metadata.get("title") or metadata.get("url") or metadata.get("doi") or ""
+        )
         web_ref, web_meta = _enrich_reference_from_web(metadata.get("number") or 0, str(query_seed))
         web_queries += int(web_meta.get("web_queries", 0))
         web_hits += int(web_meta.get("web_hits", 0))
@@ -2126,22 +2428,25 @@ def _handle_format_provided_references_request(user_text: str, allow_web: bool) 
         "### Formatted sources (ABNT)",
     )
     reply = f"{heading}\n\n{abnt_list}"
-    meta = {"intent": "format_provided", "agent": "reference_extractor+reference_formatter"}
+    meta = {
+        "intent": "format_provided",
+        "agent": "reference_extractor+reference_formatter",
+    }
     return reply, meta
 
 
 def _handle_reference_request(markdown: str, user_text: str, allow_web: bool) -> tuple[str, dict]:
-    """ This is the main handler for resolving numbered references in the document based on user requests.
+    """This is the main handler for resolving numbered references in the document based on user requests.
     It collects the reference inventory, identifies which numbers to target, and attempts to enrich their metadata
     using MongoDB and web search as needed, then formats the results in ABNT style.
-    
+
     The response includes sections for unique references, non-numbered mentions, resolved numbered references, and pending items.
-    
+
     Args:
         markdown: The full markdown content of the document.
         user_text: The user's request text that may contain instructions and specific reference numbers.
         allow_web: Whether to allow web search for metadata enrichment.
-    
+
     Returns:
         A tuple of (response_markdown, metadata_dict) where response_markdown is the formatted
         markdown string to reply with, and metadata_dict contains details about the processing.
@@ -2170,7 +2475,9 @@ def _handle_reference_request(markdown: str, user_text: str, allow_web: bool) ->
         raw_ref = references_by_number.get(number, f"[{number}]")
         metadata = _metadata_from_raw_reference(number, raw_ref)
 
-        mongo_ref, mongo_meta = _enrich_reference_from_mongo(number, citation_paragraphs.get(number, []))
+        mongo_ref, mongo_meta = _enrich_reference_from_mongo(
+            number, citation_paragraphs.get(number, [])
+        )
         mongo_queries += int(mongo_meta.get("mongo_queries", 0))
         mongo_hits += int(mongo_meta.get("mongo_hits", 0))
         if mongo_ref:
@@ -2208,7 +2515,13 @@ def _handle_reference_request(markdown: str, user_text: str, allow_web: bool) ->
         dedup_resolved.append(ref)
 
     lines: list[str] = []
-    lines.append(_localized_text(language, "### Referências únicas (deduplicadas) — padrão ABNT", "### Unique references (deduplicated) — ABNT style"))
+    lines.append(
+        _localized_text(
+            language,
+            "### Referências únicas (deduplicadas) — padrão ABNT",
+            "### Unique references (deduplicated) — ABNT style",
+        )
+    )
     lines.append("")
     if unique_references:
         unique_abnt: list[str] = []
@@ -2224,20 +2537,53 @@ def _handle_reference_request(markdown: str, user_text: str, allow_web: bool) ->
             unique_abnt.append(formatted)
         lines.extend(f"- {ref}" for ref in unique_abnt)
     else:
-        lines.append(_localized_text(language, "- Nenhuma referência explícita detectada no bloco de referências.", "- No explicit references were detected in references blocks."))
+        lines.append(
+            _localized_text(
+                language,
+                "- Nenhuma referência explícita detectada no bloco de referências.",
+                "- No explicit references were detected in references blocks.",
+            )
+        )
 
-    lines += ["", _localized_text(language, "### Referências não numeradas detectadas", "### Detected non-numbered references"), ""]
+    lines += [
+        "",
+        _localized_text(
+            language,
+            "### Referências não numeradas detectadas",
+            "### Detected non-numbered references",
+        ),
+        "",
+    ]
     if non_numbered_mentions:
-        non_numbered_abnt = [_format_abnt_entry(_metadata_from_raw_reference(None, mention)) for mention in non_numbered_mentions]
+        non_numbered_abnt = [
+            _format_abnt_entry(_metadata_from_raw_reference(None, mention))
+            for mention in non_numbered_mentions
+        ]
         lines.extend(f"- {ref}" for ref in non_numbered_abnt)
     else:
-        lines.append(_localized_text(language, "- Nenhuma referência não numerada detectada no texto.", "- No non-numbered references detected in the text."))
+        lines.append(
+            _localized_text(
+                language,
+                "- Nenhuma referência não numerada detectada no texto.",
+                "- No non-numbered references detected in the text.",
+            )
+        )
 
-    lines += ["", _localized_text(language, "### Referências numeradas [n]", "### Numbered references [n]"), ""]
+    lines += [
+        "",
+        _localized_text(language, "### Referências numeradas [n]", "### Numbered references [n]"),
+        "",
+    ]
     if dedup_resolved:
         lines.extend(f"- {ref}" for ref in dedup_resolved)
     else:
-        lines.append(_localized_text(language, "- Nenhuma referência numerada foi resolvida.", "- No numbered references were resolved."))
+        lines.append(
+            _localized_text(
+                language,
+                "- Nenhuma referência numerada foi resolvida.",
+                "- No numbered references were resolved.",
+            )
+        )
 
     if unresolved:
         lines += ["", _localized_text(language, "### Pendências", "### Pending")]
@@ -2260,10 +2606,26 @@ def _handle_reference_request(markdown: str, user_text: str, allow_web: bool) ->
     lines += [
         "",
         _localized_text(language, "### Rastreabilidade da busca", "### Search traceability"),
-        _localized_text(language, f"- MongoDB: {mongo_queries} consulta(s), {mongo_hits} item(ns) resolvido(s)", f"- MongoDB: {mongo_queries} query(ies), {mongo_hits} item(s) resolved"),
-        _localized_text(language, f"- Tavily: {web_queries} consulta(s), {web_hits} item(ns) resolvido(s)", f"- Tavily: {web_queries} query(ies), {web_hits} item(s) resolved"),
-        _localized_text(language, f"- Cobertura de [n] solicitados: {len(target_numbers) - len(unresolved)}/{len(target_numbers)}", f"- Requested [n] coverage: {len(target_numbers) - len(unresolved)}/{len(target_numbers)}"),
-        _localized_text(language, f"- Completude ABNT de [n]: {complete_count}/{len(target_numbers)}", f"- ABNT completeness for [n]: {complete_count}/{len(target_numbers)}"),
+        _localized_text(
+            language,
+            f"- MongoDB: {mongo_queries} consulta(s), {mongo_hits} item(ns) resolvido(s)",
+            f"- MongoDB: {mongo_queries} query(ies), {mongo_hits} item(s) resolved",
+        ),
+        _localized_text(
+            language,
+            f"- Tavily: {web_queries} consulta(s), {web_hits} item(ns) resolvido(s)",
+            f"- Tavily: {web_queries} query(ies), {web_hits} item(s) resolved",
+        ),
+        _localized_text(
+            language,
+            f"- Cobertura de [n] solicitados: {len(target_numbers) - len(unresolved)}/{len(target_numbers)}",
+            f"- Requested [n] coverage: {len(target_numbers) - len(unresolved)}/{len(target_numbers)}",
+        ),
+        _localized_text(
+            language,
+            f"- Completude ABNT de [n]: {complete_count}/{len(target_numbers)}",
+            f"- ABNT completeness for [n]: {complete_count}/{len(target_numbers)}",
+        ),
     ]
 
     meta = {
@@ -2279,7 +2641,7 @@ def _handle_reference_request(markdown: str, user_text: str, allow_web: bool) ->
 
 def _list_paragraphs_using_citation(markdown: str, user_text: str) -> str:
     """Lists paragraphs in the document that use a specific citation number, based on user input that references the citation by its number (e.g., [2]). It also checks if the citation is mentioned in the reference sections and provides localized feedback.
-    
+
     Args:
         markdown (str): The full markdown text of the document, which may contain sections, paragraphs and references.
         user_text (str): The user's input text, which should contain a reference to a citation
@@ -2332,7 +2694,11 @@ def _list_paragraphs_using_citation(markdown: str, user_text: str) -> str:
         )
 
     lines = [
-        _localized_text(language, f"### Parágrafos que usam {token}", f"### Paragraphs using {token}"),
+        _localized_text(
+            language,
+            f"### Parágrafos que usam {token}",
+            f"### Paragraphs using {token}",
+        ),
         "",
         *matches,
     ]
@@ -2354,7 +2720,7 @@ def _confirm_paragraph(markdown: str, user_text: str) -> tuple[str, dict]:
             and references.
         user_text (str): The user's input text, which may contain instructions to identify a specific
             paragraph either by section/paragraph number or by quoting a snippet of its text.
-    
+
     Returns:
         Tuple [str, dict]: A tuple containing the message with evidence and context for the identified
         paragraph, and a metadata dictionary with details about the identified section, number of chunks
@@ -2379,7 +2745,9 @@ def _confirm_paragraph(markdown: str, user_text: str) -> tuple[str, dict]:
     if target_para is None:
         sec_idx = _resolve_section_index(user_text, sections)
         if sec_idx is not None:
-            p_idx = _resolve_paragraph_index(user_text, len(sections[sec_idx].get("paragraphs", [])))
+            p_idx = _resolve_paragraph_index(
+                user_text, len(sections[sec_idx].get("paragraphs", []))
+            )
             if p_idx is not None:
                 target_sec = sections[sec_idx]
                 target_para = target_sec["paragraphs"][p_idx]
@@ -2398,23 +2766,43 @@ def _confirm_paragraph(markdown: str, user_text: str) -> tuple[str, dict]:
     refs = target_sec.get("references", []) if target_sec else []
     ref_labels = [re.sub(r"^\[(\d+)\]\s*", "", r) for r in refs[:5]]
     authors_hint = [os.path.basename(r).replace(".pdf", "") for r in ref_labels]
-    evidence = "\n\n".join(chunks[:3]) if chunks else _localized_text(
-        language,
-        "Sem chunks relevantes retornados no momento.",
-        "No relevant chunks were returned at the moment.",
+    evidence = (
+        "\n\n".join(chunks[:3])
+        if chunks
+        else _localized_text(
+            language,
+            "Sem chunks relevantes retornados no momento.",
+            "No relevant chunks were returned at the moment.",
+        )
     )
 
     msg = (
         _localized_text(language, "### Verificação do parágrafo\n", "### Paragraph verification\n")
-        + _localized_text(language, f"- Seção: **{target_sec['title'] if target_sec else 'N/A'}**\n", f"- Section: **{target_sec['title'] if target_sec else 'N/A'}**\n")
-        + _localized_text(language, f"- Evidências MongoDB: **{len(chunks)} chunks**\n", f"- MongoDB evidence: **{len(chunks)} chunks**\n")
+        + _localized_text(
+            language,
+            f"- Seção: **{target_sec['title'] if target_sec else 'N/A'}**\n",
+            f"- Section: **{target_sec['title'] if target_sec else 'N/A'}**\n",
+        )
+        + _localized_text(
+            language,
+            f"- Evidências MongoDB: **{len(chunks)} chunks**\n",
+            f"- MongoDB evidence: **{len(chunks)} chunks**\n",
+        )
         + _localized_text(
             language,
             f"- Fontes/autores (aproximação pelos arquivos/links citados): {', '.join(authors_hint[:6]) if authors_hint else 'não identificado'}\n\n",
             f"- Sources/authors (approximated from cited files/links): {', '.join(authors_hint[:6]) if authors_hint else 'not identified'}\n\n",
         )
-        + _localized_text(language, f"**Trecho alvo:**\n{target_para['text'][:700]}\n\n", f"**Target excerpt:**\n{target_para['text'][:700]}\n\n")
-        + _localized_text(language, f"**Evidência principal:**\n{evidence[:1800]}", f"**Primary evidence:**\n{evidence[:1800]}")
+        + _localized_text(
+            language,
+            f"**Trecho alvo:**\n{target_para['text'][:700]}\n\n",
+            f"**Target excerpt:**\n{target_para['text'][:700]}\n\n",
+        )
+        + _localized_text(
+            language,
+            f"**Evidência principal:**\n{evidence[:1800]}",
+            f"**Primary evidence:**\n{evidence[:1800]}",
+        )
     )
     return msg, {
         "section": target_sec["title"] if target_sec else "",
@@ -2425,11 +2813,11 @@ def _confirm_paragraph(markdown: str, user_text: str) -> tuple[str, dict]:
 
 def _suggest_more_documents(user_text: str, allow_web: bool) -> tuple[str, dict]:
     """Suggests more documents related to the user's query, using both local MongoDB evidence and optional web search.
-    
+
     Args:
         user_text (str): The user's input text, which may contain a query and/or a quoted snippet.
         allow_web (bool): A flag indicating whether web search is enabled for finding related documents.
-    
+
     Returns:
         Tuple [str, dict]: A tuple containing the message with suggested documents and a metadata dictionary with search details.
     """
@@ -2438,29 +2826,56 @@ def _suggest_more_documents(user_text: str, allow_web: bool) -> tuple[str, dict]
     query = snippet or user_text
 
     local_chunks = search_chunks(query[:600], k=5)
-    local_msg = "\n".join(f"- Local evidence chunk {i+1}: {chunk[:180]}..." for i, chunk in enumerate(local_chunks[:3]))
+    local_msg = "\n".join(
+        f"- Local evidence chunk {i + 1}: {chunk[:180]}..."
+        for i, chunk in enumerate(local_chunks[:3])
+    )
 
     if not allow_web:
         msg = (
-            _localized_text(language, "### Documentos relacionados (modo local)\n", "### Related documents (local mode)\n")
-            + _localized_text(language, "Use 'search on internet' na pergunta para incluir documentos web.\n\n", "Use 'search on internet' in your request to include web documents.\n\n")
+            _localized_text(
+                language,
+                "### Documentos relacionados (modo local)\n",
+                "### Related documents (local mode)\n",
+            )
+            + _localized_text(
+                language,
+                "Use 'search on internet' na pergunta para incluir documentos web.\n\n",
+                "Use 'search on internet' in your request to include web documents.\n\n",
+            )
             + f"{local_msg or _localized_text(language, '- Sem evidência local retornada.', '- No local evidence returned.')}"
         )
         return msg, {"source": "mongo", "chunks": len(local_chunks)}
 
     web = search_tavily_incremental(query=query[:400], previous_urls=[], max_results=5)
     urls = web.get("new_urls", [])[:3]
-    extracted = extract_tavily.invoke({"urls": urls, "include_images": False}) if urls else {"extracted": []}
+    extracted = (
+        extract_tavily.invoke({"urls": urls, "include_images": False})
+        if urls
+        else {"extracted": []}
+    )
 
-    lines = [_localized_text(language, "### Documentos relacionados (local + web)", "### Related documents (local + web)")]
+    lines = [
+        _localized_text(
+            language,
+            "### Documentos relacionados (local + web)",
+            "### Related documents (local + web)",
+        )
+    ]
     if local_msg:
         lines += ["**MongoDB**", local_msg]
     if urls:
         lines += ["\n**Web (Tavily)**"]
         for idx, item in enumerate(extracted.get("extracted", [])[:3], start=1):
-            lines.append(f"- [{idx}] {item.get('title','(sem título)')} — {item.get('url','')}")
+            lines.append(f"- [{idx}] {item.get('title', '(sem título)')} — {item.get('url', '')}")
     else:
-        lines.append(_localized_text(language, "- Nenhum novo URL web encontrado.", "- No new web URL was found."))
+        lines.append(
+            _localized_text(
+                language,
+                "- Nenhum novo URL web encontrado.",
+                "- No new web URL was found.",
+            )
+        )
 
     return "\n".join(lines), {
         "source": "mongo+web",
@@ -2485,26 +2900,42 @@ def _build_edit_proposal(markdown: str, user_text: str, allow_web: bool) -> tupl
     sections = _split_sections(markdown)
     sec_idx = _resolve_section_index(user_text, sections)
     if sec_idx is None:
-        return _localized_text(language, "Não consegui identificar a seção alvo para edição.", "I couldn't identify the target section for editing."), {}
+        return (
+            _localized_text(
+                language,
+                "Não consegui identificar a seção alvo para edição.",
+                "I couldn't identify the target section for editing.",
+            ),
+            {},
+        )
 
     section = sections[sec_idx]
     p_idx = _resolve_paragraph_index(user_text, len(section.get("paragraphs", [])))
     if p_idx is None:
         p_idx = 0 if section.get("paragraphs") else None
     if p_idx is None:
-        return _localized_text(language, "A seção alvo não possui parágrafos editáveis.", "The target section has no editable paragraphs."), {}
+        return (
+            _localized_text(
+                language,
+                "A seção alvo não possui parágrafos editáveis.",
+                "The target section has no editable paragraphs.",
+            ),
+            {},
+        )
 
     paragraph = section["paragraphs"][p_idx]
     evidence_chunks = search_chunks(paragraph["text"][:600], k=5)
 
     web_context = ""
     if allow_web:
-        web = search_tavily_incremental(query=paragraph["text"][:350], previous_urls=[], max_results=3)
+        web = search_tavily_incremental(
+            query=paragraph["text"][:350], previous_urls=[], max_results=3
+        )
         urls = web.get("new_urls", [])[:2]
         if urls:
             ext = extract_tavily.invoke({"urls": urls, "include_images": False})
             web_context = "\n\nWEB SOURCES:\n" + "\n\n".join(
-                f"URL: {item.get('url','')}\nTITLE: {item.get('title','')}\nCONTENT: {str(item.get('content',''))[:1200]}"
+                f"URL: {item.get('url', '')}\nTITLE: {item.get('title', '')}\nCONTENT: {str(item.get('content', ''))[:1200]}"
                 for item in ext.get("extracted", [])
             )
 
@@ -2512,7 +2943,7 @@ def _build_edit_proposal(markdown: str, user_text: str, allow_web: bool) -> tupl
         "academic/edit_paragraph_suggestions",
         user_instruction=user_text,
         current_year=datetime.now().year,
-        original_paragraph=paragraph['text'],
+        original_paragraph=paragraph["text"],
         evidence_chunks="\n".join(evidence_chunks[:3]),
         web_context=web_context,
     )
@@ -2533,11 +2964,31 @@ def _build_edit_proposal(markdown: str, user_text: str, allow_web: bool) -> tupl
     }
 
     preview = (
-        _localized_text(language, "### Proposta de edição (pendente)\n", "### Edit proposal (pending)\n")
-        + _localized_text(language, f"- Alvo: **{section['title']}**, parágrafo **{p_idx+1}**\n", f"- Target: **{section['title']}**, paragraph **{p_idx+1}**\n")
-        + _localized_text(language, "- Ação necessária: clique em **Confirm Edit** para aplicar.\n\n", "- Required action: click **Confirm Edit** to apply it.\n\n")
-        + _localized_text(language, f"**Antes**\n{proposal['before'][:1200]}\n\n", f"**Before**\n{proposal['before'][:1200]}\n\n")
-        + _localized_text(language, f"**Depois (proposto)**\n{proposal['after'][:1200]}", f"**After (proposed)**\n{proposal['after'][:1200]}")
+        _localized_text(
+            language,
+            "### Proposta de edição (pendente)\n",
+            "### Edit proposal (pending)\n",
+        )
+        + _localized_text(
+            language,
+            f"- Alvo: **{section['title']}**, parágrafo **{p_idx + 1}**\n",
+            f"- Target: **{section['title']}**, paragraph **{p_idx + 1}**\n",
+        )
+        + _localized_text(
+            language,
+            "- Ação necessária: clique em **Confirm Edit** para aplicar.\n\n",
+            "- Required action: click **Confirm Edit** to apply it.\n\n",
+        )
+        + _localized_text(
+            language,
+            f"**Antes**\n{proposal['before'][:1200]}\n\n",
+            f"**Before**\n{proposal['before'][:1200]}\n\n",
+        )
+        + _localized_text(
+            language,
+            f"**Depois (proposto)**\n{proposal['after'][:1200]}",
+            f"**After (proposed)**\n{proposal['after'][:1200]}",
+        )
     )
     return preview, proposal
 
@@ -2558,15 +3009,31 @@ def start_review_session(
     Returns:
         tuple: A tuple containing the updated chat history, session state, status message, and the content of the working copy.
     """
-    language = _detect_user_language(" ".join(
-        str(msg.get("content", "")) for msg in (history or [])[-3:] if isinstance(msg, dict)
-    ))
+    language = _detect_user_language(
+        " ".join(
+            str(msg.get("content", "")) for msg in (history or [])[-3:] if isinstance(msg, dict)
+        )
+    )
     if not review_file or not os.path.exists(review_file):
-        return history, session_state, _localized_text(language, "❌ Arquivo não encontrado.", "❌ File not found."), ""
+        return (
+            history,
+            session_state,
+            _localized_text(language, "❌ Arquivo não encontrado.", "❌ File not found."),
+            "",
+        )
 
     normalized = os.path.normpath(review_file)
     if not normalized.startswith("reviews/"):
-        return history, session_state, _localized_text(language, "❌ Apenas arquivos em reviews/ são permitidos.", "❌ Only files inside reviews/ are allowed."), ""
+        return (
+            history,
+            session_state,
+            _localized_text(
+                language,
+                "❌ Apenas arquivos em reviews/ são permitidos.",
+                "❌ Only files inside reviews/ are allowed.",
+            ),
+            "",
+        )
 
     working_copy = _working_copy_path(normalized)
     shutil.copyfile(normalized, working_copy)
@@ -2599,7 +3066,12 @@ def start_review_session(
             ),
         }
     ]
-    return history, state, _localized_text(language, "✅ Sessão pronta", "✅ Session ready"), content
+    return (
+        history,
+        state,
+        _localized_text(language, "✅ Sessão pronta", "✅ Session ready"),
+        content,
+    )
 
 
 def review_chat_turn(
@@ -2608,24 +3080,37 @@ def review_chat_turn(
     session_state: dict,
     web_enabled: bool = False,
 ) -> tuple[list, dict, str, str]:
-    
     """Handles a chat turn during the review session, processing the user's message and updating the session state accordingly.
-    
+
     Args:
         user_msg (str): The message input by the user in the chat.
         history (list): The list of previous messages in the chat history, where each message is a dictionary with 'role' and 'content' keys.
         session_state (dict): The current state of the review session, containing information such as the working copy path, current markdown content, pending edits, and retrieval trace.
         web_enabled (bool, optional): A flag indicating whether web search is enabled for reference retrieval. Defaults to False.
-    
+
     Returns:
         tuple: A tuple containing the updated chat history (list), the updated session state (dict
     """
     language = _detect_user_language(user_msg)
     session_state["last_language"] = language
     if not session_state or not session_state.get("working_copy_path"):
-        return history, session_state, _localized_text(language, "❌ Inicie uma sessão selecionando um arquivo.", "❌ Start a session by selecting a file."), ""
+        return (
+            history,
+            session_state,
+            _localized_text(
+                language,
+                "❌ Inicie uma sessão selecionando um arquivo.",
+                "❌ Start a session by selecting a file.",
+            ),
+            "",
+        )
     if not user_msg.strip():
-        return history, session_state, _localized_text(language, "⚠️ Mensagem vazia.", "⚠️ Empty message."), _read_md(session_state.get("working_copy_path"))
+        return (
+            history,
+            session_state,
+            _localized_text(language, "⚠️ Mensagem vazia.", "⚠️ Empty message."),
+            _read_md(session_state.get("working_copy_path")),
+        )
 
     working_copy = session_state["working_copy_path"]
     markdown = _read_md(working_copy)
@@ -2658,7 +3143,12 @@ def review_chat_turn(
                 {"role": "assistant", "content": reply},
             ]
             session_state["chat_history"] = history
-            return history, session_state, _localized_text(language, "✅ Cancelado", "✅ Canceled"), _read_md(working_copy)
+            return (
+                history,
+                session_state,
+                _localized_text(language, "✅ Cancelado", "✅ Canceled"),
+                _read_md(working_copy),
+            )
 
         if _is_affirmative_confirmation(user_msg):
             if pending_intent == "list_all":
@@ -2667,7 +3157,9 @@ def review_chat_turn(
                     str(pending_reference_action.get("original_message") or ""),
                     allow_web=allow_web,
                 )
-                status_msg = _localized_text(language, "✅ Referências listadas", "✅ References listed")
+                status_msg = _localized_text(
+                    language, "✅ Referências listadas", "✅ References listed"
+                )
                 trace_action = "reference_pipeline_list_all"
             elif pending_intent == "format_provided":
                 requires_web = bool(pending_reference_action.get("requires_web"))
@@ -2688,16 +3180,31 @@ def review_chat_turn(
                     ]
                     session_state["chat_history"] = history
                     session_state["awaiting_reference_confirmation"] = True
-                    return history, session_state, _localized_text(language, "⚠️ Habilite web para continuar", "⚠️ Enable web to continue"), _read_md(working_copy)
+                    return (
+                        history,
+                        session_state,
+                        _localized_text(
+                            language,
+                            "⚠️ Habilite web para continuar",
+                            "⚠️ Enable web to continue",
+                        ),
+                        _read_md(working_copy),
+                    )
 
                 reply, ref_meta = _handle_format_provided_references_request(
                     str(pending_reference_action.get("original_message") or ""),
                     allow_web=allow_web,
                 )
-                status_msg = _localized_text(language, "✅ Fontes formatadas", "✅ Sources formatted")
+                status_msg = _localized_text(
+                    language, "✅ Fontes formatadas", "✅ Sources formatted"
+                )
                 trace_action = "reference_pipeline_format_provided"
             else:
-                reply = _localized_text(language, "Ação pendente inválida. Reinicie o comando.", "Invalid pending action. Please send the command again.")
+                reply = _localized_text(
+                    language,
+                    "Ação pendente inválida. Reinicie o comando.",
+                    "Invalid pending action. Please send the command again.",
+                )
                 history = history + [
                     {"role": "user", "content": user_msg},
                     {"role": "assistant", "content": reply},
@@ -2705,7 +3212,12 @@ def review_chat_turn(
                 session_state["chat_history"] = history
                 session_state["pending_reference_action"] = {}
                 session_state["awaiting_reference_confirmation"] = False
-                return history, session_state, _localized_text(language, "❌ Erro de estado", "❌ State error"), _read_md(working_copy)
+                return (
+                    history,
+                    session_state,
+                    _localized_text(language, "❌ Erro de estado", "❌ State error"),
+                    _read_md(working_copy),
+                )
 
             history = history + [
                 {"role": "user", "content": user_msg},
@@ -2714,17 +3226,21 @@ def review_chat_turn(
             session_state["chat_history"] = history
             session_state["pending_reference_action"] = {}
             session_state["awaiting_reference_confirmation"] = False
-            session_state.setdefault("retrieval_trace", []).append({
-                "action": trace_action,
-                "web": allow_web,
-                "at": datetime.now().isoformat(timespec="seconds"),
-                "tool_calls": [],
-                "meta": ref_meta,
-            })
+            session_state.setdefault("retrieval_trace", []).append(
+                {
+                    "action": trace_action,
+                    "web": allow_web,
+                    "at": datetime.now().isoformat(timespec="seconds"),
+                    "tool_calls": [],
+                    "meta": ref_meta,
+                }
+            )
             return history, session_state, status_msg, _read_md(working_copy)
 
         if reference_intent in {"list_all", "format_provided"}:
-            prompt, pending_data = _build_reference_confirmation_prompt(reference_intent, user_msg, allow_web=allow_web)
+            prompt, pending_data = _build_reference_confirmation_prompt(
+                reference_intent, user_msg, allow_web=allow_web
+            )
             session_state["pending_reference_action"] = pending_data
             session_state["awaiting_reference_confirmation"] = True
             history = history + [
@@ -2732,7 +3248,12 @@ def review_chat_turn(
                 {"role": "assistant", "content": prompt},
             ]
             session_state["chat_history"] = history
-            return history, session_state, _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"), _read_md(working_copy)
+            return (
+                history,
+                session_state,
+                _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"),
+                _read_md(working_copy),
+            )
 
         reply = _localized_text(
             language,
@@ -2744,10 +3265,17 @@ def review_chat_turn(
             {"role": "assistant", "content": reply},
         ]
         session_state["chat_history"] = history
-        return history, session_state, _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"), _read_md(working_copy)
+        return (
+            history,
+            session_state,
+            _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"),
+            _read_md(working_copy),
+        )
 
     if reference_intent == "list_all":
-        reply, pending_data = _build_reference_confirmation_prompt(reference_intent, user_msg, allow_web=allow_web)
+        reply, pending_data = _build_reference_confirmation_prompt(
+            reference_intent, user_msg, allow_web=allow_web
+        )
         history = history + [
             {"role": "user", "content": user_msg},
             {"role": "assistant", "content": reply},
@@ -2755,10 +3283,17 @@ def review_chat_turn(
         session_state["chat_history"] = history
         session_state["pending_reference_action"] = pending_data
         session_state["awaiting_reference_confirmation"] = True
-        return history, session_state, _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"), _read_md(working_copy)
+        return (
+            history,
+            session_state,
+            _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"),
+            _read_md(working_copy),
+        )
 
     if reference_intent == "format_provided":
-        reply, pending_data = _build_reference_confirmation_prompt(reference_intent, user_msg, allow_web=allow_web)
+        reply, pending_data = _build_reference_confirmation_prompt(
+            reference_intent, user_msg, allow_web=allow_web
+        )
         history = history + [
             {"role": "user", "content": user_msg},
             {"role": "assistant", "content": reply},
@@ -2766,7 +3301,12 @@ def review_chat_turn(
         session_state["chat_history"] = history
         session_state["pending_reference_action"] = pending_data
         session_state["awaiting_reference_confirmation"] = True
-        return history, session_state, _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"), _read_md(working_copy)
+        return (
+            history,
+            session_state,
+            _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"),
+            _read_md(working_copy),
+        )
 
     if reference_intent == "resolve_numbers":
         reply, ref_meta = _handle_resolve_numbers_request(markdown, user_msg, allow_web=allow_web)
@@ -2775,14 +3315,21 @@ def review_chat_turn(
             {"role": "assistant", "content": reply},
         ]
         session_state["chat_history"] = history
-        session_state.setdefault("retrieval_trace", []).append({
-            "action": "reference_pipeline",
-            "web": allow_web,
-            "at": datetime.now().isoformat(timespec="seconds"),
-            "tool_calls": [],
-            "meta": ref_meta,
-        })
-        return history, session_state, _localized_text(language, "✅ Referências processadas", "✅ References processed"), _read_md(working_copy)
+        session_state.setdefault("retrieval_trace", []).append(
+            {
+                "action": "reference_pipeline",
+                "web": allow_web,
+                "at": datetime.now().isoformat(timespec="seconds"),
+                "tool_calls": [],
+                "meta": ref_meta,
+            }
+        )
+        return (
+            history,
+            session_state,
+            _localized_text(language, "✅ Referências processadas", "✅ References processed"),
+            _read_md(working_copy),
+        )
 
     if _is_citation_usage_query(user_msg):
         reply = _list_paragraphs_using_citation(markdown, user_msg)
@@ -2791,13 +3338,20 @@ def review_chat_turn(
             {"role": "assistant", "content": reply},
         ]
         session_state["chat_history"] = history
-        session_state.setdefault("retrieval_trace", []).append({
-            "action": "local_citation_lookup",
-            "web": False,
-            "at": datetime.now().isoformat(timespec="seconds"),
-            "tool_calls": [],
-        })
-        return history, session_state, _localized_text(language, "✅ Sessão ativa", "✅ Session active"), _read_md(working_copy)
+        session_state.setdefault("retrieval_trace", []).append(
+            {
+                "action": "local_citation_lookup",
+                "web": False,
+                "at": datetime.now().isoformat(timespec="seconds"),
+                "tool_calls": [],
+            }
+        )
+        return (
+            history,
+            session_state,
+            _localized_text(language, "✅ Sessão ativa", "✅ Session active"),
+            _read_md(working_copy),
+        )
 
     # ── Run the ReAct review agent ────────────────────────────────────
     try:
@@ -2817,7 +3371,12 @@ def review_chat_turn(
             {"role": "assistant", "content": reply},
         ]
         session_state["chat_history"] = history
-        return history, session_state, _localized_text(language, "❌ Erro no agente", "❌ Agent error"), _read_md(working_copy)
+        return (
+            history,
+            session_state,
+            _localized_text(language, "❌ Erro no agente", "❌ Agent error"),
+            _read_md(working_copy),
+        )
 
     action = result.get("action", "answer")
     reply = result.get("reply", "")
@@ -2826,7 +3385,11 @@ def review_chat_turn(
     if action == "apply_edit":
         proposal = session_state.get("pending_edit") or {}
         if not proposal:
-            reply = _localized_text(language, "Não há edição pendente para confirmar.", "There is no pending edit to confirm.")
+            reply = _localized_text(
+                language,
+                "Não há edição pendente para confirmar.",
+                "There is no pending edit to confirm.",
+            )
         else:
             start = int(proposal["start"])
             end = int(proposal["end"])
@@ -2856,8 +3419,12 @@ def review_chat_turn(
         session_state["pending_edit"] = {}
         reply = _localized_text(
             language,
-            "🗑️ Edição pendente cancelada." if has_pending else "Não havia edição pendente para cancelar.",
-            "🗑️ Pending edit canceled." if has_pending else "There was no pending edit to cancel.",
+            (
+                "🗑️ Edição pendente cancelada."
+                if has_pending
+                else "Não havia edição pendente para cancelar."
+            ),
+            ("🗑️ Pending edit canceled." if has_pending else "There was no pending edit to cancel."),
         )
 
     elif action == "edit_proposal":
@@ -2916,11 +3483,11 @@ def confirm_review_edit(
     session_state: dict,
 ) -> tuple[list, dict, str, str]:
     """Confirm and apply the pending edit in the review session.
-    
+
     Args:
         history: The current chat history.
         session_state: The current session state, expected to contain 'pending_edit'.
-    
+
     Returns:
         Updated history, session_state, status message, and the refreshed markdown content.
     """
@@ -2934,11 +3501,11 @@ def cancel_review_edit(
     session_state: dict,
 ) -> tuple[list, dict, str, str]:
     """Cancel the pending edit in the review session.
-    
+
     Args:
         history: The current chat history.
         session_state: The current session state, expected to contain 'pending_edit'.
-    
+
     Returns:
         Updated history, session_state, status message, and the current markdown content.
     """
@@ -2953,20 +3520,34 @@ def save_review_manual_edit(
     session_state: dict,
 ) -> tuple[list, dict, str, str]:
     """Save manual edits made directly in the text editor.
-    
+
     Args:
         edited_text: The full text from the editor after manual changes.
         history: The current chat history.
         session_state: The current session state, expected to contain 'working_copy_path'.
-    
+
     Returns:
         Updated history, session_state, status message, and the refreshed markdown content.
     """
     language = (session_state or {}).get("last_language", "pt")
     if not session_state or not session_state.get("working_copy_path"):
-        return history, session_state, _localized_text(language, "❌ Nenhuma sessão ativa.", "❌ No active session."), ""
+        return (
+            history,
+            session_state,
+            _localized_text(language, "❌ Nenhuma sessão ativa.", "❌ No active session."),
+            "",
+        )
     if not edited_text.strip():
-        return history, session_state, _localized_text(language, "⚠️ Texto vazio — nada salvo.", "⚠️ Empty text — nothing was saved."), _read_md(session_state.get("working_copy_path"))
+        return (
+            history,
+            session_state,
+            _localized_text(
+                language,
+                "⚠️ Texto vazio — nada salvo.",
+                "⚠️ Empty text — nothing was saved.",
+            ),
+            _read_md(session_state.get("working_copy_path")),
+        )
 
     working_copy = session_state["working_copy_path"]
     _atomic_write(working_copy, edited_text)
@@ -2985,4 +3566,9 @@ def save_review_manual_edit(
         },
     ]
     session_state["chat_history"] = history
-    return history, session_state, _localized_text(language, "✅ Edição manual salva", "✅ Manual edit saved"), refreshed
+    return (
+        history,
+        session_state,
+        _localized_text(language, "✅ Edição manual salva", "✅ Manual edit saved"),
+        refreshed,
+    )

@@ -9,19 +9,17 @@ generate_fallback_abnt : produce a minimal ABNT-like citation from a file path/U
 
 import re
 from pathlib import Path
-from typing import Optional
-
 
 _BIBTEX_PATTERNS = {
-    'author':  r'author\s*=\s*["{]([^"}]+)["}]',
-    'title':   r'title\s*=\s*["{]([^"}]+)["}]',
-    'year':    r'year\s*=\s*["{]?(\d{4})',
-    'journal': r'journal\s*=\s*["{]([^"}]+)["}]',
-    'doi':     r'doi\s*=\s*["{]([^"}]+)["}]',
+    "author": r'author\s*=\s*["{]([^"}]+)["}]',
+    "title": r'title\s*=\s*["{]([^"}]+)["}]',
+    "year": r'year\s*=\s*["{]?(\d{4})',
+    "journal": r'journal\s*=\s*["{]([^"}]+)["}]',
+    "doi": r'doi\s*=\s*["{]([^"}]+)["}]',
 }
 
 
-def bibtex_to_abnt(bibtex: str, url: Optional[str] = None) -> str:
+def bibtex_to_abnt(bibtex: str, url: str | None = None) -> str:
     """Convert a BibTeX entry to a simplified ABNT-style citation string.
 
     Format: ``Author. Title. Journal, Year. DOI: … | Disponível em: …``
@@ -29,7 +27,7 @@ def bibtex_to_abnt(bibtex: str, url: Optional[str] = None) -> str:
     Args:
         bibtex: A string containing the BibTeX entry.
         url: Optional URL to include if DOI is not available.
-    
+
     Returns:
         A string formatted in a simplified ABNT citation style.
     """
@@ -39,16 +37,13 @@ def bibtex_to_abnt(bibtex: str, url: Optional[str] = None) -> str:
         if match:
             extracted[key] = match.group(1).strip()
 
-    author = extracted.get('author', 'Unknown Author')
-    year = extracted.get('year', 'n.d.')
-    title = extracted.get('title', 'Unknown Title')
-    journal = extracted.get('journal', '')
-    doi = extracted.get('doi', '')
+    author = extracted.get("author", "Unknown Author")
+    year = extracted.get("year", "n.d.")
+    title = extracted.get("title", "Unknown Title")
+    journal = extracted.get("journal", "")
+    doi = extracted.get("doi", "")
 
-    if journal:
-        abnt = f"{author}. {title}. {journal}, {year}."
-    else:
-        abnt = f"{author}. {title}, {year}."
+    abnt = f"{author}. {title}. {journal}, {year}." if journal else f"{author}. {title}, {year}."
 
     if doi:
         abnt += f" DOI: {doi}"
@@ -60,10 +55,10 @@ def bibtex_to_abnt(bibtex: str, url: Optional[str] = None) -> str:
 
 def generate_fallback_abnt(file_path: str) -> str:
     """Return a minimal ABNT-like citation when no bibliographic data is available.
-    
+
     Args:
         file_path: The path or URL of the file to generate a citation for.
-    
+
     Returns:
         A string in the format "FileName. Disponível em: file_path".
     """

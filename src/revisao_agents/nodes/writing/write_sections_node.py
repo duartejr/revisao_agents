@@ -2,25 +2,37 @@
 write_sections_node — writes sections using search, extraction and verification
 Part of the nodes/writing subpackage.
 """
+
+# 1. Standard Library Imports
+import logging
 import re
 import time
-import logging
 from datetime import datetime
 
+# 2. Local/Existing Codebase Imports (MOVIDOS PARA CIMA)
+from ...config import (
+    CTX_ABSTRACT_CHARS,
+    DELAY_BETWEEN_SECTIONS,
+    MAX_CORPUS_PROMPT,
+    TECHNICAL_MAX_RESULTS,
+)
+from ...core.schemas.writer_config import WriterConfig
+from ...helpers.anchor_helpers import _ANCHORS_PATTERN
+from ...state import TechnicalWriterState
+from ...utils.file_utils.helpers import summarize_section
+from ...utils.search_utils.tavily_client import search_images, search_web
+from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
+from .phase_runners import (
+    _draft_phase,
+    _extract_with_fallback,
+    _observation_phase,
+    _thought_phase,
+)
+from .verification import _verify_and_correct_section_with_anchor
+
+# 3. Global Variables and Logger (ABAIXO DE TODOS OS IMPORTS)
 logger = logging.getLogger(__name__)
 
-from ...state import TechnicalWriterState
-from ...config import (
-    TECHNICAL_MAX_RESULTS, MAX_CORPUS_PROMPT,
-    CTX_ABSTRACT_CHARS, DELAY_BETWEEN_SECTIONS
-)
-from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
-from ...utils.file_utils.helpers import summarize_section
-from ...core.schemas.writer_config import WriterConfig
-from ...utils.search_utils.tavily_client import search_web, search_images
-from ...helpers.anchor_helpers import _ANCHORS_PATTERN
-from .phase_runners import _thought_phase, _observation_phase, _draft_phase, _extract_with_fallback
-from .verification import _verify_and_correct_section_with_anchor
 
 def write_sections_node(state: TechnicalWriterState) -> dict:
     """Main node for writing sections with search, extraction and verification.
@@ -35,7 +47,7 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
             - "react_log": list of log entries for debugging (optional).
             - "verification_stats": list of dicts with verification statistics per section (optional).
             - "writer_config": dict, optional configuration for writing (e.g., prompt_dir, language, min_sources_per_section).
-    
+
     Returns:
         dict: Updated state with written sections, collected references, cumulative summary, logs, and verification stats.
     """
@@ -46,10 +58,16 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
         "image_desc": "Desc imagem" if is_pt else "Image desc",
         "image_source": "Fonte imagem" if is_pt else "Image source",
         "reliability": "Confiabilidade" if is_pt else "Reliability",
-        "manual_review": "Revisão manual pode ser necessária." if is_pt else "Manual review may be necessary.",
+        "manual_review": (
+            "Revisão manual pode ser necessária." if is_pt else "Manual review may be necessary."
+        ),
         "verification": "Verificação" if is_pt else "Verification",
-        "verified_paragraphs": "dos parágrafos verificados" if is_pt else "of paragraphs verified",
-        "references_section": "Referências desta seção" if is_pt else "References for this section",
+        "verified_paragraphs": (
+            "dos parágrafos verificados" if is_pt else "of paragraphs verified"
+        ),
+        "references_section": (
+            "Referências desta seção" if is_pt else "References for this section"
+        ),
         "section_marker": "Seção" if is_pt else "Section",
     }
     prompt_dir = config.prompt_dir
@@ -73,21 +91,28 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
         resources = section.get("resources", "")
         index_num = section.get("index", pos)
 
-        print(f"\n{'━'*70}")
-        print(f"  [{pos+1}/{n_total}] PROCESSING: {title}")
-        print(f"{'━'*70}")
+        print(f"\n{'━' * 70}")
+        print(f"  [{pos + 1}/{n_total}] PROCESSING: {title}")
+        print(f"{'━' * 70}")
 
         log = [
-            f"\n{'='*70}",
-            f"SECTION [{pos+1}/{n_total}]: {title}",
+            f"\n{'=' * 70}",
+            f"SECTION [{pos + 1}/{n_total}]: {title}",
             f"Timestamp: {datetime.now().isoformat()}",
-            f"{'='*70}",
+            f"{'=' * 70}",
         ]
 
         # PHASE 1: Thought
-        print(f"\n  🧠 PHASE 1 — Thought...")
+        print("\n  🧠 PHASE 1 — Thought...")
         log.append("\n── PHASE 1: THOUGHT ──")
-        plan = _thought_phase(theme, title, expected_content, resources, prompt_dir=prompt_dir, language=config.language)
+        plan = _thought_phase(
+            theme,
+            title,
+            expected_content,
+            resources,
+            prompt_dir=prompt_dir,
+            language=config.language,
+        )
         search_queries = plan.get("search_queries", [f"{theme} {title}"])
         image_queries = plan.get("image_queries", [f"{title} diagram"])
         necessary_information = plan.get("necessary_information", [expected_content[:120]])
@@ -95,7 +120,7 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
         print(f"     Queries: {search_queries}")
 
         # PHASES 2-4: Search + Extraction
-        print(f"\n  🔎 PHASE 2-4 — Search and Extraction...")
+        print("\n  🔎 PHASE 2-4 — Search and Extraction...")
         log.append("\n── PHASE 2-4: SEARCH + EXTRACTION ──")
         extracted = []
         results = []
@@ -104,14 +129,16 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
         # Corpus-first strategy: query existing MongoDB before hitting the web
         _corpus_sufficient = False
         if config.is_corpus_first:
-            print(f"\n  🔬 PHASE 5 — Observation (corpus-first, before search)...")
+            print("\n  🔬 PHASE 5 — Observation (corpus-first, before search)...")
             log.append("\n── PHASE 5: OBSERVATION (corpus-first) ──")
-            obs = _observation_phase(necessary_information, corpus_check, prompt_dir=prompt_dir, language=config.language)
-            _corpus_sufficient = obs.get("sufficient", False)
-            log.append(
-                f"Corpus sufficient: {_corpus_sufficient} | "
-                f"{obs.get('summary', '')[:120]}"
+            obs = _observation_phase(
+                necessary_information,
+                corpus_check,
+                prompt_dir=prompt_dir,
+                language=config.language,
             )
+            _corpus_sufficient = obs.get("sufficient", False)
+            log.append(f"Corpus sufficient: {_corpus_sufficient} | {obs.get('summary', '')[:120]}")
             print(f"     Corpus sufficient: {_corpus_sufficient}")
 
         if not _corpus_sufficient and tavily_enabled:
@@ -133,10 +160,10 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
         log.append(f"Sources extracted: {len(extracted)}")
 
         # MongoDB Indexing / corpus selection
-        print(f"\n  🗄️  Indexing in MongoDB...")
+        print("\n  🗄️  Indexing in MongoDB...")
         log.append("\n── MONGODB INDEXING ──")
         slug_section = re.sub(r"[^\w]", "_", title[:30]).lower()
-        prefix = f"s{pos+1:02d}_{slug_section}"
+        prefix = f"s{pos + 1:02d}_{slug_section}"
 
         if _corpus_sufficient:
             # Reuse the global check corpus — no new documents to index
@@ -157,7 +184,9 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
             res_emergency = search_web(q_emergency, 6)
             corpus_check.tavily_enabled = tavily_enabled
             new_emergency, _, urls_seen = _extract_with_fallback(
-                res_emergency, queries_fallback=[title], urls_tried=urls_seen,
+                res_emergency,
+                queries_fallback=[title],
+                urls_tried=urls_seen,
                 corpus=corpus_check,
             )
             if new_emergency:
@@ -180,11 +209,11 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
 
         # PHASE 5: Observation (skipped in web-first mode)
         if not config.is_corpus_first:
-            print(f"\n  🔬 PHASE 5 — Observation (skipped)...")
+            print("\n  🔬 PHASE 5 — Observation (skipped)...")
             log.append("\n── PHASE 5: OBSERVATION (skipped) ──")
 
         # Images
-        print(f"\n  🖼️  Searching for images...")
+        print("\n  🖼️  Searching for images...")
         images = []
         if tavily_enabled:
             images = search_images(image_queries, max_results=3)
@@ -206,11 +235,20 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
             complete_reference += f"\n\n{labels['images_heading']}:\n{images_text}"
 
         # PHASE 6: Anchored Draft
-        print(f"\n  ✍️  PHASE 6 — Anchored draft...")
+        print("\n  ✍️  PHASE 6 — Anchored draft...")
         log.append("\n── PHASE 6: DRAFT ──")
         draft, urls_used_phase6 = _draft_phase(
-            theme, title, expected_content, resources, complete_reference, section_urls,
-            cumulative_summary, pos, n_total, all_titles, len(extracted),
+            theme,
+            title,
+            expected_content,
+            resources,
+            complete_reference,
+            section_urls,
+            cumulative_summary,
+            pos,
+            n_total,
+            all_titles,
+            len(extracted),
             prompt_dir=prompt_dir,
             language=config.language,
             min_sources=config.min_sources_per_section,
@@ -218,10 +256,10 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
         # Track source map
         source_map_section = {}
         for i, source in enumerate(urls_used_phase6, 1):
-            if hasattr(source, 'id') and hasattr(source, 'url'):
+            if hasattr(source, "id") and hasattr(source, "url"):
                 source_map_section[source.id] = source.url
             elif isinstance(source, dict):
-                source_map_section[source.get('id', i)] = source.get('url', '')
+                source_map_section[source.get("id", i)] = source.get("url", "")
             else:
                 source_map_section[i] = str(source)
 
@@ -232,26 +270,34 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
             print(f"     ⚠️  Only {n_distinct} distinct sources (minimum: {min_src}). Retrying...")
             log.append(f"⚠️  Retry: {n_distinct}/{min_src} distinct sources")
             diversity_hint = (
-                f"\n\n{'━'*60}\n"
+                f"\n\n{'━' * 60}\n"
                 f"MANDATORY INSTRUCTION: Use at least {min_src} DISTINCT sources in this section.\n"
                 f"Distribute citations among different corpus documents.\n"
                 f"DO NOT rely on only 1-2 papers.\n"
-                f"{'━'*60}\n"
+                f"{'━' * 60}\n"
             )
             draft_retry, urls_retry = _draft_phase(
-                theme, title, expected_content, resources,
-                complete_reference + diversity_hint, section_urls,
-                cumulative_summary, pos, n_total, all_titles, len(extracted),
+                theme,
+                title,
+                expected_content,
+                resources,
+                complete_reference + diversity_hint,
+                section_urls,
+                cumulative_summary,
+                pos,
+                n_total,
+                all_titles,
+                len(extracted),
                 prompt_dir=prompt_dir,
                 language=config.language,
                 min_sources=config.min_sources_per_section,
             )
             source_map_retry = {}
             for i, source in enumerate(urls_retry, 1):
-                if hasattr(source, 'id') and hasattr(source, 'url'):
+                if hasattr(source, "id") and hasattr(source, "url"):
                     source_map_retry[source.id] = source.url
                 elif isinstance(source, dict):
-                    source_map_retry[source.get('id', i)] = source.get('url', '')
+                    source_map_retry[source.get("id", i)] = source.get("url", "")
                 else:
                     source_map_retry[i] = str(source)
             n_distinct_retry = len(set(source_map_retry.values()))
@@ -262,16 +308,20 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
                 source_map_section = source_map_retry
                 n_distinct = n_distinct_retry
             else:
-                print(f"     ℹ️  Retry did not improve ({n_distinct_retry} sources). Keeping original.")
+                print(
+                    f"     ℹ️  Retry did not improve ({n_distinct_retry} sources). Keeping original."
+                )
             if n_distinct < min_src:
-                log.append(f"<!-- WARNING: only {n_distinct} distinct sources used (min: {min_src}) -->")
+                log.append(
+                    f"<!-- WARNING: only {n_distinct} distinct sources used (min: {min_src}) -->"
+                )
 
         n_anchors = len(_ANCHORS_PATTERN.findall(draft))
         log.append(f"Draft: {len(draft):,} chars | {n_anchors} anchors (hints)")
         print(f"     {len(draft):,} chars | {n_anchors} anchors")
 
         # PHASE 7: Adaptive verification with REACT loop
-        print(f"\n  🔍 PHASE 7 — Adaptive verification...")
+        print("\n  🔍 PHASE 7 — Adaptive verification...")
         log.append("\n── PHASE 7: ADAPTIVE VERIFICATION (REACT) ──")
         final_text, verification_report, stats = _verify_and_correct_section_with_anchor(
             draft,
@@ -305,22 +355,20 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
             )
             final_text = re.sub(r"(## .+?\n)", r"\1\n" + warning, final_text, count=1)
         elif rate < 60 and stats["total"] > 0:
-            warning = (
-                f"> ℹ️ **{labels['verification']}**: {rate:.0f}% {labels['verified_paragraphs']}.\n\n"
-            )
+            warning = f"> ℹ️ **{labels['verification']}**: {rate:.0f}% {labels['verified_paragraphs']}.\n\n"
             final_text = re.sub(
                 r"(## .+?\n)", r"\1\n" + warning, final_text, count=1, flags=re.DOTALL
             )
 
         # Add per-section references
-        print(f"\n  📚 Adding section references...")
+        print("\n  📚 Adding section references...")
 
         found_citations = set()
-        for match in re.finditer(r'\[(\d+)\]', final_text):
+        for match in re.finditer(r"\[(\d+)\]", final_text):
             num = int(match.group(1))
             found_citations.add(num)
 
-        all_corpus_urls = corpus._used_urls if hasattr(corpus, '_used_urls') else section_urls
+        all_corpus_urls = corpus._used_urls if hasattr(corpus, "_used_urls") else section_urls
 
         section_references = []
         missing_urls = []
@@ -344,18 +392,20 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
             if missing_urls:
                 print(f"     ⚠️  Citations without URL: {missing_urls}")
         else:
-            print(f"     ⚠️  No citations found in this section")
+            print("     ⚠️  No citations found in this section")
 
-        print(f"  ✅ [{pos+1}/{n_total}] Section completed ({rate:.0f}% verified)")
+        print(f"  ✅ [{pos + 1}/{n_total}] Section completed ({rate:.0f}% verified)")
 
-        written_sections.append({
-            "index": index_num,
-            "title": title,
-            "text": final_text,
-            "urls_used": section_urls,
-            "source_map": source_map_section,
-            "images": images,
-        })
+        written_sections.append(
+            {
+                "index": index_num,
+                "title": title,
+                "text": final_text,
+                "urls_used": section_urls,
+                "source_map": source_map_section,
+                "images": images,
+            }
+        )
 
         for u in section_urls:
             if u not in all_refs_urls:
@@ -367,9 +417,13 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
 
         section_summary = summarize_section(title, final_text)
         if cumulative_summary:
-            cumulative_summary += f"\n\n[{labels['section_marker']} {pos+1}: {title}] {section_summary}"
+            cumulative_summary += (
+                f"\n\n[{labels['section_marker']} {pos + 1}: {title}] {section_summary}"
+            )
         else:
-            cumulative_summary = f"[{labels['section_marker']} {pos+1}: {title}] {section_summary}"
+            cumulative_summary = (
+                f"[{labels['section_marker']} {pos + 1}: {title}] {section_summary}"
+            )
         if len(cumulative_summary) > CTX_ABSTRACT_CHARS * 3:
             split_marker = f"\n\n[{labels['section_marker']} "
             parts = cumulative_summary.split(split_marker)

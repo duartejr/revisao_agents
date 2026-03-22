@@ -2,26 +2,27 @@
 consolidate_node — consolidates all written sections into a final document
 Part of the nodes/writing subpackage.
 """
-import re
-import os
+
 import logging
+import os
+import re
 from datetime import datetime
 
-logger = logging.getLogger(__name__)
-
-from ...state import TechnicalWriterState
 from ...config import llm_call
 from ...core.schemas.writer_config import WriterConfig
+from ...state import TechnicalWriterState
 from ...utils.llm_utils.prompt_loader import load_prompt
 from .text_filters import _strip_figure_table_refs
+
+logger = logging.getLogger(__name__)
 
 
 def consolidate_node(state: TechnicalWriterState) -> dict:
     """Consolidates written sections into a final document.
-    
+
     Args:
         state: The current state of the technical writer, containing all sections, stats, and references.
-    
+
     Returns:
         dict: Updated state with consolidation status.
     """
@@ -29,7 +30,9 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
     is_pt = config.language == "pt"
     labels = {
         "type": "Tipo" if is_pt else "Type",
-        "paragraph_verification": "Verificação de parágrafos" if is_pt else "Paragraph verification",
+        "paragraph_verification": (
+            "Verificação de parágrafos" if is_pt else "Paragraph verification"
+        ),
         "verified": "verificados" if is_pt else "verified",
         "approved": "aprovados" if is_pt else "approved",
         "adjusted": "ajustados" if is_pt else "adjusted",
@@ -39,14 +42,15 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
         "summary": "RESUMO" if is_pt else "SUMMARY",
         "introduction": "Introdução" if is_pt else "Introduction",
         "conclusion": "Conclusão" if is_pt else "Conclusion",
-        "references_section": "Referências desta seção" if is_pt else "References for this section",
+        "references_section": (
+            "Referências desta seção" if is_pt else "References for this section"
+        ),
         "paragraphs": "Parágrafos" if is_pt else "Paragraphs",
         "generated": "Gerado" if is_pt else "Generated",
     }
     theme = state["theme"]
     sections = sorted(state["written_sections"], key=lambda s: s["index"])
     all_urls = list(dict.fromkeys(state.get("refs_urls", [])))
-    all_images = state.get("refs_images", [])
     react_log = state.get("react_log", [])
     stats_global = state.get("verification_stats", [])
     final_summary = state.get("cumulative_summary", "")[:1000]
@@ -60,9 +64,11 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
     total_verif = total_aprov + total_ajust
     taxa_global = (total_verif / total_par * 100) if total_par > 0 else 100
 
-    print(f"   📊 {total_verif}/{total_par} verified ({taxa_global:.0f}%) "
-          f"— ✅{total_aprov} approved  🔵{total_ajust} adjusted  "
-          f"🔧{total_corr} corrected | {len(all_urls)} sources")
+    print(
+        f"   📊 {total_verif}/{total_par} verified ({taxa_global:.0f}%) "
+        f"— ✅{total_aprov} approved  🔵{total_ajust} adjusted  "
+        f"🔧{total_corr} corrected | {len(all_urls)} sources"
+    )
 
     titles = [s["title"] for s in sections]
     p_intro = load_prompt(
@@ -87,17 +93,22 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
         f"({taxa_global:.0f}%) — {total_aprov} {labels['approved']}, {total_ajust} {labels['adjusted']}, "
         f"{total_corr} {labels['corrected']} | "
         f"**{labels['sources']}:** {len(all_urls)} | **{labels['sections']}:** {len(sections)}\n",
-        "\n---\n", f"## {labels['summary']}\n", f"- {labels['introduction'].upper()}",
+        "\n---\n",
+        f"## {labels['summary']}\n",
+        f"- {labels['introduction'].upper()}",
     ]
     for s in sections:
         parts.append(f"- {s['title']}")
-    parts += [f"- {labels['conclusion']}", "\n\n---\n",
-               f"## {labels['introduction']}\n", ans_intro.strip(), "\n\n---\n"]
+    parts += [
+        f"- {labels['conclusion']}",
+        "\n\n---\n",
+        f"## {labels['introduction']}\n",
+        ans_intro.strip(),
+        "\n\n---\n",
+    ]
 
     for s in sections:
-        stats_s = next(
-            (x for x in stats_global if x.get("section") == s["title"]), {}
-        )
+        stats_s = next((x for x in stats_global if x.get("section") == s["title"]), {})
         t_s = stats_s.get("total", 0)
         a_s = stats_s.get("approved", 0) + stats_s.get("adjusted", 0)
         r_s = stats_s.get("corrected", 0)
@@ -116,7 +127,7 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
     # ══════════════════════════════════════════════════════════════════
     # GLOBAL CITATION SYNCHRONIZATION + PER-SECTION REFERENCE REBUILD
     # ══════════════════════════════════════════════════════════════════
-    print(f"\n  🔗 Synchronizing global citations...")
+    print("\n  🔗 Synchronizing global citations...")
 
     # 1. Build consolidated source_map: {original_citation_number: url}
     #    Merge all per-section source_maps; keep the first URL seen per index.
@@ -138,8 +149,8 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
 
     # 2. Strip old "### References for this section" blocks before renumbering
     cleaned_document = re.sub(
-        r'\n*###\s+(?:References\s+for\s+this\s+section|Refer[êe]ncias\s+desta\s+se[çc][ãa]o)\s*\n(?:\[?\d+\]?[^\n]*\n?)*',
-        '',
+        r"\n*###\s+(?:References\s+for\s+this\s+section|Refer[êe]ncias\s+desta\s+se[çc][ãa]o)\s*\n(?:\[?\d+\]?[^\n]*\n?)*",
+        "",
         raw_document,
         flags=re.IGNORECASE,
     )
@@ -148,7 +159,7 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
     cleaned_document = _strip_figure_table_refs(cleaned_document)
 
     # 4. Extract all [N] from entire document and create global renumbering
-    original_citations = re.findall(r'\[(\d+)\]', cleaned_document)
+    original_citations = re.findall(r"\[(\d+)\]", cleaned_document)
     unique_citations = []
     seen = set()
     for c in original_citations:
@@ -172,10 +183,10 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
     # 5. Renumber all [N] in the document
     def _renumber(match):
         """Renumber a single citation.
-        
+
         Args:
             match: regex match object for a single [N] citation
-        
+
         Returns:
             the renumbered citation string [new_N]
         """
@@ -183,21 +194,23 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
         new = global_map.get(old, old)
         return f"[{new}]"
 
-    document_sync = re.sub(r'\[(\d+)\]', _renumber, cleaned_document)
+    document_sync = re.sub(r"\[(\d+)\]", _renumber, cleaned_document)
+
     # Also handle [N, M] compound citations
     def _renumber_compound(match):
         """Renumber a compound citation.
-        
+
         Args:
             match: regex match object for a compound [N, M] citation
-        
+
         Returns:
             the renumbered compound citation string [new_N, new_M]
         """
-        nums = re.findall(r'\d+', match.group(0))
+        nums = re.findall(r"\d+", match.group(0))
         new_nums = [str(global_map.get(int(n), int(n))) for n in nums]
         return "[" + ", ".join(new_nums) + "]"
-    document_sync = re.sub(r'\[\d+(?:\s*,\s*\d+)+\]', _renumber_compound, document_sync)
+
+    document_sync = re.sub(r"\[\d+(?:\s*,\s*\d+)+\]", _renumber_compound, document_sync)
 
     n_global_sources = len(global_source_map_sync)
     print(f"     ✅ {n_global_sources} global sources | {len(global_map)} citations remapped")
@@ -206,7 +219,9 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
     #    First, split out the conclusion so it doesn't contaminate the
     #    last section block (the old code skipped any block containing
     #    '## Conclusion', silently dropping the last section's refs).
-    conclusion_match = re.search(r'\n##\s+(?:Conclusion|Conclus[ãa]o)\b', document_sync, re.IGNORECASE)
+    conclusion_match = re.search(
+        r"\n##\s+(?:Conclusion|Conclus[ãa]o)\b", document_sync, re.IGNORECASE
+    )
     if conclusion_match:
         conclusion_idx = conclusion_match.start()
         doc_sections_part = document_sync[:conclusion_idx]
@@ -215,23 +230,23 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
         doc_sections_part = document_sync
         doc_conclusion_part = ""
 
-    section_pattern = re.compile(r'(?=\n<!--\s*(?:Paragraphs|Par[áa]grafos):)', re.IGNORECASE)
+    section_pattern = re.compile(r"(?=\n<!--\s*(?:Paragraphs|Par[áa]grafos):)", re.IGNORECASE)
     section_blocks = section_pattern.split(doc_sections_part)
 
     rebuilt_parts = []
     for block in section_blocks:
         # Only process blocks that contain a numbered section heading
-        if not re.search(r'## \d', block):
+        if not re.search(r"## \d", block):
             rebuilt_parts.append(block)
             continue
 
         # Extract all [N] referenced in block body
         cits_in_block = set()
-        for m in re.finditer(r'\[(\d+)\]', block):
+        for m in re.finditer(r"\[(\d+)\]", block):
             cits_in_block.add(int(m.group(1)))
         # Also handle [N, M]
-        for m in re.finditer(r'\[(\d+(?:\s*,\s*\d+)+)\]', block):
-            for n in re.findall(r'\d+', m.group(1)):
+        for m in re.finditer(r"\[(\d+(?:\s*,\s*\d+)+)\]", block):
+            for n in re.findall(r"\d+", m.group(1)):
                 cits_in_block.add(int(n))
 
         if cits_in_block:
@@ -259,7 +274,7 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
     all_urls_final = list(global_source_map_sync.values())
     # Update the header line with correct source count
     document = re.sub(
-        r'\*\*(?:Sources|Fontes):\*\* \d+',
+        r"\*\*(?:Sources|Fontes):\*\* \d+",
         f"**{labels['sources']}:** {len(all_urls_final)}",
         document,
         count=1,
@@ -288,12 +303,14 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
 
     try:
         header = [
-            "=" * 70, f"REACT AUDIT LOG — {theme}",
+            "=" * 70,
+            f"REACT AUDIT LOG — {theme}",
             f"{labels['generated']}: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             f"{labels['sections']}: {len(sections)} | {labels['sources']}: {len(all_urls)}",
             f"{labels['verified'].capitalize()}: {total_verif}/{total_par} ({taxa_global:.0f}%) "
             f"— {total_aprov} {labels['approved']}, {total_ajust} {labels['adjusted']}, {total_corr} {labels['corrected']}",
-            "=" * 70, "\n── STATS PER SECTION ──",
+            "=" * 70,
+            "\n── STATS PER SECTION ──",
         ]
         for s in stats_global:
             t = s.get("total", 0)

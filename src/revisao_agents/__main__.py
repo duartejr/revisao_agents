@@ -1,14 +1,16 @@
 import glob
 import os
 
+from .agents.reference_formatter_agent import (
+    run_reference_formatter_agent,
+)
+from .config import print_runtime_config_summary, validate_runtime_config
+from .core.schemas.writer_config import WriterConfig
+from .hitl import run_hitl_loop
 from .state import ReviewState, TechnicalWriterState
+from .utils.vector_utils.pdf_ingestor import ingest_pdf_folder
 from .workflows import build_academic_workflow, build_technical_workflow
 from .workflows.technical_writing_workflow import build_technical_writing_workflow
-from .hitl import run_hitl_loop
-from .utils.vector_utils.pdf_ingestor import ingest_pdf_folder
-from .core.schemas.writer_config import WriterConfig
-from .tools.reference_formatter import run_reference_formatter
-from .config import print_runtime_config_summary, validate_runtime_config
 
 
 def main():
@@ -60,7 +62,7 @@ def main():
         return
 
     if choice == "5":
-        run_reference_formatter()
+        run_reference_formatter_agent()
         return
 
     if choice == "3":
@@ -114,7 +116,7 @@ def main():
         tavily_opt = input("\nEnable Tavily? [y/N]: ").strip().lower() or "n"
         tavily_enabled = tavily_opt == "y"
 
-        print(f"\n" + "=" * 70)
+        print("\n" + "=" * 70)
         print(f"WRITING EXECUTION {mode_label}")
         print("=" * 70)
 
@@ -185,7 +187,11 @@ def main():
             break
         choice = ""  # Clear to order again
         print("Enter 1, 2, or 3.")
-    review_types = {"1": ["academic"], "2": ["technical"], "3": ["academic", "technical"]}[e]
+    review_types = {
+        "1": ["academic"],
+        "2": ["technical"],
+        "3": ["academic", "technical"],
+    }[e]
 
     max_p = 3
     try:
@@ -202,25 +208,22 @@ def main():
         print("-" * 70)
 
         state_init: ReviewState = {
-            "theme":                   theme,
-            "review_type":             review_type,
-            "relevant_chunks":      [],
-            "technical_snippets":      [],
-            "technical_urls":          [],
-            "current_plan":            "",
-            "interview_history":   [],
-            "questions_asked":       0,
-            "max_questions":          max_p,
-            "final_plan":            "",
-            "final_plan_path":       "",
-            "status":                 "starting",
+            "theme": theme,
+            "review_type": review_type,
+            "relevant_chunks": [],
+            "technical_snippets": [],
+            "technical_urls": [],
+            "current_plan": "",
+            "interview_history": [],
+            "questions_asked": 0,
+            "max_questions": max_p,
+            "final_plan": "",
+            "final_plan_path": "",
+            "status": "starting",
         }
         config = {"configurable": {"thread_id": f"review_{review_type}_{theme[:20]}"}}
 
-        if review_type == "academic":
-            app = build_academic_workflow()
-        else:
-            app = build_technical_workflow()
+        app = build_academic_workflow() if review_type == "academic" else build_technical_workflow()
 
         try:
             run_hitl_loop(app, config, state_init)
@@ -229,6 +232,7 @@ def main():
             break
         except Exception as ex:
             import traceback
+
             print("\nError:", str(ex))
             traceback.print_exc()
 

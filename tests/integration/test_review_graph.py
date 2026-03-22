@@ -8,6 +8,7 @@ the compatibility graph wrappers. They do not require external API keys.
 """
 
 import importlib.util
+
 import pytest
 
 has_langgraph = importlib.util.find_spec("langgraph") is not None

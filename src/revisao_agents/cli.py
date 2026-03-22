@@ -1,6 +1,7 @@
 import os
 import re
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -9,30 +10,31 @@ from .graphs.review_graph import build_review_graph
 
 console = Console()
 
+
 def resolve_topic(input_value: str) -> str:
     """
     Resolves the input as either raw topic text or a file path containing a topic/plan.
-    
-    If the input is a valid file path, this function attempts to extract the 
-    topic from a structured header (e.g., "**Topic:** ..."). If no header is 
+
+    If the input is a valid file path, this function attempts to extract the
+    topic from a structured header (e.g., "**Topic:** ..."). If no header is
     found, it falls back to the first non-empty line of the file.
 
     Args:
-        input_value (str): A string that is either the topic itself or a path 
+        input_value (str): A string that is either the topic itself or a path
             to a text file.
 
     Returns:
         str: The extracted topic or the original input string if no file exists.
     """
     path = Path(input_value)
-    
+
     # If it's not a file, treat the input as the raw topic text
     if not path.exists() or not path.is_file():
         return input_value.strip()
 
     try:
         content = path.read_text(encoding="utf-8")
-        
+
         # Look for a common header pattern (Case-insensitive 'Topic' or 'Tema')
         match = re.search(r"\*\*(?:Topic|Theme|Tema|T[óo]pico):\*\*\s*(.+)", content, re.IGNORECASE)
         if match:
@@ -41,7 +43,7 @@ def resolve_topic(input_value: str) -> str:
         # Fallback: Extract the first non-empty line
         first_line = next((line.strip() for line in content.splitlines() if line.strip()), "")
         return first_line or input_value.strip()
-        
+
     except Exception:
         # If file reading fails for any reason, return the original input
         return input_value.strip()
@@ -56,7 +58,7 @@ def _run_planning_until_complete(
     debug: bool,
 ) -> dict:
     """Execute planning graph with automatic HITL responses until completion.
-    
+
     Args:
         graph: the compiled review graph to execute
         theme: the review topic/theme
@@ -64,7 +66,7 @@ def _run_planning_until_complete(
         rounds: number of refinement rounds for HITL steps
         auto_response: the response to use for all HITL prompts
         debug: whether to print intermediate events
-    
+
     Returns:
         the final state dict after graph execution completes
     """
@@ -108,16 +110,26 @@ def _run_planning_until_complete(
 
 
 def main(
-    input_value: str = typer.Argument(..., help="Review theme or path to file containing theme/plan"),
-    review_type: str = typer.Option("academic", "--review-type", "-t", help="Type: academic or technical"),  # noqa: B008
-    rounds: int = typer.Option(3, "--rounds", "-r", help="Number of refinement rounds"),  # noqa: B008
-    output_file: Path = typer.Option(None, "--output", "-o", help="Save final plan to file (optional)"),  # noqa: B008
-    model: str = typer.Option("", "--model", help="LLM model to use (optional)"),  # noqa: B008
-    auto_response: str = typer.Option("Keep the current plan.", "--auto-response", help="Automatic response for HITL steps"),  # noqa: B008
-    debug: bool = typer.Option(False, "--debug", help="Verbose mode"),  # noqa: B008
-):
+    input_value: Annotated[
+        str,
+        typer.Argument(..., help="Review theme or path to file containing theme/plan"),
+    ],
+    review_type: Annotated[
+        str, typer.Option("--review-type", "-t", help="Type: academic or technical")
+    ] = "academic",
+    rounds: Annotated[int, typer.Option("--rounds", "-r", help="Number of refinement rounds")] = 3,
+    output_file: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Save final plan to file (optional)"),
+    ] = None,
+    model: Annotated[str, typer.Option("--model", help="LLM model to use (optional)")] = "",
+    auto_response: Annotated[
+        str, typer.Option("--auto-response", help="Automatic response for HITL steps")
+    ] = "Keep the current plan.",
+    debug: Annotated[bool, typer.Option("--debug", help="Verbose mode")] = False,
+) -> None:
     """Execute academic/technical planning until final plan is generated.
-    
+
     Args:
         input_value: either the review theme text or a path to a text file containing the theme/plan
         review_type: "academic" or "technical"
@@ -126,7 +138,7 @@ def main(
         model: optional LLM model name to set via environment variable
         auto_response: response to use for all HITL prompts (default: "Keep the current plan.")
         debug: whether to print intermediate events during execution
-    
+
     Returns:
         None (prints final plan and optionally saves to file)
     """
@@ -135,7 +147,9 @@ def main(
 
     review_type_norm = review_type.strip().lower()
     if review_type_norm not in {"academic", "technical"}:
-        console.print("[bold red]Error:[/bold red] --review-type must be 'academic' or 'technical'.")
+        console.print(
+            "[bold red]Error:[/bold red] --review-type must be 'academic' or 'technical'."
+        )
         raise typer.Exit(2)
 
     theme = resolve_topic(input_value)
@@ -143,7 +157,9 @@ def main(
         console.print("[bold red]Error:[/bold red] theme is empty after reading the argument/file.")
         raise typer.Exit(2)
 
-    console.print(f"[bold green]Starting planning:[/bold green] {review_type_norm} | theme={theme!r}")
+    console.print(
+        f"[bold green]Starting planning:[/bold green] {review_type_norm} | theme={theme!r}"
+    )
 
     try:
         graph = build_review_graph(review_type=review_type_norm)

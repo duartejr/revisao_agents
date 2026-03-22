@@ -1,12 +1,18 @@
 import os
-from typing import Any, List
+from typing import Any
+
 import pymongo
-from pymongo.collection import Collection
 from openai import OpenAI
+from pymongo.collection import Collection
 
 from ...config import (
-    MONGODB_URI, MONGODB_DB, MONGODB_COLLECTION,
-    VECTOR_INDEX_NAME, CHUNK_MAX_CHARS, MAX_CHUNKS_TOTAL, CHUNKS_CACHE_DIR
+    CHUNK_MAX_CHARS,
+    CHUNKS_CACHE_DIR,
+    MAX_CHUNKS_TOTAL,
+    MONGODB_COLLECTION,
+    MONGODB_DB,
+    MONGODB_URI,
+    VECTOR_INDEX_NAME,
 )
 
 _client = None
@@ -24,7 +30,7 @@ def _project_root() -> str:
 
 def _resolve_chunk_path(file_path: str) -> str:
     """Resolves the file path for a chunk's content, checking absolute path, project root, and cache directory.
-    
+
     Args:
         file_path: The original file path stored in MongoDB for the chunk content.
     Returns:
@@ -40,7 +46,11 @@ def _resolve_chunk_path(file_path: str) -> str:
     if os.path.exists(candidate):
         return candidate
 
-    cache_dir = CHUNKS_CACHE_DIR if os.path.isabs(CHUNKS_CACHE_DIR) else os.path.abspath(os.path.join(root, CHUNKS_CACHE_DIR))
+    cache_dir = (
+        CHUNKS_CACHE_DIR
+        if os.path.isabs(CHUNKS_CACHE_DIR)
+        else os.path.abspath(os.path.join(root, CHUNKS_CACHE_DIR))
+    )
     by_basename = os.path.join(cache_dir, os.path.basename(file_path))
     if os.path.exists(by_basename):
         return by_basename
@@ -63,15 +73,16 @@ def _read_chunk_text(result: dict) -> str:
     if not file_path:
         return ""
     try:
-        with open(file_path, "r", encoding="utf-8") as file_handle:
+        with open(file_path, encoding="utf-8") as file_handle:
             return file_handle.read()
     except Exception:
         return ""
 
+
 def _get_mongo_collection() -> Collection:
     """Returns the MongoDB collection (connects if necessary).
     Uses global variables to cache the client and collection.
-    
+
     Returns:
         pymongo Collection object for the configured MongoDB Atlas collection.
     Raises:
@@ -86,9 +97,10 @@ def _get_mongo_collection() -> Collection:
     db = _client[MONGODB_DB]
     _collection = db[MONGODB_COLLECTION]
     # Test connection
-    _client.admin.command('ping')
+    _client.admin.command("ping")
     print("   Connected to MongoDB Atlas.")
     return _collection
+
 
 def _get_openai_client():
     """Returns OpenAI client (initializes if necessary)."""
@@ -100,7 +112,8 @@ def _get_openai_client():
         _openai_client = OpenAI(api_key=api_key)
     return _openai_client
 
-def _generate_embedding(text: str) -> List[float]:
+
+def _generate_embedding(text: str) -> list[float]:
     """
     Generates embedding for a single text using OpenAI.
     Truncates the text if necessary (model limit is generous, but we'll truncate beforehand).
@@ -110,7 +123,7 @@ def _generate_embedding(text: str) -> List[float]:
 
     Returns:
         List of floats representing the embedding vector.
-    
+
     Raises:
         RuntimeError if OpenAI client is not configured or API call fails.
     """
@@ -121,17 +134,15 @@ def _generate_embedding(text: str) -> List[float]:
     if len(text_clean) > 8000:
         text_clean = text_clean[:8000]
     try:
-        response = client.embeddings.create(
-            input=text_clean,
-            model=OPENAI_EMBEDDING_MODEL
-        )
+        response = client.embeddings.create(input=text_clean, model=OPENAI_EMBEDDING_MODEL)
         return response.data[0].embedding
     except Exception as e:
         print(f"   Error generating embedding: {e}")
         # Return empty embedding? Better to propagate exception
         raise
 
-def search_chunks(query: str, k: int = 16) -> List[str]:
+
+def search_chunks(query: str, k: int = 16) -> list[str]:
     """
     Searches for chunks similar to the query using MongoDB Atlas Vector Search.
     Generates query embedding via OpenAI.
@@ -143,22 +154,22 @@ def search_chunks(query: str, k: int = 16) -> List[str]:
         List of truncated strings (content of the chunks).
     """
     collection = _get_mongo_collection()
-    
+
     # Generates embedding for the query using OpenAI
     try:
         query_embedding = _generate_embedding(query)
     except Exception as e:
         print(f"   Failure to generate query embedding.: {e}")
         return []
-    
+
     # Aggregation pipeline with $vectorSearch
     pipeline = [
         {
             "$vectorSearch": {
                 "index": VECTOR_INDEX_NAME,
-                "path": "embedding",          # field where the embedding is stored
+                "path": "embedding",  # field where the embedding is stored
                 "queryVector": query_embedding,
-                "numCandidates": k * 10,      # number of candidates for search
+                "numCandidates": k * 10,  # number of candidates for search
                 "limit": k,
             }
         },
@@ -166,17 +177,17 @@ def search_chunks(query: str, k: int = 16) -> List[str]:
             "$project": {
                 "text": 1,
                 "file_path": 1,
-                "score": {"$meta": "vectorSearchScore"}
+                "score": {"$meta": "vectorSearchScore"},
             }
-        }
+        },
     ]
-    
+
     try:
         results = list(collection.aggregate(pipeline))
     except Exception as e:
         print(f"   Error in MongoDB vector search: {e}")
         return []
-    
+
     chunks = []
     for result in results:
         chunk_text = _read_chunk_text(result)
@@ -186,7 +197,7 @@ def search_chunks(query: str, k: int = 16) -> List[str]:
     return chunks
 
 
-def search_chunk_records(query: str, k: int = 16) -> List[dict[str, Any]]:
+def search_chunk_records(query: str, k: int = 16) -> list[dict[str, Any]]:
     """Search chunks and return text plus source metadata.
 
     Args:
@@ -234,7 +245,7 @@ def search_chunk_records(query: str, k: int = 16) -> List[dict[str, Any]]:
         print(f"   Error in MongoDB vector search: {e}")
         return []
 
-    records: List[dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
     for result in results:
         chunk_text = _read_chunk_text(result)
         if not chunk_text:
@@ -266,9 +277,10 @@ def search_chunk_records(query: str, k: int = 16) -> List[dict[str, Any]]:
     print(f"   {len(records)} chunk records retrieved from MongoDB.")
     return records
 
-def accumulate_chunks(existing: List[str], new: List[str]) -> List[str]:
+
+def accumulate_chunks(existing: list[str], new: list[str]) -> list[str]:
     """Accumulates new chunks without duplicates, respecting the maximum limit.
-    
+
     Args:
         existing: List of existing chunks.
         new: List of new chunks to add.
@@ -281,6 +293,7 @@ def accumulate_chunks(existing: List[str], new: List[str]) -> List[str]:
     if len(accumulated) > MAX_CHUNKS_TOTAL:
         accumulated = accumulated[-MAX_CHUNKS_TOTAL:]
     return accumulated
+
 
 __all__ = [
     "search_chunks",

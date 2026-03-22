@@ -13,14 +13,14 @@ All logic has been extracted into the `nodes/writing/` subpackage for maintainab
 
 import logging
 
-logger = logging.getLogger(__name__)
-
 # ---------------------------------------------------------------------------
 # Graph nodes (implementations in parse_plan_node, write_sections_node, consolidate_node)
 # ---------------------------------------------------------------------------
+from .writing.consolidate_node import consolidate_node
 from .writing.parse_plan_node import parse_plan_node
 from .writing.write_sections_node import write_sections_node
-from .writing.consolidate_node import consolidate_node
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "parse_plan_node",

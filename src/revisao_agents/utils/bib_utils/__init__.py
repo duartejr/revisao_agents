@@ -4,13 +4,13 @@ Uses REACT agent to intelligently fetch bibliographic data from multiple sources
 """
 
 from .crossref_bibtex import (
-    get_reference_data_react,
-    get_bibtex_from_doi,
-    get_bibtex_from_arxiv,
-    extract_doi_from_url,
-    extract_arxiv_id,
-    search_doi_in_text,
     bibtex_to_abnt,
+    extract_arxiv_id,
+    extract_doi_from_url,
+    get_bibtex_from_arxiv,
+    get_bibtex_from_doi,
+    get_reference_data_react,
+    search_doi_in_text,
 )
 
 __all__ = [

@@ -325,5 +325,5 @@ Provide these on demand:
 
 ---
 
-**Version:** 0.1.0  
+**Version:** 0.1.0
 **Adapted from:** [langsmith-fetch-skill for Claude](https://github.com/OthmanAdi/langsmith-fetch-skill)

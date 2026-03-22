@@ -1,8 +1,18 @@
-# src/revisao_agents/core/__init__.py
 """
-Core modules shared across the revisao_agents package.
-This includes Pydantic schemas and utilities that are not specific to agents/tools.
+Core module for revisao_agents.
+Centralizes access to schemas and core objects.
 """
 
-# Re-export all modules for clean imports anywhere in the project
-from .schemas import *
+from .schemas import (
+    Chunk,
+    SectionAnswer,
+    Source,
+    WriterConfig,
+)
+
+__all__ = [
+    "Chunk",
+    "SectionAnswer",
+    "Source",
+    "WriterConfig",
+]
