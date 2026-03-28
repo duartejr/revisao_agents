@@ -93,15 +93,22 @@ def search_images_with_queries(
     if cached is not None:
         return cached[:max_results]
 
+    # Always fetch with the upstream cap (4) so the cached set is as large as
+    # possible; the caller's max_results is applied only on return.
+    _UPSTREAM_CAP = 4
     try:
-        result = search_tavily_images.invoke({"queries": queries, "max_results": max_results})
+        result = search_tavily_images.invoke({"queries": queries, "max_results": _UPSTREAM_CAP})
         raw_images: list[dict] = result.get("images", []) if isinstance(result, dict) else []
     except Exception as exc:
         return [{"error": f"Image search failed: {exc}"}]
 
     enriched: list[dict] = []
-    source_note = (
+
+    source_note_en = (
         "Source paper metadata may be incomplete. Verify the original publication manually."
+    )
+    source_note_pt = (
+        "Metadados bibliográficos podem estar incompletos. Verifique manualmente a fonte original."
     )
 
     # Cache the full result set so later calls with larger max_results can be served from cache.
@@ -115,7 +122,8 @@ def search_images_with_queries(
                 "description": img.get("description", "") or "",
                 "source_url": img.get("source_url", "") or "",
                 "page_title": img.get("page_title", "") or "",
-                "source_note": img.get("source_note", "") or source_note,
+                "source_note_en": img.get("source_note_en", "") or source_note_en,
+                "source_note_pt": img.get("source_note_pt", "") or source_note_pt,
             }
         )
 

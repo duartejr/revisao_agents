@@ -152,7 +152,8 @@ class TestSearchImagesWithQueries:
         assert "image_url" in result[0]
         assert "source_url" in result[0]
         assert "page_title" in result[0]
-        assert "source_note" in result[0]
+        assert "source_note_en" in result[0]
+        assert "source_note_pt" in result[0]
 
     def test_falls_back_to_url_field(self, tmp_path, monkeypatch):
         monkeypatch.setattr(_mod, "_CACHE_DIR", str(tmp_path))

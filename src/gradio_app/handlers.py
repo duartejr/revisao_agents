@@ -1360,8 +1360,16 @@ def _build_image_scope_description(
     if para_match and sections:
         num_str = para_match.group(1) or para_match.group(2)
         para_num = int(num_str) - 1
-        # Use first section as default if no section specified
-        section = sections[0]
+        # Try to infer the intended section from the user text by title,
+        # falling back to the first section if nothing matches.
+        section = None
+        for candidate in sections:
+            title = str(candidate.get("title", "")).strip()
+            if title and title.lower() in text:
+                section = candidate
+                break
+        if section is None:
+            section = sections[0]
         paragraphs = section.get("paragraphs", [])
         if 0 <= para_num < len(paragraphs):
             para = paragraphs[para_num]

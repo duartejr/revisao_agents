@@ -33,7 +33,7 @@ system: |
   ## WORKFLOW
 
   Start your response with exactly one warning line (once, at the top):
-  - PT-BR: "⚠️ Limitação de fonte: o Tavily retorna URL e descrição da imagem, mas pode não fornecer metadados bibliográficos completos. Verifique manualmente a fonte original do paper."
+  - PT-BR: "⚠️ Limitação de fonte: o Tavily retorna URL e descrição da imagem, mas pode não fornecer metadados bibliográficos completos. Verifique manualmente a fonte original do artigo."
   - EN: "⚠️ Source limitation: Tavily returns image URL and description, but full bibliographic metadata may be unavailable. Please verify the original paper source manually."
 
   ### Step 1 — Identify illustratable paragraphs

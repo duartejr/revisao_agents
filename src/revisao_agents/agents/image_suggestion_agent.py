@@ -94,7 +94,11 @@ def run_image_suggestion_agent(
     if not document_excerpt and not scope_description:
         return "No document content or scope provided to the image suggestion agent."
 
+    # Use user_request as a secondary signal when the excerpt is empty or
+    # language detection is inconclusive (both scores 0).
     doc_language = _detect_language(document_excerpt or "")
+    if doc_language == "en" and not (document_excerpt or "").strip():
+        doc_language = _detect_language(user_request or "")
     if doc_language == "pt":
         lang_instruction = (
             "Write ALL your output in Brazilian Portuguese (same language as the document). "
@@ -122,7 +126,7 @@ def run_image_suggestion_agent(
         prompt = load_prompt(
             "common/image_suggestion",
             today_date=_today(),
-            document_excerpt=document_excerpt[:4000] if document_excerpt else "(not provided)",
+            document_excerpt=document_excerpt if document_excerpt else "(not provided)",
             user_request=user_request or "(not provided)",
             scope_description=scope_description or "all sections of the document",
             lang_instruction=lang_instruction,
