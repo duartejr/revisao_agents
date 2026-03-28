@@ -1319,7 +1319,9 @@ def _is_image_request(user_text: str) -> bool:
     return any(kw in text for kw in _IMAGE_REQUEST_KEYWORDS)
 
 
-def _build_image_scope_description(user_text: str, sections: list[dict]) -> tuple[str, str]:
+def _build_image_scope_description(
+    user_text: str, sections: list[dict], language: str = "en"
+) -> tuple[str, str]:
     """Derive a human-readable scope and a document excerpt for the image agent.
 
     Returns (scope_description, document_excerpt).
@@ -1345,7 +1347,11 @@ def _build_image_scope_description(user_text: str, sections: list[dict]) -> tupl
     sec_idx = _resolve_section_index(user_text, sections)
     if sec_idx is not None and 0 <= sec_idx < len(sections):
         section = sections[sec_idx]
-        scope = f"section {sec_idx + 1} — {section['title']}"
+        scope = _localized_text(
+            language,
+            f"seção {sec_idx + 1} — {section['title']}",
+            f"section {sec_idx + 1} — {section['title']}",
+        )
         excerpt = _paragraphs_excerpt(section)
         return scope, excerpt
 
@@ -1359,7 +1365,11 @@ def _build_image_scope_description(user_text: str, sections: list[dict]) -> tupl
         paragraphs = section.get("paragraphs", [])
         if 0 <= para_num < len(paragraphs):
             para = paragraphs[para_num]
-            scope = f"paragraph {para_num + 1} of section '{section['title']}'"
+            scope = _localized_text(
+                language,
+                f"parágrafo {para_num + 1} da seção '{section['title']}'",
+                f"paragraph {para_num + 1} of section '{section['title']}'",
+            )
             excerpt = (
                 f"## {section['title']}\n\n" f"[PARAGRAPH {para_num + 1}]\n{para.get('text', '')}\n"
             )
@@ -1371,9 +1381,10 @@ def _build_image_scope_description(user_text: str, sections: list[dict]) -> tupl
         for section in sections:
             for p_idx, paragraph in enumerate(section.get("paragraphs", [])):
                 if snippet.lower() in paragraph.get("text", "").lower():
-                    scope = (
-                        f"paragraph containing \"{snippet[:60]}\"..."
-                        f" in section '{section['title']}'"
+                    scope = _localized_text(
+                        language,
+                        f"parágrafo contendo \"{snippet[:60]}\"... na seção '{section['title']}'",
+                        f"paragraph containing \"{snippet[:60]}\"... in section '{section['title']}'",
                     )
                     excerpt = (
                         f"## {section['title']}\n\n"
@@ -1382,7 +1393,9 @@ def _build_image_scope_description(user_text: str, sections: list[dict]) -> tupl
                     return scope, excerpt
 
     # Default: all sections (condensed, showing first paragraph of each)
-    scope = "all sections of the document"
+    scope = _localized_text(
+        language, "todas as seções do documento", "all sections of the document"
+    )
     parts: list[str] = []
     total = 0
     for sec in sections[:6]:
@@ -3595,7 +3608,7 @@ def review_chat_turn(
 
         # Allow user to override scope in the same message
         if not _is_affirmative_confirmation(user_msg):
-            scope, excerpt = _build_image_scope_description(user_msg, sections)
+            scope, excerpt = _build_image_scope_description(user_msg, sections, language)
             session_state["pending_image_action"]["scope"] = scope
             session_state["pending_image_action"]["excerpt"] = excerpt
 
@@ -3620,7 +3633,7 @@ def review_chat_turn(
 
     if _is_image_request(user_msg):
         # First image request — ask for scope confirmation
-        scope, excerpt = _build_image_scope_description(user_msg, sections)
+        scope, excerpt = _build_image_scope_description(user_msg, sections, language)
         confirm_prompt = _build_image_confirmation_prompt(scope, language)
         session_state["pending_image_action"] = {
             "scope": scope,

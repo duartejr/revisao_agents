@@ -41,7 +41,6 @@ def _detect_language(text: str) -> str:
         r"\besta\b",
         r"\bneste\b",
         r"\besses\b",
-        r"\besses\b",
         r"\bmodelos\b",
         r"\bdados\b",
         r"\bprevisão\b",

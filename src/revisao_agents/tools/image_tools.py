@@ -60,7 +60,7 @@ def _save_cache(key: str, images: list[dict]) -> None:
 @tool
 def search_images_with_queries(
     queries: list[str],
-    max_results: int = 5,
+    max_results: int = 4,
 ) -> list[dict]:
     """Search for academic/technical images using explicit pre-crafted queries.
 
@@ -74,7 +74,8 @@ def search_images_with_queries(
         queries: List of 2–4 search queries crafted by the agent.  Each query
             should name the specific model, method, dataset, or visual type
             mentioned in the paragraph.
-        max_results: Upper limit of total image candidates to return (default 5).
+        max_results: Upper limit of total image candidates to return (default 4,
+            matching the upstream Tavily image cap per query).
 
     Returns:
         List of dicts, each containing:
@@ -93,7 +94,7 @@ def search_images_with_queries(
         return cached[:max_results]
 
     try:
-        result = search_tavily_images.invoke({"queries": queries, "max_results": max_results + 3})
+        result = search_tavily_images.invoke({"queries": queries, "max_results": max_results})
         raw_images: list[dict] = result.get("images", []) if isinstance(result, dict) else []
     except Exception as exc:
         return [{"error": f"Image search failed: {exc}"}]
