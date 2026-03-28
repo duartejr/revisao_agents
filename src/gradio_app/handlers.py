@@ -30,6 +30,7 @@ from datetime import datetime
 from typing import Any
 
 # 2. Local Codebase Imports
+from revisao_agents.agents.image_suggestion_agent import run_image_suggestion_agent
 from revisao_agents.agents.reference_extractor_agent import (
     run_reference_extractor_agent,
 )
@@ -928,17 +929,87 @@ def _split_sections(markdown: str) -> list[dict]:
 
 def _resolve_section_index(user_text: str, sections: list[dict]) -> int | None:
     text = user_text.lower()
-    sec_match = re.search(r"(?:section|sec|se[çc][ãa]o|chapter|cap[ií]tulo)\s*(\d+)", text)
+
+    # Priority 1 — explicit keyword + number, allowing non-whitespace between
+    # them (e.g. "seção ## 4", "section #4", "seção4", "section 4")
+    sec_match = re.search(
+        r"(?:section|sec|se[çc][ãa]o|chapter|cap[ií]tulo)\s*[^\w\d]*(\d+)",
+        text,
+    )
     if sec_match:
         number = sec_match.group(1)
         for idx, section in enumerate(sections):
             if re.match(rf"^{number}[\.)\s]", section["title"], flags=re.IGNORECASE):
                 return idx
+
+    # Priority 2 — bare markdown heading number in user text: "## 4", "##4."
+    md_match = re.search(r"##\s*(\d+)[.\s]", text)
+    if md_match:
+        number = md_match.group(1)
+        for idx, section in enumerate(sections):
+            if re.match(rf"^{number}[\.)\s]", section["title"], flags=re.IGNORECASE):
+                return idx
+
+    # Priority 3 — conclusion keyword
     if re.search(r"\b(?:conclusion|conclus[ãa]o)\b", text):
         for idx, section in enumerate(sections):
             t = section["title"].lower()
             if re.search(r"\b(?:conclusion|conclus[ãa]o)\b", t):
                 return idx
+
+    # Priority 4 — match by section title word (e.g. "discussion", "methodology")
+    # Strip stopwords so short common words don't cause false positives.
+    _STOPWORDS = {
+        "a",
+        "o",
+        "e",
+        "de",
+        "da",
+        "do",
+        "em",
+        "para",
+        "no",
+        "na",
+        "com",
+        "the",
+        "of",
+        "in",
+        "on",
+        "at",
+        "to",
+        "and",
+        "for",
+        "or",
+        "an",
+        "quero",
+        "contexto",
+        "seção",
+        "section",
+        "apenas",
+        "only",
+        "sobre",
+        "about",
+        "this",
+        "esse",
+        "este",
+        "essa",
+    }
+    user_words = {
+        w
+        for w in re.findall(r"[a-záàâãéèêíïóôõöúüçñ]+", text)
+        if w not in _STOPWORDS and len(w) > 3
+    }
+    best_idx: int | None = None
+    best_hits = 0
+    for idx, section in enumerate(sections):
+        title_words = set(re.findall(r"[a-záàâãéèêíïóôõöúüçñ]+", section["title"].lower()))
+        hits = len(user_words & title_words)
+        if hits > best_hits:
+            best_hits = hits
+            best_idx = idx
+    if best_hits >= 1:
+        return best_idx
+
     return None
 
 
@@ -1202,6 +1273,166 @@ def _explicit_web_request(user_text: str) -> bool:
             "pesquise na internet",
             "busque online",
         ]
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Image suggestion intent helpers
+# ═══════════════════════════════════════════════════════════════════════════
+
+_IMAGE_REQUEST_KEYWORDS = [
+    # Portuguese
+    "imagem",
+    "imagens",
+    "figur",
+    "ilustr",
+    "foto",
+    "diagrama",
+    "inserir imagem",
+    "adicionar imagem",
+    "sugerir imagem",
+    "buscar imagem",
+    "encontrar imagem",
+    "colocar imagem",
+    "incluir imagem",
+    "imagem para",
+    "imagens para",
+    # English
+    "image",
+    "images",
+    "figure",
+    "illustration",
+    "diagram",
+    "picture",
+    "insert image",
+    "add image",
+    "suggest image",
+    "find image",
+    "search image",
+    "place image",
+]
+
+
+def _is_image_request(user_text: str) -> bool:
+    """Return True when the user is asking for image suggestions."""
+    text = user_text.lower()
+    return any(kw in text for kw in _IMAGE_REQUEST_KEYWORDS)
+
+
+def _build_image_scope_description(
+    user_text: str, sections: list[dict], language: str = "en"
+) -> tuple[str, str]:
+    """Derive a human-readable scope and a document excerpt for the image agent.
+
+    Returns (scope_description, document_excerpt).
+    The excerpt clearly delimits each paragraph with [PARAGRAPH N] markers so
+    the image agent can reproduce them verbatim in the PARAGRAPH template block.
+    """
+    text = user_text.lower()
+
+    def _paragraphs_excerpt(section: dict, max_chars: int = 3500) -> str:
+        """Build a numbered-paragraph excerpt for a section."""
+        accumulated = f"## {section['title']}\n\n"
+        for i, para in enumerate(section.get("paragraphs", []), 1):
+            para_text = para.get("text", "").strip()
+            if not para_text:
+                continue
+            block = f"[PARAGRAPH {i}]\n{para_text}\n\n"
+            if len(accumulated) + len(block) > max_chars:
+                break
+            accumulated += block
+        return accumulated
+
+    # Check for specific section request
+    sec_idx = _resolve_section_index(user_text, sections)
+    if sec_idx is not None and 0 <= sec_idx < len(sections):
+        section = sections[sec_idx]
+        scope = _localized_text(
+            language,
+            f"seção {sec_idx + 1} — {section['title']}",
+            f"section {sec_idx + 1} — {section['title']}",
+        )
+        excerpt = _paragraphs_excerpt(section)
+        return scope, excerpt
+
+    # Check for specific paragraph request
+    para_match = re.search(r"par[áa]grafo\s*(\d+)|paragraph\s*(\d+)", text)
+    if para_match and sections:
+        num_str = para_match.group(1) or para_match.group(2)
+        para_num = int(num_str) - 1
+        # Try to infer the intended section from the user text by title,
+        # falling back to the first section if nothing matches.
+        section = None
+        for candidate in sections:
+            title = str(candidate.get("title", "")).strip()
+            if title and title.lower() in text:
+                section = candidate
+                break
+        if section is None:
+            section = sections[0]
+        paragraphs = section.get("paragraphs", [])
+        if 0 <= para_num < len(paragraphs):
+            para = paragraphs[para_num]
+            scope = _localized_text(
+                language,
+                f"parágrafo {para_num + 1} da seção '{section['title']}'",
+                f"paragraph {para_num + 1} of section '{section['title']}'",
+            )
+            excerpt = (
+                f"## {section['title']}\n\n" f"[PARAGRAPH {para_num + 1}]\n{para.get('text', '')}\n"
+            )
+            return scope, excerpt
+
+    # Check for quoted snippet
+    snippet = _extract_quoted_snippet(user_text)
+    if snippet and sections:
+        for section in sections:
+            for p_idx, paragraph in enumerate(section.get("paragraphs", [])):
+                if snippet.lower() in paragraph.get("text", "").lower():
+                    scope = _localized_text(
+                        language,
+                        f"parágrafo contendo \"{snippet[:60]}\"... na seção '{section['title']}'",
+                        f"paragraph containing \"{snippet[:60]}\"... in section '{section['title']}'",
+                    )
+                    excerpt = (
+                        f"## {section['title']}\n\n"
+                        f"[PARAGRAPH {p_idx + 1}]\n{paragraph.get('text', '')}\n"
+                    )
+                    return scope, excerpt
+
+    # Default: all sections (condensed, showing first paragraph of each)
+    scope = _localized_text(
+        language, "todas as seções do documento", "all sections of the document"
+    )
+    parts: list[str] = []
+    total = 0
+    for sec in sections[:6]:
+        paragraphs = sec.get("paragraphs", [])
+        if not paragraphs:
+            continue
+        block = f"## {sec['title']}\n\n"
+        for i, para in enumerate(paragraphs[:3], 1):
+            para_text = para.get("text", "").strip()
+            if para_text:
+                block += f"[PARAGRAPH {i}]\n{para_text}\n\n"
+        if total + len(block) > 4000:
+            break
+        parts.append(block)
+        total += len(block)
+    excerpt = "\n".join(parts)
+    return scope, excerpt
+
+
+def _build_image_confirmation_prompt(scope: str, language: str) -> str:
+    """Return a confirmation prompt asking user to confirm image search scope."""
+    return _localized_text(
+        language,
+        f"Vou buscar imagens para ilustrar: **{scope}**.\n\n"
+        "Confirme o escopo ou especifique uma seção/parágrafo diferente.\n"
+        "Responda **sim** para confirmar ou descreva o escopo desejado.",
+        f"I will search for images to illustrate: **{scope}**.\n\n"
+        "Confirm the scope or specify a different section/paragraph.\n"
+        "Reply **yes** to confirm or describe the desired scope.",
     )
 
 
@@ -3350,6 +3581,132 @@ def review_chat_turn(
             history,
             session_state,
             _localized_text(language, "✅ Sessão ativa", "✅ Session active"),
+            _read_md(working_copy),
+        )
+
+    # ── Image suggestion flow ─────────────────────────────────────────
+    awaiting_image_confirmation = bool(session_state.get("awaiting_image_confirmation"))
+    pending_image_action = session_state.get("pending_image_action") or {}
+
+    if awaiting_image_confirmation and pending_image_action:
+        if _is_negative_confirmation(user_msg):
+            session_state["pending_image_action"] = {}
+            session_state["awaiting_image_confirmation"] = False
+            reply = _localized_text(
+                language,
+                "🛑 Busca de imagens cancelada.",
+                "🛑 Image search canceled.",
+            )
+            history = history + [
+                {"role": "user", "content": user_msg},
+                {"role": "assistant", "content": reply},
+            ]
+            session_state["chat_history"] = history
+            return (
+                history,
+                session_state,
+                _localized_text(language, "✅ Cancelado", "✅ Canceled"),
+                _read_md(working_copy),
+            )
+
+        # Affirmative or new scope — run the image agent
+        original_request = str(pending_image_action.get("original_request", user_msg))
+        pending_excerpt = pending_image_action.get("excerpt")
+        if pending_excerpt:
+            excerpt = str(pending_excerpt)
+        else:
+            # Rebuild excerpt only (scope stays from pending_image_action — it
+            # was already confirmed by the user).
+            _confirmed_scope, excerpt = _build_image_scope_description(
+                original_request, sections, language
+            )
+        scope = str(pending_image_action.get("scope", "all sections"))
+
+        # Allow user to override scope in the same message
+        if not _is_affirmative_confirmation(user_msg):
+            scope, excerpt = _build_image_scope_description(user_msg, sections, language)
+            session_state["pending_image_action"]["scope"] = scope
+            session_state["pending_image_action"]["excerpt"] = excerpt
+
+        if not allow_web:
+            session_state["pending_image_action"] = {}
+            session_state["awaiting_image_confirmation"] = False
+            reply = _localized_text(
+                language,
+                "A sugestão de imagens requer busca na web. "
+                "Ative **Allow web search** e tente novamente.",
+                "Image suggestion requires web search. "
+                "Enable **Allow web search** and try again.",
+            )
+            history = history + [
+                {"role": "user", "content": user_msg},
+                {"role": "assistant", "content": reply},
+            ]
+            session_state["chat_history"] = history
+            return (
+                history,
+                session_state,
+                _localized_text(language, "⚠️ Web desativado", "⚠️ Web disabled"),
+                _read_md(working_copy),
+            )
+
+        reply = run_image_suggestion_agent(
+            document_excerpt=excerpt,
+            user_request=original_request,
+            scope_description=scope,
+        )
+        session_state["pending_image_action"] = {}
+        session_state["awaiting_image_confirmation"] = False
+        history = history + [
+            {"role": "user", "content": user_msg},
+            {"role": "assistant", "content": reply},
+        ]
+        session_state["chat_history"] = history
+        return (
+            history,
+            session_state,
+            _localized_text(language, "✅ Imagens sugeridas", "✅ Images suggested"),
+            _read_md(working_copy),
+        )
+
+    if _is_image_request(user_msg):
+        if not allow_web:
+            reply = _localized_text(
+                language,
+                "A sugestão de imagens requer busca na web. "
+                "Ative **Allow web search** e tente novamente.",
+                "Image suggestion requires web search. "
+                "Enable **Allow web search** and try again.",
+            )
+            history = history + [
+                {"role": "user", "content": user_msg},
+                {"role": "assistant", "content": reply},
+            ]
+            session_state["chat_history"] = history
+            return (
+                history,
+                session_state,
+                _localized_text(language, "⚠️ Web desativado", "⚠️ Web disabled"),
+                _read_md(working_copy),
+            )
+        # First image request — ask for scope confirmation
+        scope, excerpt = _build_image_scope_description(user_msg, sections, language)
+        confirm_prompt = _build_image_confirmation_prompt(scope, language)
+        session_state["pending_image_action"] = {
+            "scope": scope,
+            "excerpt": excerpt,
+            "original_request": user_msg,
+        }
+        session_state["awaiting_image_confirmation"] = True
+        history = history + [
+            {"role": "user", "content": user_msg},
+            {"role": "assistant", "content": confirm_prompt},
+        ]
+        session_state["chat_history"] = history
+        return (
+            history,
+            session_state,
+            _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"),
             _read_md(working_copy),
         )
 
