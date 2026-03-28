@@ -734,6 +734,7 @@ def search_tavily_images(
                 max_results=max_results,
                 include_images=True,
                 include_image_descriptions=True,
+                exclude_domains=BLOCKED_DOMAINS,
             )
 
             # Build best-effort map image_url -> (source_url, page_title) from search results.

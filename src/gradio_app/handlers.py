@@ -1330,15 +1330,16 @@ def _build_image_scope_description(user_text: str, sections: list[dict]) -> tupl
 
     def _paragraphs_excerpt(section: dict, max_chars: int = 3500) -> str:
         """Build a numbered-paragraph excerpt for a section."""
-        lines = [f"## {section['title']}", ""]
+        accumulated = f"## {section['title']}\n\n"
         for i, para in enumerate(section.get("paragraphs", []), 1):
             para_text = para.get("text", "").strip()
-            if para_text:
-                lines.append(f"[PARAGRAPH {i}]")
-                lines.append(para_text)
-                lines.append("")
-        result = "\n".join(lines)
-        return result[:max_chars]
+            if not para_text:
+                continue
+            block = f"[PARAGRAPH {i}]\n{para_text}\n\n"
+            if len(accumulated) + len(block) > max_chars:
+                break
+            accumulated += block
+        return accumulated
 
     # Check for specific section request
     sec_idx = _resolve_section_index(user_text, sections)
@@ -1360,8 +1361,7 @@ def _build_image_scope_description(user_text: str, sections: list[dict]) -> tupl
             para = paragraphs[para_num]
             scope = f"paragraph {para_num + 1} of section '{section['title']}'"
             excerpt = (
-                f"## {section['title']}\n\n"
-                f"[PARAGRAPH {para_num + 1}]\n{para.get('text', '')[:2000]}\n"
+                f"## {section['title']}\n\n" f"[PARAGRAPH {para_num + 1}]\n{para.get('text', '')}\n"
             )
             return scope, excerpt
 
@@ -1377,7 +1377,7 @@ def _build_image_scope_description(user_text: str, sections: list[dict]) -> tupl
                     )
                     excerpt = (
                         f"## {section['title']}\n\n"
-                        f"[PARAGRAPH {p_idx + 1}]\n{paragraph.get('text', '')[:2000]}\n"
+                        f"[PARAGRAPH {p_idx + 1}]\n{paragraph.get('text', '')}\n"
                     )
                     return scope, excerpt
 
@@ -1398,7 +1398,7 @@ def _build_image_scope_description(user_text: str, sections: list[dict]) -> tupl
             break
         parts.append(block)
         total += len(block)
-    excerpt = "\n".join(parts)[:4000]
+    excerpt = "\n".join(parts)
     return scope, excerpt
 
 

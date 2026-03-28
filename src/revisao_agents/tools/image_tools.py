@@ -103,7 +103,8 @@ def search_images_with_queries(
         "Source paper metadata may be incomplete. Verify the original publication manually."
     )
 
-    for img in raw_images[:max_results]:
+    # Cache the full result set so later calls with larger max_results can be served from cache.
+    for img in raw_images:
         image_url = img.get("image_url", "") or img.get("url", "")
         if not image_url:
             continue
@@ -118,7 +119,7 @@ def search_images_with_queries(
         )
 
     _save_cache(cache_key, enriched)
-    return enriched
+    return enriched[:max_results]
 
 
 @tool
