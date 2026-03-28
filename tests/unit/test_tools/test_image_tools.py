@@ -8,51 +8,75 @@ Uses mocks so no real network calls or installed LangChain providers are needed.
 
 from __future__ import annotations
 
-import importlib
 import importlib.util
 import pathlib
 import sys
 import types
 from unittest import mock
 
+import pytest
+
 # ---------------------------------------------------------------------------
-# Stub out heavy transitive dependencies before importing image_tools
+# Build stub modules (kept as module-level objects for reuse in tests,
+# but NOT permanently inserted into sys.modules here).
 # ---------------------------------------------------------------------------
 
+_SENTINEL = object()
 
-def _make_stub_module(name: str) -> types.ModuleType:
-    m = types.ModuleType(name)
-    sys.modules[name] = m
-    return m
+# langchain_core.tools stub – pass-through @tool decorator
+_lc_tools_mod = types.ModuleType("langchain_core.tools")
+_lc_tools_mod.tool = lambda f: f  # @tool becomes identity
 
+_lc_mod = types.ModuleType("langchain_core")
+_lc_mod.tools = _lc_tools_mod
 
-# langchain_core.tools – just expose a pass-through @tool decorator
-lc_tools = _make_stub_module("langchain_core")
-lc_tools.tools = _make_stub_module("langchain_core.tools")
-lc_tools.tools.tool = lambda f: f  # @tool becomes identity
-
-# tavily_web_search stub – provides search_tavily_images (replaced in tests)
-_tws_mod = _make_stub_module("revisao_agents.tools.tavily_web_search")
+# tavily_web_search stub – search_tavily_images / _get_client replaced per test
+_tws_mod = types.ModuleType("revisao_agents.tools.tavily_web_search")
 _tws_mod.search_tavily_images = mock.MagicMock()
 _tws_mod._get_client = mock.MagicMock()
 
-# Insert parent package stubs so Python can resolve relative imports
-for pkg in [
-    "revisao_agents",
-    "revisao_agents.tools",
-]:
-    if pkg not in sys.modules:
-        _make_stub_module(pkg)
+_ra_mod = types.ModuleType("revisao_agents")
+_ra_tools_mod = types.ModuleType("revisao_agents.tools")
+
+_STUBS: dict[str, types.ModuleType] = {
+    "langchain_core": _lc_mod,
+    "langchain_core.tools": _lc_tools_mod,
+    "revisao_agents": _ra_mod,
+    "revisao_agents.tools": _ra_tools_mod,
+    "revisao_agents.tools.tavily_web_search": _tws_mod,
+}
 
 _TOOLS_PATH = (
     pathlib.Path(__file__).parents[3] / "src" / "revisao_agents" / "tools" / "image_tools.py"
 )
 
-spec = importlib.util.spec_from_file_location("image_tools_under_test", _TOOLS_PATH)
-_mod = importlib.util.module_from_spec(spec)
-# Point relative imports at our stubs
-_mod.__package__ = "revisao_agents.tools"
-spec.loader.exec_module(_mod)
+
+def _load_module() -> types.ModuleType:
+    """Load image_tools.py in isolation via a temporary sys.modules injection.
+
+    _SENTINEL distinguishes "key was absent from sys.modules" from "key mapped
+    to None" so the finally block can remove newly added keys rather than
+    setting them to None (which would leave a broken entry in sys.modules).
+    """
+    saved = {k: sys.modules.get(k, _SENTINEL) for k in _STUBS}
+    sys.modules.update(_STUBS)
+    try:
+        spec = importlib.util.spec_from_file_location("image_tools_under_test", _TOOLS_PATH)
+        mod = importlib.util.module_from_spec(spec)
+        mod.__package__ = "revisao_agents.tools"
+        spec.loader.exec_module(mod)
+        return mod
+    finally:
+        # Restore sys.modules so later imports (e.g. test_tavily_web_search.py)
+        # see the real packages.
+        for k, v in saved.items():
+            if v is _SENTINEL:
+                sys.modules.pop(k, None)
+            else:
+                sys.modules[k] = v
+
+
+_mod = _load_module()
 
 # Grab symbols under test
 search_images_with_queries = _mod.search_images_with_queries
@@ -63,6 +87,19 @@ get_image_tools = _mod.get_image_tools
 _cache_key = _mod._cache_key
 _load_cache = _mod._load_cache
 _save_cache = _mod._save_cache
+
+
+# ---------------------------------------------------------------------------
+# Autouse fixture: ensure the TWS stub is in sys.modules for every test so
+# that lookup_page_metadata / search_paper_reference can do their lazy
+# `from .tavily_web_search import _get_client` import correctly.
+# monkeypatch reverts the override automatically after each test.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _inject_tws_stub(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "revisao_agents.tools.tavily_web_search", _tws_mod)
 
 
 # ===========================================================================

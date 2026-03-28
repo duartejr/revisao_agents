@@ -53,6 +53,36 @@ def _save_cache(key: str, images: list[dict]) -> None:
 
 
 # ============================================================================
+# Source-note constants (used when building enriched image dicts)
+# ============================================================================
+
+_SOURCE_NOTE_EN = (
+    "Source paper metadata may be incomplete. Verify the original publication manually."
+)
+_SOURCE_NOTE_PT = (
+    "Metadados bibliográficos podem estar incompletos. Verifique manualmente a fonte original."
+)
+
+
+def _normalize_image(item: dict) -> dict:
+    """Return a copy of *item* with all expected keys present.
+
+    Fills missing keys introduced by newer versions so that cache entries
+    created by older code are always served with a complete schema.
+    """
+    return {
+        "image_url": item.get("image_url") or "",
+        "description": item.get("description") or "",
+        "source_url": item.get("source_url") or "",
+        "page_title": item.get("page_title") or "",
+        # `or` converts both missing-key (None default) and explicit null
+        # values that may appear in older cache files (JSON null → None).
+        "source_note_en": item.get("source_note_en") or _SOURCE_NOTE_EN,
+        "source_note_pt": item.get("source_note_pt") or _SOURCE_NOTE_PT,
+    }
+
+
+# ============================================================================
 # Image tools
 # ============================================================================
 
@@ -83,7 +113,8 @@ def search_images_with_queries(
         - description: Text description (if available).
         - source_url: Web page where the image was found (may be empty).
         - page_title: Title of the source page (may be empty).
-        - source_note: Limitation message explaining metadata constraints.
+        - source_note_en: Limitation message in English explaining metadata constraints.
+        - source_note_pt: Limitation message in Portuguese explaining metadata constraints.
     """
     if not queries:
         return [{"error": "No queries provided"}]
@@ -91,7 +122,8 @@ def search_images_with_queries(
     cache_key = _cache_key(queries)
     cached = _load_cache(cache_key)
     if cached is not None:
-        return cached[:max_results]
+        # Normalize to fill keys added by newer versions before returning.
+        return [_normalize_image(item) for item in cached][:max_results]
 
     # Always fetch with the upstream cap (4) so the cached set is as large as
     # possible; the caller's max_results is applied only on return.
@@ -102,30 +134,13 @@ def search_images_with_queries(
     except Exception as exc:
         return [{"error": f"Image search failed: {exc}"}]
 
-    enriched: list[dict] = []
-
-    source_note_en = (
-        "Source paper metadata may be incomplete. Verify the original publication manually."
-    )
-    source_note_pt = (
-        "Metadados bibliográficos podem estar incompletos. Verifique manualmente a fonte original."
-    )
-
     # Cache the full result set so later calls with larger max_results can be served from cache.
+    enriched: list[dict] = []
     for img in raw_images:
         image_url = img.get("image_url", "") or img.get("url", "")
         if not image_url:
             continue
-        enriched.append(
-            {
-                "image_url": image_url,
-                "description": img.get("description", "") or "",
-                "source_url": img.get("source_url", "") or "",
-                "page_title": img.get("page_title", "") or "",
-                "source_note_en": img.get("source_note_en", "") or source_note_en,
-                "source_note_pt": img.get("source_note_pt", "") or source_note_pt,
-            }
-        )
+        enriched.append(_normalize_image({**img, "image_url": image_url}))
 
     _save_cache(cache_key, enriched)
     return enriched[:max_results]

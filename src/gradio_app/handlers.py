@@ -3610,15 +3610,45 @@ def review_chat_turn(
             )
 
         # Affirmative or new scope — run the image agent
-        scope = str(pending_image_action.get("scope", "all sections"))
-        excerpt = str(pending_image_action.get("excerpt", markdown[:4000]))
         original_request = str(pending_image_action.get("original_request", user_msg))
+        pending_excerpt = pending_image_action.get("excerpt")
+        if pending_excerpt:
+            excerpt = str(pending_excerpt)
+        else:
+            # Rebuild excerpt only (scope stays from pending_image_action — it
+            # was already confirmed by the user).
+            _confirmed_scope, excerpt = _build_image_scope_description(
+                original_request, sections, language
+            )
+        scope = str(pending_image_action.get("scope", "all sections"))
 
         # Allow user to override scope in the same message
         if not _is_affirmative_confirmation(user_msg):
             scope, excerpt = _build_image_scope_description(user_msg, sections, language)
             session_state["pending_image_action"]["scope"] = scope
             session_state["pending_image_action"]["excerpt"] = excerpt
+
+        if not allow_web:
+            session_state["pending_image_action"] = {}
+            session_state["awaiting_image_confirmation"] = False
+            reply = _localized_text(
+                language,
+                "A sugestão de imagens requer busca na web. "
+                "Ative **Allow web search** e tente novamente.",
+                "Image suggestion requires web search. "
+                "Enable **Allow web search** and try again.",
+            )
+            history = history + [
+                {"role": "user", "content": user_msg},
+                {"role": "assistant", "content": reply},
+            ]
+            session_state["chat_history"] = history
+            return (
+                history,
+                session_state,
+                _localized_text(language, "⚠️ Web desativado", "⚠️ Web disabled"),
+                _read_md(working_copy),
+            )
 
         reply = run_image_suggestion_agent(
             document_excerpt=excerpt,
@@ -3640,6 +3670,25 @@ def review_chat_turn(
         )
 
     if _is_image_request(user_msg):
+        if not allow_web:
+            reply = _localized_text(
+                language,
+                "A sugestão de imagens requer busca na web. "
+                "Ative **Allow web search** e tente novamente.",
+                "Image suggestion requires web search. "
+                "Enable **Allow web search** and try again.",
+            )
+            history = history + [
+                {"role": "user", "content": user_msg},
+                {"role": "assistant", "content": reply},
+            ]
+            session_state["chat_history"] = history
+            return (
+                history,
+                session_state,
+                _localized_text(language, "⚠️ Web desativado", "⚠️ Web disabled"),
+                _read_md(working_copy),
+            )
         # First image request — ask for scope confirmation
         scope, excerpt = _build_image_scope_description(user_msg, sections, language)
         confirm_prompt = _build_image_confirmation_prompt(scope, language)

@@ -76,7 +76,8 @@ system: |
   - `description` (preferred)
   - `source_url` (optional)
   - `page_title` (optional)
-  - `source_note` (limitation reminder)
+  - `source_note_en` / `source_note_pt` — choose based on the LANGUAGE RULE:
+    use `source_note_pt` for Portuguese documents, `source_note_en` for English.
 
   Do NOT depend on `lookup_page_metadata` or `search_paper_reference` in the
   default flow.
@@ -110,7 +111,7 @@ system: |
   **{figure_label} source**: {{page_title or "Image source page not identified"}}.
   {{available_at_label}} <{{source_url if source_url else image_url}}>.
   {{accessed_label}} {today_date}.
-  {{source_note}}
+  {{source_note_pt if language is Portuguese else source_note_en}}
 
   Rules:
   - Never invent authors, journal, DOI, year, or page numbers.
