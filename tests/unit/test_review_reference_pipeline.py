@@ -471,6 +471,104 @@ def test_phrase_reference_no_mongo_asks_internet_when_web_enabled(tmp_path: Path
     assert "internet" in history[-1]["content"].lower()
 
 
+def test_phrase_reference_no_mongo_with_web_disabled_preserves_pending_action(tmp_path: Path):
+    review_file = tmp_path / "review.md"
+    review_file.write_text("## 1. Intro\n\nTexto [1].\n", encoding="utf-8")
+
+    history: list = []
+    session_state = {
+        "working_copy_path": str(review_file),
+        "chat_history": [],
+        "pending_phrase_reference_action": {
+            "stage": "ask_mongo",
+            "missing_numbers": [2],
+            "original_message": "what is the reference of this phrase [2]?",
+            "action_language": "en",
+        },
+        "awaiting_phrase_reference_confirmation": True,
+    }
+
+    with patch("gradio_app.handlers.search_chunk_records", return_value=[]):
+        history, session_state, status, _ = review_chat_turn(
+            "yes",
+            history,
+            session_state,
+            web_enabled=False,
+        )
+
+    assert "Web disabled" in status or "Web desativado" in status
+    assert session_state.get("awaiting_phrase_reference_confirmation") is True
+    assert session_state.get("pending_phrase_reference_action", {}).get("stage") == "ask_internet"
+    assert "enable **allow web search**" in history[-1]["content"].lower()
+
+
+def test_phrase_reference_continue_after_enabling_web(tmp_path: Path):
+    review_file = tmp_path / "review.md"
+    review_file.write_text("## 1. Intro\n\nTexto [1].\n", encoding="utf-8")
+
+    history: list = []
+    session_state = {
+        "working_copy_path": str(review_file),
+        "chat_history": [],
+        "pending_phrase_reference_action": {
+            "stage": "ask_mongo",
+            "missing_numbers": [2],
+            "original_message": "what is the reference of this phrase [2]?",
+            "action_language": "en",
+        },
+        "awaiting_phrase_reference_confirmation": True,
+    }
+
+    with patch("gradio_app.handlers.search_chunk_records", return_value=[]):
+        history, session_state, status, _ = review_chat_turn(
+            "yes",
+            history,
+            session_state,
+            web_enabled=False,
+        )
+
+    assert "Web disabled" in status or "Web desativado" in status
+    assert session_state.get("awaiting_phrase_reference_confirmation") is True
+    assert session_state.get("pending_phrase_reference_action", {}).get("stage") == "ask_internet"
+
+    with (
+        patch(
+            "gradio_app.handlers.search_tavily_incremental",
+            return_value={"new_urls": ["https://example.org/chronos"]},
+        ),
+        patch(
+            "gradio_app.handlers.extract_tavily",
+            new=type(
+                "_FakeExtractTool",
+                (),
+                {
+                    "invoke": staticmethod(
+                        lambda _payload: {
+                            "extracted": [
+                                {
+                                    "title": "Chronos Foundation Models",
+                                    "url": "https://example.org/chronos",
+                                }
+                            ]
+                        }
+                    )
+                },
+            )(),
+        ),
+    ):
+        history, session_state, status, _ = review_chat_turn(
+            "yes",
+            history,
+            session_state,
+            web_enabled=True,
+        )
+
+    assert "internet" in status.lower()
+    assert session_state.get("awaiting_phrase_reference_confirmation") is False
+    assert session_state.get("pending_phrase_reference_action") == {}
+    assert "Chronos Foundation Models" in history[-1]["content"]
+
+
 def test_phrase_reference_yes_internet_disabled_warns(tmp_path: Path):
     review_file = tmp_path / "review.md"
     review_file.write_text("## 1. Intro\n\nTexto [1].\n", encoding="utf-8")

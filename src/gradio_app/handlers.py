@@ -1379,7 +1379,7 @@ def _build_image_scope_description(
                 f"paragraph {para_num + 1} of section '{section['title']}'",
             )
             excerpt = (
-                f"## {section['title']}\n\n" f"[PARAGRAPH {para_num + 1}]\n{para.get('text', '')}\n"
+                f"## {section['title']}\n\n[PARAGRAPH {para_num + 1}]\n{para.get('text', '')}\n"
             )
             return scope, excerpt
 
@@ -1607,6 +1607,7 @@ def _is_citation_usage_query(user_text: str) -> bool:
 
 def _matches_intent_keyword(text: str, keyword: str) -> bool:
     """Match a keyword as a whole token or exact phrase inside text."""
+    text = (text or "").lower()
     keyword = (keyword or "").strip().lower()
     if not keyword:
         return False
@@ -3796,8 +3797,9 @@ def review_chat_turn(
                     "Não encontrei no MongoDB e a busca web está desativada. Ative **Allow web search** se quiser tentar internet.",
                     "I couldn't find it in MongoDB and web search is disabled. Enable **Allow web search** if you want to try internet search.",
                 )
-                session_state["pending_phrase_reference_action"] = {}
-                session_state["awaiting_phrase_reference_confirmation"] = False
+                pending_phrase_reference_action["stage"] = "ask_internet"
+                session_state["pending_phrase_reference_action"] = pending_phrase_reference_action
+                session_state["awaiting_phrase_reference_confirmation"] = True
                 history = history + [
                     {"role": "user", "content": user_msg},
                     {"role": "assistant", "content": reply},
@@ -4097,8 +4099,7 @@ def review_chat_turn(
                 language,
                 "A sugestão de imagens requer busca na web. "
                 "Ative **Allow web search** e tente novamente.",
-                "Image suggestion requires web search. "
-                "Enable **Allow web search** and try again.",
+                "Image suggestion requires web search. Enable **Allow web search** and try again.",
             )
             history = history + [
                 {"role": "user", "content": user_msg},
@@ -4137,8 +4138,7 @@ def review_chat_turn(
                 language,
                 "A sugestão de imagens requer busca na web. "
                 "Ative **Allow web search** e tente novamente.",
-                "Image suggestion requires web search. "
-                "Enable **Allow web search** and try again.",
+                "Image suggestion requires web search. Enable **Allow web search** and try again.",
             )
             history = history + [
                 {"role": "user", "content": user_msg},
