@@ -1605,16 +1605,24 @@ def _is_citation_usage_query(user_text: str) -> bool:
     return any(w in text for w in listing_words) and any(re.search(w, text) for w in usage_words)
 
 
-def _is_phrase_reference_query(user_text: str) -> bool:
-    """Detect requests asking for the source/reference of a specific phrase/snippet.
+def _matches_intent_keyword(text: str, keyword: str) -> bool:
+    """Match a keyword as a whole token or exact phrase inside text."""
+    keyword = (keyword or "").strip().lower()
+    if not keyword:
+        return False
+    if re.search(r"\s", keyword):
+        return keyword in text
+    return bool(re.search(rf"\b{re.escape(keyword)}\b", text))
 
-    Uses semantic signals instead of rigid fixed templates to reduce misses
-    across wording variants in Portuguese/English.
+
+def _classify_phrase_reference_intent(user_text: str) -> tuple[bool, dict[str, bool]]:
+    """Return whether the user asks for the source of a specific phrase/snippet.
+
+    This stays deterministic, using semantic signals with boundary-aware matching
+    plus explicit rewrite exclusions to avoid false positives like "rephrase".
     """
     text = (user_text or "").lower()
-    if _extract_citation_number(user_text) is None:
-        return False
-
+    has_citation_number = _extract_citation_number(user_text) is not None
     has_quoted_snippet = bool(_extract_quoted_snippet(user_text))
 
     source_markers = [
@@ -1626,8 +1634,6 @@ def _is_phrase_reference_query(user_text: str) -> bool:
         "fonte",
         "citação",
         "citacao",
-        "fonte usada",
-        "source used",
     ]
     phrase_markers = [
         "phrase",
@@ -1635,17 +1641,45 @@ def _is_phrase_reference_query(user_text: str) -> bool:
         "excerpt",
         "trecho",
         "frase",
-        "nesta frase",
-        "nesse trecho",
-        "neste trecho",
-        "this phrase",
-        "this snippet",
+    ]
+    rewrite_exclusions = [
+        "rephrase",
+        "paraphrase",
+        "paráfrase",
+        "parafrasear",
+        "parafraseie",
+        "reescreva",
+        "reescrever",
+        "rewrite",
     ]
 
-    has_source_marker = any(marker in text for marker in source_markers)
-    has_phrase_marker = any(marker in text for marker in phrase_markers) or has_quoted_snippet
+    has_source_marker = any(_matches_intent_keyword(text, marker) for marker in source_markers)
+    has_phrase_marker = has_quoted_snippet or any(
+        _matches_intent_keyword(text, marker) for marker in phrase_markers
+    )
+    has_rewrite_exclusion = any(
+        _matches_intent_keyword(text, marker) for marker in rewrite_exclusions
+    )
 
-    return has_source_marker and has_phrase_marker
+    debug = {
+        "has_citation_number": has_citation_number,
+        "has_source_marker": has_source_marker,
+        "has_phrase_marker": has_phrase_marker,
+        "has_quoted_snippet": has_quoted_snippet,
+        "has_rewrite_exclusion": has_rewrite_exclusion,
+    }
+    return (
+        has_citation_number
+        and has_source_marker
+        and has_phrase_marker
+        and not has_rewrite_exclusion,
+        debug,
+    )
+
+
+def _is_phrase_reference_query(user_text: str) -> bool:
+    """Detect requests asking for the source/reference of a specific phrase/snippet."""
+    return _classify_phrase_reference_intent(user_text)[0]
 
 
 def _build_phrase_reference_query_seed(user_text: str) -> str:
@@ -3684,6 +3718,13 @@ def review_chat_turn(
         stage = str(pending_phrase_reference_action.get("stage") or "ask_mongo")
         missing_numbers = list(pending_phrase_reference_action.get("missing_numbers") or [])
         original_message = str(pending_phrase_reference_action.get("original_message") or user_msg)
+        pending_action_language = pending_phrase_reference_action.get("action_language")
+        if pending_action_language:
+            action_language = str(pending_action_language)
+            language_source = "pending_phrase_reference_action.action_language"
+        else:
+            action_language = _detect_user_language(original_message, fallback=language)
+            language_source = "detected_from_original_message"
 
         if _is_affirmative_confirmation(user_msg):
             if stage == "ask_mongo":
@@ -3699,7 +3740,13 @@ def review_chat_turn(
                             "web": False,
                             "at": datetime.now().isoformat(timespec="seconds"),
                             "tool_calls": [],
-                            "meta": meta,
+                            "meta": {
+                                **meta,
+                                "intent_source": pending_phrase_reference_action.get(
+                                    "intent_source", "deterministic"
+                                ),
+                                "language_source": language_source,
+                            },
                         }
                     )
                     history = history + [
@@ -3711,7 +3758,7 @@ def review_chat_turn(
                         history,
                         session_state,
                         _localized_text(
-                            language,
+                            action_language,
                             "✅ Referência candidata encontrada no MongoDB",
                             "✅ Candidate reference found in MongoDB",
                         ),
@@ -3720,7 +3767,7 @@ def review_chat_turn(
 
                 if allow_web:
                     followup = _localized_text(
-                        language,
+                        action_language,
                         "Não encontrei no MongoDB. Deseja buscar na internet? Responda **sim** ou **não**.",
                         "I couldn't find it in MongoDB. Do you want to search on the internet? Reply **yes** or **no**.",
                     )
@@ -3737,13 +3784,15 @@ def review_chat_turn(
                         history,
                         session_state,
                         _localized_text(
-                            language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"
+                            action_language,
+                            "⏳ Aguardando confirmação",
+                            "⏳ Awaiting confirmation",
                         ),
                         _read_md(working_copy),
                     )
 
                 reply = _localized_text(
-                    language,
+                    action_language,
                     "Não encontrei no MongoDB e a busca web está desativada. Ative **Allow web search** se quiser tentar internet.",
                     "I couldn't find it in MongoDB and web search is disabled. Enable **Allow web search** if you want to try internet search.",
                 )
@@ -3757,14 +3806,14 @@ def review_chat_turn(
                 return (
                     history,
                     session_state,
-                    _localized_text(language, "⚠️ Web desativado", "⚠️ Web disabled"),
+                    _localized_text(action_language, "⚠️ Web desativado", "⚠️ Web disabled"),
                     _read_md(working_copy),
                 )
 
             if stage == "ask_internet":
                 if not allow_web:
                     reply = _localized_text(
-                        language,
+                        action_language,
                         "A busca na internet está desativada. Ative **Allow web search** para continuar.",
                         "Internet search is disabled. Enable **Allow web search** to continue.",
                     )
@@ -3776,7 +3825,7 @@ def review_chat_turn(
                     return (
                         history,
                         session_state,
-                        _localized_text(language, "⚠️ Web desativado", "⚠️ Web disabled"),
+                        _localized_text(action_language, "⚠️ Web desativado", "⚠️ Web disabled"),
                         _read_md(working_copy),
                     )
 
@@ -3789,7 +3838,13 @@ def review_chat_turn(
                         "web": True,
                         "at": datetime.now().isoformat(timespec="seconds"),
                         "tool_calls": [],
-                        "meta": meta,
+                        "meta": {
+                            **meta,
+                            "intent_source": pending_phrase_reference_action.get(
+                                "intent_source", "deterministic"
+                            ),
+                            "language_source": language_source,
+                        },
                     }
                 )
                 history = history + [
@@ -3801,7 +3856,7 @@ def review_chat_turn(
                     history,
                     session_state,
                     _localized_text(
-                        language,
+                        action_language,
                         "✅ Busca na internet concluída",
                         "✅ Internet search completed",
                     ),
@@ -3811,7 +3866,7 @@ def review_chat_turn(
         if _is_negative_confirmation(user_msg):
             if stage == "ask_mongo" and allow_web:
                 followup = _localized_text(
-                    language,
+                    action_language,
                     "Ok, sem MongoDB. Deseja buscar na internet? Responda **sim** ou **não**.",
                     "Okay, skipping MongoDB. Do you want to search on the internet? Reply **yes** or **no**.",
                 )
@@ -3826,7 +3881,9 @@ def review_chat_turn(
                     history,
                     session_state,
                     _localized_text(
-                        language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"
+                        action_language,
+                        "⏳ Aguardando confirmação",
+                        "⏳ Awaiting confirmation",
                     ),
                     _read_md(working_copy),
                 )
@@ -3834,7 +3891,7 @@ def review_chat_turn(
             session_state["pending_phrase_reference_action"] = {}
             session_state["awaiting_phrase_reference_confirmation"] = False
             reply = _localized_text(
-                language,
+                action_language,
                 "Busca de referência por frase cancelada.",
                 "Phrase reference search canceled.",
             )
@@ -3846,12 +3903,12 @@ def review_chat_turn(
             return (
                 history,
                 session_state,
-                _localized_text(language, "✅ Cancelado", "✅ Canceled"),
+                _localized_text(action_language, "✅ Cancelado", "✅ Canceled"),
                 _read_md(working_copy),
             )
 
         wait_msg = _localized_text(
-            language,
+            action_language,
             "Responda **sim** ou **não** para continuar a busca da referência por frase.",
             "Reply **yes** or **no** to continue the phrase reference lookup.",
         )
@@ -3863,7 +3920,9 @@ def review_chat_turn(
         return (
             history,
             session_state,
-            _localized_text(language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"),
+            _localized_text(
+                action_language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"
+            ),
             _read_md(working_copy),
         )
 
@@ -3905,7 +3964,8 @@ def review_chat_turn(
 
     if reference_intent == "resolve_numbers":
         requested_numbers = _extract_requested_citation_numbers(user_msg)
-        if requested_numbers and _is_phrase_reference_query(user_msg):
+        phrase_reference_match, phrase_reference_debug = _classify_phrase_reference_intent(user_msg)
+        if requested_numbers and phrase_reference_match:
             inventory = _collect_reference_inventory(markdown)
             refs_by_number = inventory.get("references_by_number", {})
             missing_numbers = [n for n in requested_numbers if n not in refs_by_number]
@@ -3923,6 +3983,9 @@ def review_chat_turn(
                     "stage": "ask_mongo",
                     "missing_numbers": missing_numbers,
                     "original_message": user_msg,
+                    "action_language": language,
+                    "intent_source": "deterministic",
+                    "intent_debug": phrase_reference_debug,
                 }
                 session_state["awaiting_phrase_reference_confirmation"] = True
                 history = history + [

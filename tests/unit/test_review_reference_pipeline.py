@@ -316,6 +316,34 @@ def test_phrase_reference_pt_wording_variant_prompts_mongo(tmp_path: Path):
     assert "MongoDB" in history[-1]["content"]
 
 
+def test_phrase_reference_does_not_trigger_for_rephrase_request(tmp_path: Path):
+    review_file = tmp_path / "review.md"
+    review_file.write_text(
+        "## 1. Intro\n\n"
+        "Texto com citação [2].\n\n"
+        "### Referências desta seção\n"
+        "[1] AUTOR A. Título A.\n",
+        encoding="utf-8",
+    )
+
+    history: list = []
+    session_state = {
+        "working_copy_path": str(review_file),
+        "chat_history": [],
+    }
+
+    question = "rephrase this phrase with citation [2] to improve clarity"
+    history, session_state, _status, _ = review_chat_turn(
+        question,
+        history,
+        session_state,
+        web_enabled=False,
+    )
+
+    assert session_state.get("awaiting_phrase_reference_confirmation") is not True
+    assert not any("MongoDB" in msg.get("content", "") for msg in history if isinstance(msg, dict))
+
+
 def test_phrase_reference_yes_runs_mongo_and_finishes(tmp_path: Path):
     review_file = tmp_path / "review.md"
     review_file.write_text("## 1. Intro\n\nTexto [1].\n", encoding="utf-8")
@@ -353,6 +381,65 @@ def test_phrase_reference_yes_runs_mongo_and_finishes(tmp_path: Path):
     assert "MongoDB" in status
     assert session_state.get("awaiting_phrase_reference_confirmation") is False
     assert "Chronos paper" in history[-1]["content"]
+
+
+def test_phrase_reference_confirmation_uses_original_message_language(tmp_path: Path):
+    review_file = tmp_path / "review.md"
+    review_file.write_text("## 1. Intro\n\nTexto [1].\n", encoding="utf-8")
+
+    history: list = []
+    session_state = {
+        "working_copy_path": str(review_file),
+        "chat_history": [],
+        "pending_phrase_reference_action": {
+            "stage": "ask_mongo",
+            "missing_numbers": [2],
+            "original_message": "what is the reference of this phrase [2]?",
+            "action_language": "en",
+        },
+        "awaiting_phrase_reference_confirmation": True,
+    }
+
+    with patch("gradio_app.handlers.search_chunk_records", return_value=[]):
+        history, session_state, status, _ = review_chat_turn(
+            "sim",
+            history,
+            session_state,
+            web_enabled=True,
+        )
+
+    assert "Awaiting confirmation" in status
+    assert session_state.get("pending_phrase_reference_action", {}).get("stage") == "ask_internet"
+    assert "search on the internet" in history[-1]["content"]
+
+
+def test_phrase_reference_confirmation_falls_back_to_original_message_language(tmp_path: Path):
+    review_file = tmp_path / "review.md"
+    review_file.write_text("## 1. Intro\n\nTexto [1].\n", encoding="utf-8")
+
+    history: list = []
+    session_state = {
+        "working_copy_path": str(review_file),
+        "chat_history": [],
+        "pending_phrase_reference_action": {
+            "stage": "ask_mongo",
+            "missing_numbers": [2],
+            "original_message": "what is the reference of this phrase [2]?",
+        },
+        "awaiting_phrase_reference_confirmation": True,
+    }
+
+    with patch("gradio_app.handlers.search_chunk_records", return_value=[]):
+        history, session_state, status, _ = review_chat_turn(
+            "sim",
+            history,
+            session_state,
+            web_enabled=True,
+        )
+
+    assert "Awaiting confirmation" in status
+    assert session_state.get("pending_phrase_reference_action", {}).get("stage") == "ask_internet"
+    assert "search on the internet" in history[-1]["content"]
 
 
 def test_phrase_reference_no_mongo_asks_internet_when_web_enabled(tmp_path: Path):
