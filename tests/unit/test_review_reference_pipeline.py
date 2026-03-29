@@ -181,7 +181,7 @@ def test_reference_list_requires_confirmation_before_execution(tmp_path: Path):
         session_state,
         web_enabled=False,
     )
-    assert "Aguardando confirmação" in status
+    assert "Awaiting confirmation" in status or "Aguardando confirmação" in status
     assert session_state.get("awaiting_reference_confirmation") is True
     assert "Responda **sim**" in history[-1]["content"]
 
@@ -246,3 +246,219 @@ def test_metadata_complete_with_doi():
         "derived_from_path": True,
     }
     assert _is_metadata_complete(metadata) is True
+
+
+def test_phrase_reference_missing_local_id_prompts_mongo(tmp_path: Path):
+    review_file = tmp_path / "review.md"
+    review_file.write_text(
+        "## 1. Intro\n\n"
+        "Studies indicate better performance [2].\n\n"
+        "### Referências desta seção\n"
+        "[1] AUTOR A. Título A.\n",
+        encoding="utf-8",
+    )
+
+    history: list = []
+    session_state = {
+        "working_copy_path": str(review_file),
+        "chat_history": [],
+    }
+
+    question = (
+        "what is the reference of the phrase? "
+        "Studies generally indicate that transformer-based foundation models like Chronos "
+        "tend to outperform classical recurrent neural networks such as LSTM [2]."
+    )
+    history, session_state, status, _ = review_chat_turn(
+        question,
+        history,
+        session_state,
+        web_enabled=False,
+    )
+
+    assert "Awaiting confirmation" in status or "Aguardando confirmação" in status
+    assert session_state.get("awaiting_phrase_reference_confirmation") is True
+    assert "MongoDB" in history[-1]["content"]
+
+
+def test_phrase_reference_pt_wording_variant_prompts_mongo(tmp_path: Path):
+    review_file = tmp_path / "review.md"
+    review_file.write_text(
+        "## 1. Intro\n\n"
+        "Texto com citação [2].\n\n"
+        "### Referências desta seção\n"
+        "[1] AUTOR A. Título A.\n",
+        encoding="utf-8",
+    )
+
+    history: list = []
+    session_state = {
+        "working_copy_path": str(review_file),
+        "chat_history": [],
+    }
+
+    question = (
+        "nesta frase Studies generally indicate that transformer-based foundation "
+        "models like Chronos tend to outperform classical recurrent neural networks "
+        "such as LSTM in zero-shot inference tasks, particularly in capturing peak "
+        "flow events and seasonal patterns critical for flood forecasting [2]. "
+        "qual a fonte usada?"
+    )
+    history, session_state, status, _ = review_chat_turn(
+        question,
+        history,
+        session_state,
+        web_enabled=False,
+    )
+
+    assert "Awaiting confirmation" in status or "Aguardando confirmação" in status
+    assert session_state.get("awaiting_phrase_reference_confirmation") is True
+    assert "MongoDB" in history[-1]["content"]
+
+
+def test_phrase_reference_yes_runs_mongo_and_finishes(tmp_path: Path):
+    review_file = tmp_path / "review.md"
+    review_file.write_text("## 1. Intro\n\nTexto [1].\n", encoding="utf-8")
+
+    history: list = []
+    session_state = {
+        "working_copy_path": str(review_file),
+        "chat_history": [],
+        "pending_phrase_reference_action": {
+            "stage": "ask_mongo",
+            "missing_numbers": [2],
+            "original_message": "reference of the phrase [2]",
+        },
+        "awaiting_phrase_reference_confirmation": True,
+    }
+
+    with patch(
+        "gradio_app.handlers.search_chunk_records",
+        return_value=[
+            {
+                "source_title": "Chronos paper",
+                "doi": "10.1000/xyz",
+                "source_url": "https://example.org/chronos",
+                "file_path": "/tmp/chronos.pdf",
+            }
+        ],
+    ):
+        history, session_state, status, _ = review_chat_turn(
+            "sim",
+            history,
+            session_state,
+            web_enabled=False,
+        )
+
+    assert "MongoDB" in status
+    assert session_state.get("awaiting_phrase_reference_confirmation") is False
+    assert "Chronos paper" in history[-1]["content"]
+
+
+def test_phrase_reference_no_mongo_asks_internet_when_web_enabled(tmp_path: Path):
+    review_file = tmp_path / "review.md"
+    review_file.write_text("## 1. Intro\n\nTexto [1].\n", encoding="utf-8")
+
+    history: list = []
+    session_state = {
+        "working_copy_path": str(review_file),
+        "chat_history": [],
+        "pending_phrase_reference_action": {
+            "stage": "ask_mongo",
+            "missing_numbers": [2],
+            "original_message": "reference of the phrase [2]",
+        },
+        "awaiting_phrase_reference_confirmation": True,
+    }
+
+    history, session_state, status, _ = review_chat_turn(
+        "não",
+        history,
+        session_state,
+        web_enabled=True,
+    )
+
+    assert "Awaiting confirmation" in status or "Aguardando confirmação" in status
+    assert session_state.get("awaiting_phrase_reference_confirmation") is True
+    assert session_state.get("pending_phrase_reference_action", {}).get("stage") == "ask_internet"
+    assert "internet" in history[-1]["content"].lower()
+
+
+def test_phrase_reference_yes_internet_disabled_warns(tmp_path: Path):
+    review_file = tmp_path / "review.md"
+    review_file.write_text("## 1. Intro\n\nTexto [1].\n", encoding="utf-8")
+
+    history: list = []
+    session_state = {
+        "working_copy_path": str(review_file),
+        "chat_history": [],
+        "pending_phrase_reference_action": {
+            "stage": "ask_internet",
+            "missing_numbers": [2],
+            "original_message": "reference of the phrase [2]",
+        },
+        "awaiting_phrase_reference_confirmation": True,
+    }
+
+    history, session_state, status, _ = review_chat_turn(
+        "sim",
+        history,
+        session_state,
+        web_enabled=False,
+    )
+
+    assert "Web disabled" in status or "Web desativado" in status
+    assert session_state.get("awaiting_phrase_reference_confirmation") is True
+
+
+def test_phrase_reference_yes_internet_runs_when_enabled(tmp_path: Path):
+    review_file = tmp_path / "review.md"
+    review_file.write_text("## 1. Intro\n\nTexto [1].\n", encoding="utf-8")
+
+    history: list = []
+    session_state = {
+        "working_copy_path": str(review_file),
+        "chat_history": [],
+        "pending_phrase_reference_action": {
+            "stage": "ask_internet",
+            "missing_numbers": [2],
+            "original_message": "reference of the phrase [2]",
+        },
+        "awaiting_phrase_reference_confirmation": True,
+    }
+
+    with (
+        patch(
+            "gradio_app.handlers.search_tavily_incremental",
+            return_value={"new_urls": ["https://example.org/chronos"]},
+        ),
+        patch(
+            "gradio_app.handlers.extract_tavily",
+            new=type(
+                "_FakeExtractTool",
+                (),
+                {
+                    "invoke": staticmethod(
+                        lambda _payload: {
+                            "extracted": [
+                                {
+                                    "title": "Chronos Foundation Models",
+                                    "url": "https://example.org/chronos",
+                                }
+                            ]
+                        }
+                    )
+                },
+            )(),
+        ),
+    ):
+        history, session_state, status, _ = review_chat_turn(
+            "yes",
+            history,
+            session_state,
+            web_enabled=True,
+        )
+
+    assert "internet" in status.lower()
+    assert session_state.get("awaiting_phrase_reference_confirmation") is False
+    assert "Chronos Foundation Models" in history[-1]["content"]
