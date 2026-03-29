@@ -1379,7 +1379,7 @@ def _build_image_scope_description(
                 f"paragraph {para_num + 1} of section '{section['title']}'",
             )
             excerpt = (
-                f"## {section['title']}\n\n" f"[PARAGRAPH {para_num + 1}]\n{para.get('text', '')}\n"
+                f"## {section['title']}\n\n[PARAGRAPH {para_num + 1}]\n{para.get('text', '')}\n"
             )
             return scope, excerpt
 
@@ -1603,6 +1603,214 @@ def _is_citation_usage_query(user_text: str) -> bool:
         "citam",
     ]
     return any(w in text for w in listing_words) and any(re.search(w, text) for w in usage_words)
+
+
+def _matches_intent_keyword(text: str, keyword: str) -> bool:
+    """Match a keyword as a whole token or exact phrase inside text."""
+    text = (text or "").lower()
+    keyword = (keyword or "").strip().lower()
+    if not keyword:
+        return False
+    if re.search(r"\s", keyword):
+        return keyword in text
+    return bool(re.search(rf"\b{re.escape(keyword)}\b", text))
+
+
+def _classify_phrase_reference_intent(user_text: str) -> tuple[bool, dict[str, bool]]:
+    """Return whether the user asks for the source of a specific phrase/snippet.
+
+    This stays deterministic, using semantic signals with boundary-aware matching
+    plus explicit rewrite exclusions to avoid false positives like "rephrase".
+    """
+    text = (user_text or "").lower()
+    has_citation_number = _extract_citation_number(user_text) is not None
+    has_quoted_snippet = bool(_extract_quoted_snippet(user_text))
+
+    source_markers = [
+        "reference",
+        "source",
+        "citation",
+        "referência",
+        "referencia",
+        "fonte",
+        "citação",
+        "citacao",
+    ]
+    phrase_markers = [
+        "phrase",
+        "snippet",
+        "excerpt",
+        "trecho",
+        "frase",
+    ]
+    rewrite_exclusions = [
+        "rephrase",
+        "paraphrase",
+        "paráfrase",
+        "parafrasear",
+        "parafraseie",
+        "reescreva",
+        "reescrever",
+        "rewrite",
+    ]
+
+    has_source_marker = any(_matches_intent_keyword(text, marker) for marker in source_markers)
+    has_phrase_marker = has_quoted_snippet or any(
+        _matches_intent_keyword(text, marker) for marker in phrase_markers
+    )
+    has_rewrite_exclusion = any(
+        _matches_intent_keyword(text, marker) for marker in rewrite_exclusions
+    )
+
+    debug = {
+        "has_citation_number": has_citation_number,
+        "has_source_marker": has_source_marker,
+        "has_phrase_marker": has_phrase_marker,
+        "has_quoted_snippet": has_quoted_snippet,
+        "has_rewrite_exclusion": has_rewrite_exclusion,
+    }
+    return (
+        has_citation_number
+        and has_source_marker
+        and has_phrase_marker
+        and not has_rewrite_exclusion,
+        debug,
+    )
+
+
+def _is_phrase_reference_query(user_text: str) -> bool:
+    """Detect requests asking for the source/reference of a specific phrase/snippet."""
+    return _classify_phrase_reference_intent(user_text)[0]
+
+
+def _build_phrase_reference_query_seed(user_text: str) -> str:
+    """Build the best-effort query seed from quoted text or from the full user message."""
+    snippet = _extract_quoted_snippet(user_text)
+    if snippet:
+        return snippet
+
+    marker_match = re.search(
+        r"(?:frase|phrase|trecho)\s*[:?]\s*(.+)$",
+        user_text,
+        flags=re.IGNORECASE,
+    )
+    if marker_match:
+        candidate = marker_match.group(1).strip()
+        if candidate:
+            return candidate
+
+    return (user_text or "").strip()
+
+
+def _search_reference_in_mongo_by_phrase(
+    user_text: str, missing_numbers: list[int]
+) -> tuple[str, dict]:
+    """Search MongoDB vectors for likely source metadata for an unresolved phrase citation."""
+    language = _detect_user_language(user_text)
+    query_seed = _build_phrase_reference_query_seed(user_text)
+    if not query_seed:
+        return (
+            _localized_text(
+                language,
+                "Não consegui extrair um trecho para busca no MongoDB.",
+                "I couldn't extract a phrase to search in MongoDB.",
+            ),
+            {"found": False, "mongo_queries": 0, "mongo_hits": 0},
+        )
+
+    records = search_chunk_records(query_seed[:500], k=5)
+    if not records:
+        return (
+            _localized_text(
+                language,
+                "Não encontrei candidato no MongoDB para essa frase.",
+                "I couldn't find a MongoDB candidate for that phrase.",
+            ),
+            {"found": False, "mongo_queries": 1, "mongo_hits": 0},
+        )
+
+    best = records[0]
+    title = str(best.get("source_title") or "").strip()
+    doi = str(best.get("doi") or "").strip()
+    url = str(best.get("source_url") or "").strip()
+    file_path = str(best.get("file_path") or "").strip()
+
+    lines = [
+        _localized_text(
+            language,
+            f"### Referência candidata para {', '.join(f'[{n}]' for n in missing_numbers)} (MongoDB)",
+            f"### Candidate reference for {', '.join(f'[{n}]' for n in missing_numbers)} (MongoDB)",
+        ),
+        "",
+        f"- {_localized_text(language, 'Título', 'Title')}: {title or _localized_text(language, '(não identificado)', '(not identified)')}",
+    ]
+    if doi:
+        lines.append(f"- DOI: {doi}")
+    if url:
+        lines.append(f"- URL: {url}")
+    if file_path:
+        lines.append(f"- {_localized_text(language, 'Arquivo', 'File')}: {file_path}")
+
+    return "\n".join(lines), {"found": True, "mongo_queries": 1, "mongo_hits": 1}
+
+
+def _search_reference_on_web_by_phrase(
+    user_text: str, missing_numbers: list[int]
+) -> tuple[str, dict]:
+    """Search the internet (Tavily) for likely source metadata for an unresolved phrase citation."""
+    language = _detect_user_language(user_text)
+    query_seed = _build_phrase_reference_query_seed(user_text)
+    if not query_seed:
+        return (
+            _localized_text(
+                language,
+                "Não consegui extrair um trecho para busca na internet.",
+                "I couldn't extract a phrase to search on the internet.",
+            ),
+            {"found": False, "web_queries": 0, "web_hits": 0},
+        )
+
+    web = search_tavily_incremental(query=query_seed[:400], previous_urls=[], max_results=3)
+    urls = web.get("new_urls", [])[:3]
+    if not urls:
+        return (
+            _localized_text(
+                language,
+                "Não encontrei resultados web para essa frase.",
+                "I couldn't find web results for that phrase.",
+            ),
+            {"found": False, "web_queries": 1, "web_hits": 0},
+        )
+
+    extracted = extract_tavily.invoke({"urls": urls, "include_images": False})
+    items = extracted.get("extracted", []) if isinstance(extracted, dict) else []
+    if not items:
+        return (
+            _localized_text(
+                language,
+                "Encontrei URLs, mas não consegui extrair metadados suficientes.",
+                "I found URLs, but I couldn't extract enough metadata.",
+            ),
+            {"found": False, "web_queries": 1, "web_hits": 0},
+        )
+
+    first = items[0]
+    title = str(first.get("title") or "").strip()
+    url = str(first.get("url") or "").strip()
+
+    lines = [
+        _localized_text(
+            language,
+            f"### Referência candidata para {', '.join(f'[{n}]' for n in missing_numbers)} (Internet)",
+            f"### Candidate reference for {', '.join(f'[{n}]' for n in missing_numbers)} (Internet)",
+        ),
+        "",
+        f"- {_localized_text(language, 'Título', 'Title')}: {title or _localized_text(language, '(não identificado)', '(not identified)')}",
+    ]
+    if url:
+        lines.append(f"- URL: {url}")
+
+    return "\n".join(lines), {"found": True, "web_queries": 1, "web_hits": 1}
 
 
 def _extract_requested_citation_numbers(user_text: str) -> list[int]:
@@ -3351,6 +3559,10 @@ def review_chat_turn(
     pending_edit = session_state.get("pending_edit") or {}
     pending_reference_action = session_state.get("pending_reference_action") or {}
     awaiting_reference_confirmation = bool(session_state.get("awaiting_reference_confirmation"))
+    pending_phrase_reference_action = session_state.get("pending_phrase_reference_action") or {}
+    awaiting_phrase_reference_confirmation = bool(
+        session_state.get("awaiting_phrase_reference_confirmation")
+    )
     target_hint = _resolve_target_hint(
         user_msg,
         sections,
@@ -3503,6 +3715,219 @@ def review_chat_turn(
             _read_md(working_copy),
         )
 
+    if awaiting_phrase_reference_confirmation and pending_phrase_reference_action:
+        stage = str(pending_phrase_reference_action.get("stage") or "ask_mongo")
+        missing_numbers = list(pending_phrase_reference_action.get("missing_numbers") or [])
+        original_message = str(pending_phrase_reference_action.get("original_message") or user_msg)
+        pending_action_language = pending_phrase_reference_action.get("action_language")
+        if pending_action_language:
+            action_language = str(pending_action_language)
+            language_source = "pending_phrase_reference_action.action_language"
+        else:
+            action_language = _detect_user_language(original_message, fallback=language)
+            language_source = "detected_from_original_message"
+
+        if _is_affirmative_confirmation(user_msg):
+            if stage == "ask_mongo":
+                reply, meta = _search_reference_in_mongo_by_phrase(
+                    original_message, missing_numbers
+                )
+                if meta.get("found"):
+                    session_state["pending_phrase_reference_action"] = {}
+                    session_state["awaiting_phrase_reference_confirmation"] = False
+                    session_state.setdefault("retrieval_trace", []).append(
+                        {
+                            "action": "phrase_reference_mongo",
+                            "web": False,
+                            "at": datetime.now().isoformat(timespec="seconds"),
+                            "tool_calls": [],
+                            "meta": {
+                                **meta,
+                                "intent_source": pending_phrase_reference_action.get(
+                                    "intent_source", "deterministic"
+                                ),
+                                "language_source": language_source,
+                            },
+                        }
+                    )
+                    history = history + [
+                        {"role": "user", "content": user_msg},
+                        {"role": "assistant", "content": reply},
+                    ]
+                    session_state["chat_history"] = history
+                    return (
+                        history,
+                        session_state,
+                        _localized_text(
+                            action_language,
+                            "✅ Referência candidata encontrada no MongoDB",
+                            "✅ Candidate reference found in MongoDB",
+                        ),
+                        _read_md(working_copy),
+                    )
+
+                if allow_web:
+                    followup = _localized_text(
+                        action_language,
+                        "Não encontrei no MongoDB. Deseja buscar na internet? Responda **sim** ou **não**.",
+                        "I couldn't find it in MongoDB. Do you want to search on the internet? Reply **yes** or **no**.",
+                    )
+                    pending_phrase_reference_action["stage"] = "ask_internet"
+                    session_state["pending_phrase_reference_action"] = (
+                        pending_phrase_reference_action
+                    )
+                    history = history + [
+                        {"role": "user", "content": user_msg},
+                        {"role": "assistant", "content": followup},
+                    ]
+                    session_state["chat_history"] = history
+                    return (
+                        history,
+                        session_state,
+                        _localized_text(
+                            action_language,
+                            "⏳ Aguardando confirmação",
+                            "⏳ Awaiting confirmation",
+                        ),
+                        _read_md(working_copy),
+                    )
+
+                reply = _localized_text(
+                    action_language,
+                    "Não encontrei no MongoDB e a busca web está desativada. Ative **Allow web search** se quiser tentar internet.",
+                    "I couldn't find it in MongoDB and web search is disabled. Enable **Allow web search** if you want to try internet search.",
+                )
+                pending_phrase_reference_action["stage"] = "ask_internet"
+                session_state["pending_phrase_reference_action"] = pending_phrase_reference_action
+                session_state["awaiting_phrase_reference_confirmation"] = True
+                history = history + [
+                    {"role": "user", "content": user_msg},
+                    {"role": "assistant", "content": reply},
+                ]
+                session_state["chat_history"] = history
+                return (
+                    history,
+                    session_state,
+                    _localized_text(action_language, "⚠️ Web desativado", "⚠️ Web disabled"),
+                    _read_md(working_copy),
+                )
+
+            if stage == "ask_internet":
+                if not allow_web:
+                    reply = _localized_text(
+                        action_language,
+                        "A busca na internet está desativada. Ative **Allow web search** para continuar.",
+                        "Internet search is disabled. Enable **Allow web search** to continue.",
+                    )
+                    history = history + [
+                        {"role": "user", "content": user_msg},
+                        {"role": "assistant", "content": reply},
+                    ]
+                    session_state["chat_history"] = history
+                    return (
+                        history,
+                        session_state,
+                        _localized_text(action_language, "⚠️ Web desativado", "⚠️ Web disabled"),
+                        _read_md(working_copy),
+                    )
+
+                reply, meta = _search_reference_on_web_by_phrase(original_message, missing_numbers)
+                session_state["pending_phrase_reference_action"] = {}
+                session_state["awaiting_phrase_reference_confirmation"] = False
+                session_state.setdefault("retrieval_trace", []).append(
+                    {
+                        "action": "phrase_reference_web",
+                        "web": True,
+                        "at": datetime.now().isoformat(timespec="seconds"),
+                        "tool_calls": [],
+                        "meta": {
+                            **meta,
+                            "intent_source": pending_phrase_reference_action.get(
+                                "intent_source", "deterministic"
+                            ),
+                            "language_source": language_source,
+                        },
+                    }
+                )
+                history = history + [
+                    {"role": "user", "content": user_msg},
+                    {"role": "assistant", "content": reply},
+                ]
+                session_state["chat_history"] = history
+                return (
+                    history,
+                    session_state,
+                    _localized_text(
+                        action_language,
+                        "✅ Busca na internet concluída",
+                        "✅ Internet search completed",
+                    ),
+                    _read_md(working_copy),
+                )
+
+        if _is_negative_confirmation(user_msg):
+            if stage == "ask_mongo" and allow_web:
+                followup = _localized_text(
+                    action_language,
+                    "Ok, sem MongoDB. Deseja buscar na internet? Responda **sim** ou **não**.",
+                    "Okay, skipping MongoDB. Do you want to search on the internet? Reply **yes** or **no**.",
+                )
+                pending_phrase_reference_action["stage"] = "ask_internet"
+                session_state["pending_phrase_reference_action"] = pending_phrase_reference_action
+                history = history + [
+                    {"role": "user", "content": user_msg},
+                    {"role": "assistant", "content": followup},
+                ]
+                session_state["chat_history"] = history
+                return (
+                    history,
+                    session_state,
+                    _localized_text(
+                        action_language,
+                        "⏳ Aguardando confirmação",
+                        "⏳ Awaiting confirmation",
+                    ),
+                    _read_md(working_copy),
+                )
+
+            session_state["pending_phrase_reference_action"] = {}
+            session_state["awaiting_phrase_reference_confirmation"] = False
+            reply = _localized_text(
+                action_language,
+                "Busca de referência por frase cancelada.",
+                "Phrase reference search canceled.",
+            )
+            history = history + [
+                {"role": "user", "content": user_msg},
+                {"role": "assistant", "content": reply},
+            ]
+            session_state["chat_history"] = history
+            return (
+                history,
+                session_state,
+                _localized_text(action_language, "✅ Cancelado", "✅ Canceled"),
+                _read_md(working_copy),
+            )
+
+        wait_msg = _localized_text(
+            action_language,
+            "Responda **sim** ou **não** para continuar a busca da referência por frase.",
+            "Reply **yes** or **no** to continue the phrase reference lookup.",
+        )
+        history = history + [
+            {"role": "user", "content": user_msg},
+            {"role": "assistant", "content": wait_msg},
+        ]
+        session_state["chat_history"] = history
+        return (
+            history,
+            session_state,
+            _localized_text(
+                action_language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"
+            ),
+            _read_md(working_copy),
+        )
+
     if reference_intent == "list_all":
         reply, pending_data = _build_reference_confirmation_prompt(
             reference_intent, user_msg, allow_web=allow_web
@@ -3540,6 +3965,45 @@ def review_chat_turn(
         )
 
     if reference_intent == "resolve_numbers":
+        requested_numbers = _extract_requested_citation_numbers(user_msg)
+        phrase_reference_match, phrase_reference_debug = _classify_phrase_reference_intent(user_msg)
+        if requested_numbers and phrase_reference_match:
+            inventory = _collect_reference_inventory(markdown)
+            refs_by_number = inventory.get("references_by_number", {})
+            missing_numbers = [n for n in requested_numbers if n not in refs_by_number]
+            if missing_numbers:
+                prompt = _localized_text(
+                    language,
+                    "Não encontrei essas referências na lista atual: "
+                    f"{', '.join(f'[{n}]' for n in missing_numbers)}.\n"
+                    "Deseja que eu busque no MongoDB? Responda **sim** ou **não**.",
+                    "I couldn't find these references in the current list: "
+                    f"{', '.join(f'[{n}]' for n in missing_numbers)}.\n"
+                    "Do you want me to search in MongoDB? Reply **yes** or **no**.",
+                )
+                session_state["pending_phrase_reference_action"] = {
+                    "stage": "ask_mongo",
+                    "missing_numbers": missing_numbers,
+                    "original_message": user_msg,
+                    "action_language": language,
+                    "intent_source": "deterministic",
+                    "intent_debug": phrase_reference_debug,
+                }
+                session_state["awaiting_phrase_reference_confirmation"] = True
+                history = history + [
+                    {"role": "user", "content": user_msg},
+                    {"role": "assistant", "content": prompt},
+                ]
+                session_state["chat_history"] = history
+                return (
+                    history,
+                    session_state,
+                    _localized_text(
+                        language, "⏳ Aguardando confirmação", "⏳ Awaiting confirmation"
+                    ),
+                    _read_md(working_copy),
+                )
+
         reply, ref_meta = _handle_resolve_numbers_request(markdown, user_msg, allow_web=allow_web)
         history = history + [
             {"role": "user", "content": user_msg},
@@ -3635,8 +4099,7 @@ def review_chat_turn(
                 language,
                 "A sugestão de imagens requer busca na web. "
                 "Ative **Allow web search** e tente novamente.",
-                "Image suggestion requires web search. "
-                "Enable **Allow web search** and try again.",
+                "Image suggestion requires web search. Enable **Allow web search** and try again.",
             )
             history = history + [
                 {"role": "user", "content": user_msg},
@@ -3675,8 +4138,7 @@ def review_chat_turn(
                 language,
                 "A sugestão de imagens requer busca na web. "
                 "Ative **Allow web search** e tente novamente.",
-                "Image suggestion requires web search. "
-                "Enable **Allow web search** and try again.",
+                "Image suggestion requires web search. Enable **Allow web search** and try again.",
             )
             history = history + [
                 {"role": "user", "content": user_msg},

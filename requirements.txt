@@ -1,6 +1,8 @@
 langgraph>=0.0.20
-langchain-community>=0.0.10
+langchain-community>=0.0.10,<1.0.0
 langchain-google-genai>=1.0.0
+langchain-groq>=0.1.0,<1.0.0
+langchain>=1.0.0,<2.0.0
 python-dotenv>=1.0.0
 tavily-python>=0.3.0
 pymongo>=4.5.0
