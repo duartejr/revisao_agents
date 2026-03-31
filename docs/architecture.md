@@ -3,7 +3,7 @@
 ## Overview
 
 ```
-revisao_agent/
+revisao_agents/
 ├── run_ui.py              ← Ponto de entrada da UI Gradio (porta 7860)
 ├── scripts/
 │   ├── bootstrap.sh       ← Bootstrap interativo Linux/macOS

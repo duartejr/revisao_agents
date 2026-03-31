@@ -8,7 +8,7 @@
 #
 # Este script:
 #   1. Verifica pré-requisitos (Python >= 3.11, uv, git)
-#   2. Instala as dependências do projeto com `uv sync`
+#   2. Instala as dependências do projeto com `uv sync --extra dev`
 #   3. Gera o arquivo .env com suas chaves de API
 #   4. Valida as variáveis obrigatórias
 #   5. Exibe as instruções de início
@@ -107,16 +107,17 @@ fi
 echo ""
 
 # =============================================================================
-# FASE 2 — Instalação de dependências
+# FASE 2 — Instalação de dependências e virtual environment
 # =============================================================================
 echo -e "${BOLD}[2/4] Instalando dependências do projeto...${NC}"
 echo ""
 
 cd "$PROJECT_DIR"
 
-info "Executando: uv sync"
-if uv sync; then
-  ok "Dependências instaladas com sucesso."
+info "Executando: uv sync --extra dev"
+info "(Isso criará um virtual environment em: .venv/)"
+if uv sync --extra dev; then
+  ok "Dependências instaladas com sucesso em .venv/ (incluindo ferramentas dev)"
 else
   err "Falha ao instalar dependências. Verifique o pyproject.toml e tente novamente."
   exit 1
@@ -291,6 +292,29 @@ echo -e "  ${GREEN}uv run python -m revisao_agents${NC}"
 echo ""
 echo -e "${BOLD}  Para usar a CLI script diretamente:${NC}"
 echo -e "  ${GREEN}uv run revisao-agents --help${NC}"
+echo ""
+echo -e "${BOLD}  Para executar tarefas de desenvolvimento (lint, test, typecheck):${NC}"
+echo -e "  ${GREEN}uv run make lint${NC}"
+echo -e "  ${GREEN}uv run make typecheck${NC}"
+echo -e "  ${GREEN}uv run make test${NC}"
+echo ""
+echo -e "  Ou execute todos os checks de uma vez:${NC}"
+echo -e "  ${GREEN}uv run make all${NC}"
+echo ""
+echo -e "${BOLD}  Ambiente Virtual (Virtual Environment):${NC}"
+echo -e "  O virtual environment foi criado em: ${CYAN}.venv/${NC}"
+echo ""
+echo -e "${BOLD}  Opção 1 (Recomendado): Usar 'uv run' para todas as tarefas${NC}"
+echo -e "    • Não requer ativação manual"
+echo -e "    • Utiliza .venv/ automaticamente"
+echo -e "    • Exemplo: ${GREEN}uv run python script.py${NC}"
+echo ""
+echo -e "${BOLD}  Opção 2 (Alternativa): Ativar o venv manualmente${NC}"
+echo -e "    • Bash/Zsh: ${GREEN}source .venv/bin/activate${NC}"
+echo -e "    • Fish:     ${GREEN}source .venv/bin/activate.fish${NC}"
+echo -e "    • PowerShell: ${GREEN}.venv/Scripts/Activate.ps1${NC}"
+echo -e "    • Depois use comandos diretamente: ${GREEN}python, pytest, ruff${NC}"
+echo -e "    • Desativar: ${GREEN}deactivate${NC}"
 echo ""
 echo -e "  Acesse a UI em: ${CYAN}http://localhost:7860${NC}"
 echo ""
