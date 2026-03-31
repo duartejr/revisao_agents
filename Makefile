@@ -1,7 +1,7 @@
 # Revisão Agents – Makefile
 # Usage: make <target>
 
-.PHONY: help install install-dev lint format typecheck test test-cov clean
+.PHONY: help install install-dev lint format typecheck test test-cov all clean
 
 PYTHON := python
 SRC    := src/revisao_agents
@@ -11,27 +11,32 @@ help:           ## Show this help message
 	  awk 'BEGIN {FS = ":.*##"}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 install:        ## Install runtime dependencies
-	pip install -e .
+	uv sync
 
 install-dev:    ## Install all dependencies including dev tools
-	pip install -e ".[dev]"
-	pre-commit install
+	uv sync --extra dev
+	uv run --extra dev pre-commit install
 
 lint:           ## Run ruff linter
-	ruff check $(SRC)
+	uv run --extra dev ruff check $(SRC)
 
 format:         ## Auto-fix style issues with ruff
-	ruff check --fix $(SRC)
-	ruff format $(SRC)
+	uv run --extra dev ruff check --fix $(SRC)
+	uv run --extra dev ruff format $(SRC)
 
 typecheck:      ## Run mypy type checker
-	mypy $(SRC)
+	uv run --extra dev mypy $(SRC)
 
 test:           ## Run all tests
-	pytest tests/
+	uv run --extra dev pytest tests/
 
 test-cov:       ## Run tests with coverage report
-	pytest tests/ --cov=$(SRC) --cov-report=term-missing --cov-report=html
+	uv run --extra dev pytest tests/ --cov=$(SRC) --cov-report=term-missing --cov-report=html
+
+all:            ## Run lint, typecheck, and tests
+	$(MAKE) lint
+	$(MAKE) typecheck
+	$(MAKE) test
 
 clean:          ## Remove build artifacts and caches
 	rm -rf .pytest_cache htmlcov .ruff_cache .mypy_cache dist build

@@ -7,7 +7,7 @@
 #
 # Este script:
 #   1. Verifica pré-requisitos (Python >= 3.11, uv, git)
-#   2. Instala as dependências do projeto com `uv sync`
+#   2. Instala as dependências do projeto com `uv sync --extra dev`
 #   3. Gera o arquivo .env com suas chaves de API
 #   4. Valida as variáveis obrigatórias
 #   5. Exibe as instruções de início
@@ -135,17 +135,18 @@ if (-not $uvAvailable) {
 Write-Host ""
 
 # =============================================================================
-# FASE 2 — Instalação de dependências
+# FASE 2 — Instalação de dependências e virtual environment
 # =============================================================================
 Write-Host "[2/4] Instalando dependencias do projeto..." -ForegroundColor White
 Write-Host ""
 
 Set-Location $projectDir
 
-Write-Info "Executando: uv sync"
+Write-Info "Executando: uv sync --extra dev"
+Write-Info "(Isso criara um virtual environment em: .venv\)"
 try {
-    uv sync
-    Write-Ok "Dependencias instaladas com sucesso."
+    uv sync --extra dev
+    Write-Ok "Dependencias instaladas com sucesso em .venv\ (incluindo ferramentas dev)"
 } catch {
     Write-Err "Falha ao instalar dependencias. Verifique o pyproject.toml e tente novamente."
     exit 1
@@ -306,6 +307,25 @@ Write-Host "  uv run python -m revisao_agents" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Para usar a CLI script diretamente:" -ForegroundColor White
 Write-Host "  uv run revisao-agents --help" -ForegroundColor Green
+Write-Host ""
+Write-Host "  Para executar tarefas de desenvolvimento (lint, test, typecheck):" -ForegroundColor White
+Write-Host "  uv run --extra dev ruff check src/revisao_agents" -ForegroundColor Green
+Write-Host "  uv run --extra dev mypy src/revisao_agents" -ForegroundColor Green
+Write-Host "  uv run --extra dev pytest tests/" -ForegroundColor Green
+Write-Host ""
+Write-Host "  Ambiente Virtual (Virtual Environment):" -ForegroundColor White
+Write-Host "  O virtual environment foi criado em: .venv" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Opcao 1 (Recomendado): Usar 'uv run' para todas as tarefas" -ForegroundColor White
+Write-Host "    - Nao requer ativacao manual" -ForegroundColor Gray
+Write-Host "    - Utiliza .venv automaticamente" -ForegroundColor Gray
+Write-Host "    - Exemplo: uv run python script.py" -ForegroundColor Green
+Write-Host ""
+Write-Host "  Opcao 2 (Alternativa): Ativar o venv manualmente" -ForegroundColor White
+Write-Host "    - PowerShell:  .venv\Scripts\Activate.ps1" -ForegroundColor Green
+Write-Host "    - Cmd:         .venv\Scripts\activate.bat" -ForegroundColor Green
+Write-Host "    - Depois use comandos diretamente: python, pytest, ruff" -ForegroundColor Gray
+Write-Host "    - Desativar: deactivate" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Acesse a UI em: http://localhost:7860" -ForegroundColor Cyan
 Write-Host ""

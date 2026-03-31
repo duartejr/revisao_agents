@@ -29,8 +29,8 @@ Sistema agêntico para planejamento e escrita de revisões acadêmicas e capítu
 ### 1. Clone o repositório
 
 ```bash
-git clone <URL-DO-REPOSITORIO>
-cd revisao_agent
+git clone https://github.com/duartejr/revisao_agents
+cd revisao_agents
 ```
 
 ### 2. Execute o bootstrap (configura ambiente e credenciais)
@@ -51,7 +51,7 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 
 O script irá:
 1. Verificar Python, uv e git
-2. Instalar dependências com `uv sync`
+2. Instalar dependências com `uv sync --extra dev`
 3. Criar o arquivo `.env` com um assistente interativo
 4. Validar as variáveis obrigatórias
 5. Exibir os comandos de início
@@ -212,7 +212,7 @@ uv run python run_ui.py --port 8080
 ## Estrutura do projeto
 
 ```
-revisao_agent/
+revisao_agents/
 ├── run_ui.py              ← Ponto de entrada da UI Gradio
 ├── scripts/
 │   ├── bootstrap.sh       ← Bootstrap Linux/macOS

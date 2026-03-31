@@ -47,3 +47,6 @@ vector_db*/
 plans/
 reviews/
 tavily_searchs/
+roadmap/
+reports/
+uv.lock

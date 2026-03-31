@@ -11,13 +11,15 @@ O sistema oferece dois modos de uso pela linha de comando:
 
 ### Instalação / Ativação
 
-Após executar `./scripts/bootstrap.sh` (ou `uv sync`), o comando fica disponível como:
+Após executar `./scripts/bootstrap.sh` (ou `uv sync --extra dev` para ambiente de desenvolvimento), o comando fica disponível como:
 
 ```bash
 uv run revisao-agents
 ```
 
 > Se o ambiente estiver ativado (`source .venv/bin/activate`), pode-se usar `revisao-agents` diretamente.
+
+Para uso somente em runtime (sem lint/test/typecheck), `uv sync` também é suficiente.
 
 ### Ajuda geral
 
