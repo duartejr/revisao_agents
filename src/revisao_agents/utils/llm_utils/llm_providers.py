@@ -32,6 +32,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
 from langchain_openai import ChatOpenAI
 
+from ...config import validate_provider
+
 load_dotenv()
 
 
@@ -298,11 +300,11 @@ class LLMFactory:
         Returns:
             An instance of the LLM provider specified in the environment variables.
         """
-        provider_name = os.getenv("LLM_PROVIDER", "openai").lower().strip()
-
         try:
+            provider_name = validate_provider(os.getenv("LLM_PROVIDER"))
             provider = LLMProvider(provider_name)
         except ValueError:
+            provider_name = os.getenv("LLM_PROVIDER", "openai")
             validos = [p.value for p in LLMProvider]
             print(
                 f"⚠️  LLM_PROVIDER='{provider_name}' invalid. "
@@ -405,10 +407,9 @@ def llm_call(
         LLM_PROVIDER: 'openai' | 'google' | 'groq' | 'openrouter'  (default: 'openai')
         LLM_MODEL:    model name (e.g. 'gpt-4o', 'google/gemini-2.5-flash', 'llama-3.3-70b-versatile')
     """
-    provider = os.getenv("LLM_PROVIDER", "openai").lower().strip()
-    model = os.getenv("LLM_MODEL", "")
-
     try:
+        provider = validate_provider(os.getenv("LLM_PROVIDER"))
+        model = os.getenv("LLM_MODEL", "")
         llm_instance = get_llm(
             provider=LLMProvider(provider) if provider else None,
             model_name=model or None,

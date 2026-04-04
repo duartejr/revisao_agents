@@ -23,6 +23,7 @@ from langchain_core.messages import (
     ToolMessage,
 )
 
+from ..config import validate_provider
 from ..tools.review_tools import get_review_tools
 from ..utils.llm_utils.llm_providers import get_llm as get_raw_llm
 from ..utils.llm_utils.prompt_loader import load_prompt
@@ -153,7 +154,7 @@ def run_review_agent(
           ``"apply_edit"`` | ``"cancel_edit"``
         - ``trace`` (list[dict]) – tool-call trace for debugging
     """
-    provider_name = os.getenv("LLM_PROVIDER", "openai").strip().lower()
+    provider_name = validate_provider(os.getenv("LLM_PROVIDER"))
     is_groq = provider_name == "groq"
 
     compact_history, history_summary = _compact_chat_history(

@@ -364,17 +364,10 @@ def start_planning(
     if not tema.strip():
         return [], {}, "❌ Please provide a topic before starting.", ""
 
-    req_mongodb = tipo in ("academico", "ambos")
-    req_openai_embeddings = tipo in ("academico", "ambos")
-    req_tavily = tipo in ("tecnico", "ambos")
-    cfg_issues = validate_runtime_config(
-        require_mongodb=req_mongodb,
-        require_tavily=req_tavily,
-        require_openai_embeddings=req_openai_embeddings,
-        strict=False,
-    )
+    cfg_issues = validate_runtime_config(strict=False)
+
     if cfg_issues:
-        msg = "❌ Incomplete configuration for this mode:\n- " + "\n- ".join(cfg_issues)
+        msg = "❌ Incomplete configuration:\n- " + "\n- ".join(cfg_issues)
         return [], {}, msg, ""
 
     tipos_list = ["academico", "tecnico"] if tipo == "ambos" else [tipo]
@@ -586,12 +579,7 @@ def start_writing(
     """
     os.makedirs("reviews", exist_ok=True)
 
-    cfg_issues = validate_runtime_config(
-        require_mongodb=True,
-        require_tavily=bool(tavily_enabled),
-        require_openai_embeddings=True,
-        strict=False,
-    )
+    cfg_issues = validate_runtime_config(strict=False)
     if cfg_issues:
         yield (
             history
@@ -733,11 +721,7 @@ def start_writing(
 
 
 def index_pdfs(folder_path: str) -> str:
-    cfg_issues = validate_runtime_config(
-        require_mongodb=True,
-        require_openai_embeddings=True,
-        strict=False,
-    )
+    cfg_issues = validate_runtime_config(strict=False)
     if cfg_issues:
         return "❌ Configuração incompleta:\n- " + "\n- ".join(cfg_issues)
 
