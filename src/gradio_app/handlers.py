@@ -72,7 +72,7 @@ _SRC = os.path.join(os.path.dirname(__file__), "..")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-_SUPPORTED_LLM_PROVIDERS = ("gemini", "groq", "openai", "openrouter")
+_SUPPORTED_LLM_PROVIDERS = ("google", "groq", "openai", "openrouter")
 
 
 def list_llm_providers() -> list[str]:
@@ -82,8 +82,8 @@ def list_llm_providers() -> list[str]:
 
 def get_current_llm_provider() -> str:
     """Return normalized current LLM provider from env."""
-    provider = os.getenv("LLM_PROVIDER", "groq").strip().lower()
-    return provider if provider in _SUPPORTED_LLM_PROVIDERS else "groq"
+    provider = os.getenv("LLM_PROVIDER", "openai").strip().lower()
+    return provider if provider in _SUPPORTED_LLM_PROVIDERS else "openai"
 
 
 def get_llm_provider_status() -> str:
@@ -102,14 +102,14 @@ def set_llm_provider(provider: str) -> tuple[str, str]:
     """Switch active provider globally for the current UI process.
 
     Args:
-        provider: The name of the provider to switch to (e.g., "gemini", "groq", "openai", "openrouter").
+        provider: The name of the provider to switch to (e.g., "google", "groq", "openai", "openrouter").
 
     Returns:
         (normalized_provider_value_for_dropdown, status_message)
     """
     normalized = (provider or "").strip().lower()
     if normalized not in _SUPPORTED_LLM_PROVIDERS:
-        normalized = "groq"
+        normalized = "openai"
 
     current = get_current_llm_provider()
     switched = normalized != current

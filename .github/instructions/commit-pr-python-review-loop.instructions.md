@@ -7,13 +7,14 @@ name: "Commit and PR Review Loop"
 When the user asks to commit changes or create/update a pull request, follow this workflow before finalizing:
 
 1. Run the `Python Review` custom agent against the pending change set.
-2. Immediately after that review pass, run the `Python Documentation Follow-up` custom agent against the same pending change set.
-3. Read all findings carefully, prioritizing high and medium severity review items and any concrete documentation gaps identified by the documentation agent.
-4. Apply the recommended fixes in code, tests, docstrings, `README.md`, and `docs/` as needed.
-5. Re-run relevant validations (for example `pytest` or focused checks).
-6. Run the `Python Review` custom agent again.
-7. Run the `Python Documentation Follow-up` custom agent again after each new review pass.
-8. Repeat until one of the following is true:
+2. Immediately after that review pass, run the `Python Documentation Follow-up` custom agent against the same pending change set. Only start the documentation pass after the first review pass is completed, so it can pick up any documentation-related findings from the review agent.
+3. You cant execute the `Python Review` and `Python Documentation Follow-up` agents in parallel because the documentation agent needs to see the findings from the review agent to identify documentation gaps and issues that must be addressed in the current change set. Running them sequentially ensures that documentation improvements are directly informed by the latest code review feedback, leading to more effective and targeted documentation updates.
+4. Read all findings carefully, prioritizing high and medium severity review items and any concrete documentation gaps identified by the documentation agent.
+5. Apply the recommended fixes in code, tests, docstrings, `README.md`, and `docs/` as needed.
+6. Re-run relevant validations (for example `pytest` or focused checks).
+7. Run the `Python Review` custom agent again.
+8. Run the `Python Documentation Follow-up` custom agent again after each new review pass.
+9. Repeat until one of the following is true:
    - The review is effectively approved (no unresolved high/medium findings), or
    - The user explicitly asks to stop.
 

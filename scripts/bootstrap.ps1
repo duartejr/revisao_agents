@@ -189,7 +189,7 @@ if (-not $skipEnvWizard) {
     Write-Host ""
     Write-Host "  Selecione o perfil de configuracao:" -ForegroundColor White
     Write-Host "  [1] Minimo  -- OpenAI + Tavily + MongoDB (recomendado para comecar)"
-    Write-Host "  [2] Completo -- todos os provedores (OpenAI, Gemini, Groq, OpenRouter, Tavily, MongoDB)"
+    Write-Host "  [2] Completo -- todos os provedores (OpenAI, Google, Groq, OpenRouter, Tavily, MongoDB)"
     Write-Host ""
     Write-Ask "  Escolha [1/2, padrao=1]: "
     $profile = Read-Host

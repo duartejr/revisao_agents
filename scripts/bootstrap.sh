@@ -159,7 +159,7 @@ if [[ "${SKIP_ENV_WIZARD:-false}" != "true" ]]; then
   echo ""
   echo -e "${BOLD}  Selecione o perfil de configuração:${NC}"
   echo "  [1] Mínimo  — OpenAI + Tavily + MongoDB (recomendado para começar)"
-  echo "  [2] Completo — todos os provedores (OpenAI, Gemini, Groq, OpenRouter, Tavily, MongoDB)"
+  echo "  [2] Completo — todos os provedores (OpenAI, Google, Groq, OpenRouter, Tavily, MongoDB)"
   echo ""
   ask "  Escolha [1/2, padrão=1]:"
   read -r PROFILE

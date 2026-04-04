@@ -86,7 +86,7 @@ mongosh "SUA_MONGODB_URI" --eval "db.adminCommand({ ping: 1 })"
 
 **Obrigatório para:** indexação de PDFs (embeddings) e como LLM quando `LLM_PROVIDER=openai`.
 
-> Mesmo usando outro provedor LLM (Gemini, Groq), a chave OpenAI ainda é necessária para os embeddings.
+> Mesmo usando outro provedor LLM (Google, Groq), a chave OpenAI ainda é necessária para os embeddings.
 
 ### Passo a passo
 
@@ -140,7 +140,7 @@ print('OK — modelos disponíveis:', len(list(r)))
    ```env
    GOOGLE_API_KEY=AIza...
    LLM_PROVIDER=google
-   LLM_MODEL=gemini-1.5-flash   # ou gemini-1.5-pro, gemini-2.0-flash, etc.
+   LLM_MODEL=gemini-2.5-flash   # ou gemini-2.5-pro, gemini-2.0-flash, etc.
    ```
 
 ### Como validar
@@ -150,7 +150,7 @@ uv run python -c "
 import google.generativeai as genai
 import os
 genai.configure(api_key=os.environ['GOOGLE_API_KEY'])
-m = genai.GenerativeModel('gemini-1.5-flash')
+m = genai.GenerativeModel('gemini-2.5-flash')
 r = m.generate_content('Olá')
 print('OK:', r.text[:50])
 "

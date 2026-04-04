@@ -1,19 +1,19 @@
 # llm_providers.py
 """
-Modular system for switching between LLM providers (Gemini, Groq, OpenAI, OpenRouter).
+Modular system for switching between LLM providers (Google, Groq, OpenAI, OpenRouter).
 
 Usage via environment variable (recommended):
-    export LLM_PROVIDER=openai # or gemini / groq / openrouter
+    export LLM_PROVIDER=openai # or google / groq / openrouter
     export LLM_MODEL=gpt-4.1 # optional -- overwrites the default model
     export LLM_TEMPERATURE=0.3 # optional -- default: 0.2
 
 Usage via code:
     from llm_providers import get_llm, LLMProvider
     llm = get_llm(provider=LLMProvider.OPENAI, temperature=0.4)
-    llm = get_llm(provider=LLMProvider.OPENROUTER, model_name="google/gemini-2.0-flash-001")
+    llm = get_llm(provider=LLMProvider.OPENROUTER, model_name="google/gemini-2.5-flash")
 
 Required API keys in the .env file:
-    GOOGLE_API_KEY      -> Gemini
+    GOOGLE_API_KEY      -> Google Gemini
     GROQ_API_KEY        -> Groq
     OPENAI_API_KEY      -> OpenAI
     OPENROUTER_API_KEY  -> OpenRouter
@@ -43,7 +43,7 @@ load_dotenv()
 class LLMProvider(Enum):
     """Identifiers of supported providers."""
 
-    GEMINI = "gemini"
+    GOOGLE = "google"
     GROQ = "groq"
     OPENAI = "openai"
     OPENROUTER = "openrouter"
@@ -103,7 +103,7 @@ class BaseLLMProvider(ABC):
 # ============================================================================
 
 
-class GeminiProvider(BaseLLMProvider):
+class GoogleProvider(BaseLLMProvider):
     """Google Gemini via langchain-google-genai."""
 
     def get_default_model(self) -> str:
@@ -204,8 +204,8 @@ class OpenRouterProvider(BaseLLMProvider):
     OpenRouter via langchain-openai (OpenAI-compatible API).
 
     OpenRouter aggregates multiple models. Popular models:
-        google/gemini-2.0-flash-001 → fast, versatile
-        google/gemini-2.0-pro-001 → more capable
+        google/gemini-2.5-flash → fast, versatile
+        google/gemini-2.5-pro → more capable
         anthropic/claude-3.5-sonnet → excellent for writing
         anthropic/claude-3-opus → more powerful
         openai/gpt-4-turbo → OpenAI via OpenRouter
@@ -217,7 +217,7 @@ class OpenRouterProvider(BaseLLMProvider):
 
     def get_default_model(self) -> str:
         """Returns the default OpenRouter model, which can be overridden by the LLM_MODEL environment variable."""
-        model = os.getenv("LLM_MODEL") or "google/gemini-2.0-flash-001"
+        model = os.getenv("LLM_MODEL") or "google/gemini-2.5-flash"
         print(f"default model: {model}")
         return model
 
@@ -251,7 +251,7 @@ class LLMFactory:
     """Creates LLM providers via enum or environment variable."""
 
     _providers = {
-        LLMProvider.GEMINI: GeminiProvider,
+        LLMProvider.GOOGLE: GoogleProvider,
         LLMProvider.GROQ: GroqProvider,
         LLMProvider.OPENAI: OpenAIProvider,
         LLMProvider.OPENROUTER: OpenRouterProvider,
@@ -268,7 +268,7 @@ class LLMFactory:
         Instantiates the chosen provider.
 
         Args:
-            provider    : LLMProvider.GEMINI | .GROQ | .OPENAI | .OPENROUTER
+            provider    : LLMProvider.GOOGLE | .GROQ | .OPENAI | .OPENROUTER
             temperature : 0.0 – 1.0 (default 0.2)
             model_name  : overrides the provider's default model (optional)
 
@@ -288,7 +288,7 @@ class LLMFactory:
         Reads environment variables and instantiates the corresponding provider.
 
         Environment variables:
-            LLM_PROVIDER    : "gemini" | "groq" | "openai" | "openrouter"  (default: gemini)
+            LLM_PROVIDER    : "google" | "groq" | "openai" | "openrouter"  (default: openai)
             LLM_MODEL       : model name (optional)
             LLM_TEMPERATURE : float 0.0–1.0 (optional, default: 0.2)
 
@@ -298,7 +298,7 @@ class LLMFactory:
         Returns:
             An instance of the LLM provider specified in the environment variables.
         """
-        provider_name = os.getenv("LLM_PROVIDER", "gemini").lower().strip()
+        provider_name = os.getenv("LLM_PROVIDER", "openai").lower().strip()
 
         try:
             provider = LLMProvider(provider_name)
@@ -306,9 +306,9 @@ class LLMFactory:
             validos = [p.value for p in LLMProvider]
             print(
                 f"⚠️  LLM_PROVIDER='{provider_name}' invalid. "
-                f"Accepted values: {validos}. Using 'gemini'."
+                f"Accepted values: {validos}. Using 'openai'."
             )
-            provider = LLMProvider.GEMINI
+            provider = LLMProvider.OPENAI
 
         model_name = os.getenv("LLM_MODEL") or None
         temperature = float(os.getenv("LLM_TEMPERATURE", "0.2"))
@@ -345,7 +345,7 @@ def get_llm(
         llm = get_llm(provider=LLMProvider.OPENAI,
                       model_name="gpt-4o-mini",
                       temperature=0.5)
-        llm = get_llm(provider=LLMProvider.GEMINI, temperature=0.7)
+        llm = get_llm(provider=LLMProvider.GOOGLE, temperature=0.7)
     """
     if provider is None:
         llm_provider = LLMFactory.from_env()
@@ -402,10 +402,10 @@ def llm_call(
     """Wrapper for LLM calls with multi-provider support and structured output.
 
     Env vars:
-        LLM_PROVIDER: 'openai' | 'gemini' | 'groq' | 'openrouter'  (default: 'groq')
-        LLM_MODEL:    model name (e.g. 'gpt-4o', 'gemini-2.0-flash', 'llama-3.3-70b-versatile')
+        LLM_PROVIDER: 'openai' | 'google' | 'groq' | 'openrouter'  (default: 'openai')
+        LLM_MODEL:    model name (e.g. 'gpt-4o', 'google/gemini-2.5-flash', 'llama-3.3-70b-versatile')
     """
-    provider = os.getenv("LLM_PROVIDER", "groq").lower().strip()
+    provider = os.getenv("LLM_PROVIDER", "openai").lower().strip()
     model = os.getenv("LLM_MODEL", "")
 
     try:
@@ -449,7 +449,7 @@ if __name__ == "__main__":
 
     tests = [
         ("1️⃣  Via environment variable (LLM_PROVIDER)", None, None, None),
-        ("2️⃣  Gemini (default)", LLMProvider.GEMINI, None, None),
+        ("2️⃣  Google (default)", LLMProvider.GOOGLE, None, None),
         ("3️⃣  Groq (default)", LLMProvider.GROQ, None, None),
         ("4️⃣  OpenAI — gpt-4.1 (default)", LLMProvider.OPENAI, None, None),
         (
@@ -459,7 +459,7 @@ if __name__ == "__main__":
             0.5,
         ),
         (
-            "6️⃣  OpenRouter — google/gemini-2.0 (default)",
+            "6️⃣  OpenRouter — google/gemini-2.5-flash (default)",
             LLMProvider.OPENROUTER,
             None,
             None,
