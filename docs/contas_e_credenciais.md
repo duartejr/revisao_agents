@@ -1,6 +1,11 @@
+
 # Guia de Contas e Credenciais
 
-Este guia explica como criar conta e obter as chaves de API para cada serviço usado pelo sistema. Ao final há um checklist de validação.
+Este guia explica como criar conta e obter as chaves de API para cada serviço usado pelo sistema.
+
+**As chaves de MongoDB, Tavily e OpenAI são sempre obrigatórias para funcionamento do agente, independentemente do provedor LLM escolhido.**
+
+Ao final há um checklist de validação.
 
 ---
 
@@ -20,7 +25,9 @@ Este guia explica como criar conta e obter as chaves de API para cada serviço u
 
 **Para que serve:** armazenamento do corpus vetorial (chunks de PDFs indexados) e persistência de estado do LangGraph.
 
-**Obrigatório para:** indexação de PDFs, escrita de seções, planejamento acadêmico.
+**Obrigatório para:**
+- Sempre (todas as funcionalidades principais)
+- Indexação de PDFs, escrita de seções, planejamento acadêmico.
 
 ### Opção A: MongoDB Atlas (nuvem — recomendado)
 
@@ -82,11 +89,13 @@ mongosh "SUA_MONGODB_URI" --eval "db.adminCommand({ ping: 1 })"
 
 ## OpenAI
 
-**Para que serve:** geração de embeddings (`text-embedding-3-small`) para o corpus vetorial, e como provedor LLM padrão.
+**Para que serve:** geração de embeddings (`text-embedding-3-small`) para o corpus vetorial (sempre obrigatório), e como provedor LLM padrão.
 
-**Obrigatório para:** indexação de PDFs (embeddings) e como LLM quando `LLM_PROVIDER=openai`.
+**Obrigatório para:**
+- Sempre (embeddings do corpus vetorial)
+- Como LLM quando `LLM_PROVIDER=openai`
 
-> Mesmo usando outro provedor LLM (Google, Groq), a chave OpenAI ainda é necessária para os embeddings.
+> Mesmo usando outro provedor LLM (Google, Groq, OpenRouter), a chave OpenAI ainda é necessária para os embeddings.
 
 ### Passo a passo
 
@@ -219,7 +228,11 @@ print('OK:', r.choices[0].message.content[:50])
 
 **Para que serve:** busca web em tempo real para encontrar fontes online durante a escrita técnica e revisão interativa.
 
-**Obrigatório para:** aba ✍️ Write com busca web ativada, aba 🤖 Revisão Interativa com busca web, aba 📚 References com resolução de metadados.
+**Obrigatório para:**
+- Sempre (busca web e evidências)
+- Aba ✍️ Write com busca web ativada
+- Aba 🤖 Revisão Interativa com busca web
+- Aba 📚 References com resolução de metadados
 
 ### Passo a passo
 

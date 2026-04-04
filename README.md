@@ -70,13 +70,13 @@ Acesse em: **http://localhost:7860**
 
 O bootstrap cria o `.env` automaticamente. Abaixo estão as variáveis agrupadas por perfil.
 
-### Perfil mínimo (para começar)
+### Perfil mínimo (obrigatório para funcionamento)
 
 ```env
 LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-...       # https://platform.openai.com/api-keys
-TAVILY_API_KEY=tvly-...     # https://app.tavily.com
-MONGODB_URI=mongodb://localhost:27017
+OPENAI_API_KEY=sk-...       # Sempre obrigatório (usado para embeddings)
+TAVILY_API_KEY=tvly-...     # Sempre obrigatório (busca web)
+MONGODB_URI=mongodb://localhost:27017  # Sempre obrigatório (corpus vetorial)
 MONGODB_DB=revisao_agents
 ```
 
@@ -112,16 +112,16 @@ CHECKPOINT_TYPE=memory       # memory | sqlite | postgres
 
 ### Matriz de requisitos por funcionalidade
 
-| Funcionalidade | OpenAI | Tavily | MongoDB | Gemini/Groq/OpenRouter |
-|---------------|--------|--------|---------|------------------------|
-| Planejar revisão | ✔ (embeddings) | — | ✔ | opcional (LLM) |
-| Escrever seção técnica | ✔ | ✔ | ✔ | opcional |
-| Escrever seção acadêmica | ✔ | opcional | ✔ | opcional |
-| Revisão Interativa | ✔ | opcional | ✔ | opcional |
-| Indexar PDFs | ✔ (embeddings) | — | ✔ | — |
-| Formatar referências | opcional | opcional | — | opcional |
+| Funcionalidade         | OpenAI (sempre) | Tavily (sempre) | MongoDB (sempre) | Gemini/Groq/OpenRouter |
+|-----------------------|-----------------|-----------------|------------------|------------------------|
+| Planejar revisão      | ✔ (embeddings)  | —               | ✔                | opcional (LLM)         |
+| Escrever seção técnica| ✔               | ✔               | ✔                | opcional               |
+| Escrever seção acadêmica| ✔             | opcional        | ✔                | opcional               |
+| Revisão Interativa    | ✔               | opcional        | ✔                | opcional               |
+| Indexar PDFs          | ✔ (embeddings)  | —               | ✔                | —                      |
+| Formatar referências  | opcional        | opcional        | —                | opcional               |
 
-> OpenAI é necessária para geração de embeddings (`text-embedding-3-small`), independente do provedor LLM escolhido.
+> **Atenção:** As chaves de OpenAI, Tavily e MongoDB são sempre obrigatórias. OpenAI é usada para geração de embeddings (`text-embedding-3-small`), mesmo se outro provedor LLM for escolhido.
 
 ---
 

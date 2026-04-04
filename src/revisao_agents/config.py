@@ -181,7 +181,7 @@ def get_runtime_config_summary() -> dict:
             - tavily_key_present: bool indicating if TAVILY_API_KEY is set
             - openai_key_present: bool indicating if OPENAI_API_KEY is set
     """
-    provider = _env_clean("LLM_PROVIDER", "openai").lower()
+    provider = validate_provider(os.getenv("LLM_PROVIDER"))
     model = _env_clean("LLM_MODEL", "") or "<default>"
     provider_key_name = _PROVIDER_ENV_KEYS.get(provider, "")
     provider_key_ok = bool(_env_clean(provider_key_name, "")) if provider_key_name else False
@@ -218,29 +218,35 @@ def print_runtime_config_summary() -> None:
     print("-" * 70)
 
 
-def validate_runtime_config(
-    require_mongodb: bool = False,
-    require_tavily: bool = False,
-    require_openai_embeddings: bool = False,
-    strict: bool = False,
-) -> list[str]:
-    """Validate runtime requirements and optionally raise on missing config.
+def validate_runtime_config(strict: bool = False) -> list[str]:
+    """
+    Validate that all required runtime configuration is present for the agent to function.
+
+    This function checks that the following environment variables are set and valid:
+      - MONGODB_URI: Required for vector corpus storage and all core features.
+      - TAVILY_API_KEY: Required for web search and evidence retrieval.
+      - OPENAI_API_KEY: Always required for embeddings, regardless of LLM provider.
+      - LLM_PROVIDER and provider-specific key: Required for LLM completions (see supported providers).
 
     Args:
-        require_mongodb: if True, MONGODB_URI must be set
-        require_tavily: if True, TAVILY_API_KEY must be set
-        require_openai_embeddings: if True, OPENAI_API_KEY must be set
-        strict: if True, raise ValueError on any missing requirement; otherwise return list of issues
+        strict (bool): If True, raise ValueError on any missing requirement; otherwise, return a list of issues.
 
     Returns:
-        List of strings describing any configuration issues found (empty if all good)
+        list[str]: List of strings describing any configuration issues found (empty if all required config is present).
+
+    Raises:
+        ValueError: If strict is True and any required configuration is missing.
+
+    Example:
+        >>> validate_runtime_config(strict=True)
+        # Raises ValueError if any required config is missing
     """
     issues: list[str] = []
 
     try:
-        provider = validate_provider(os.getenv("LLM_PROVIDER", "openai"))
+        provider = validate_provider(os.getenv("LLM_PROVIDER"))
     except ValueError as e:
-        issues.append(str(e))
+        issues.append(f"LLM_PROVIDER error: {e}")
         provider = None
 
     if provider is not None:
@@ -252,14 +258,15 @@ def validate_runtime_config(
 
     mongodb_uri = _env_clean("MONGODB_URI", "")
     openai_key = _env_clean("OPENAI_API_KEY", "")
+    tavily_key = _env_clean("TAVILY_API_KEY", "")
 
-    if require_mongodb and not mongodb_uri:
+    if not mongodb_uri:
         issues.append("MONGODB_URI missing")
 
-    if require_tavily and not _env_clean("TAVILY_API_KEY", ""):
+    if not tavily_key:
         issues.append("TAVILY_API_KEY missing")
 
-    if require_openai_embeddings and not openai_key:
+    if not openai_key:
         issues.append("Missing OPENAI_API_KEY (required for embeddings)")
 
     if strict and issues:
@@ -298,7 +305,7 @@ def get_llm(temperature: float = 0.3) -> Any:
             "OPENROUTER": LLMProvider.OPENROUTER,
         }
         provider = provider_map.get(
-            os.getenv("LLM_PROVIDER", "OPENAI").upper().strip(),
+            validate_provider(os.getenv("LLM_PROVIDER")),
             LLMProvider.OPENAI,
         )
         print(f"   🤖 Using LLM: {provider.name} (temp={temperature})")
@@ -365,7 +372,7 @@ def llm_call(
     """
     from .utils.llm_utils.date_context import add_date_context_to_prompt
 
-    provider = os.getenv("LLM_PROVIDER", "openai").lower().strip()
+    provider = validate_provider(os.getenv("LLM_PROVIDER"))
     model = os.getenv("LLM_MODEL", "") or "<default>"
 
     # Add current date context to ensure agents know today's date
