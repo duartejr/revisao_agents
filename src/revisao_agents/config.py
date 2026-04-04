@@ -142,7 +142,7 @@ _PROVIDER_ENV_KEYS = {
 _CANONICAL_PROVIDERS = frozenset(_PROVIDER_ENV_KEYS.keys())
 
 
-def validate_provider(value: str) -> str:
+def validate_provider(value: str | None) -> str:
     """Validate and canonicalize the LLM provider name from environment variable.
 
     Args:
