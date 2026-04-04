@@ -129,8 +129,30 @@ def test_runtime_summary_has_expected_keys():
         "llm_model",
         "llm_provider_key",
         "llm_provider_key_present",
+        "llm_provider_error",
         "mongodb_uri_present",
         "tavily_key_present",
         "openai_key_present",
     }
     assert expected.issubset(set(summary.keys()))
+
+
+def test_runtime_summary_invalid_provider_does_not_raise(monkeypatch):
+    """Test that runtime summary gracefully reports invalid provider values.
+
+    Args:
+        monkeypatch: pytest fixture for modifying environment variables
+
+    Asserts:
+        Summary includes a provider error and invalid-provider sentinel key when LLM_PROVIDER is invalid.
+    """
+    monkeypatch.setenv("LLM_PROVIDER", "gemini")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai_key-value")
+    monkeypatch.setenv("MONGODB_URI", "mongodb_uri-value")
+    monkeypatch.setenv("TAVILY_API_KEY", "tavily_key-value")
+
+    summary = get_runtime_config_summary()
+
+    assert summary["llm_provider"] == "gemini"
+    assert summary["llm_provider_key"] == "<invalid-provider>"
+    assert "not supported" in summary["llm_provider_error"]

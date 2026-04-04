@@ -367,7 +367,7 @@ def start_planning(
     cfg_issues = validate_runtime_config(strict=False)
 
     if cfg_issues:
-        msg = "❌ Incomplete configuration for this mode:\n- " + "\n- ".join(cfg_issues)
+        msg = "❌ Incomplete configuration:\n- " + "\n- ".join(cfg_issues)
         return [], {}, msg, ""
 
     tipos_list = ["academico", "tecnico"] if tipo == "ambos" else [tipo]

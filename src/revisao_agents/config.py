@@ -173,15 +173,22 @@ def get_runtime_config_summary() -> dict:
 
     Returns:
         Dict with keys:
-            - llm_provider: normalized provider name (lowercase)
+            - llm_provider: normalized provider name (lowercase) or raw invalid value
             - llm_model: model name or "<default>"
-            - llm_provider_key: name of the env var for the provider's API key
+            - llm_provider_key: provider API env var name or "<invalid-provider>"
             - llm_provider_key_present: bool indicating if the key is set
+            - llm_provider_error: validation message when LLM_PROVIDER is invalid
             - mongodb_uri_present: bool indicating if MONGODB_URI is set
             - tavily_key_present: bool indicating if TAVILY_API_KEY is set
             - openai_key_present: bool indicating if OPENAI_API_KEY is set
     """
-    provider = validate_provider(os.getenv("LLM_PROVIDER"))
+    provider_error = ""
+    raw_provider = os.getenv("LLM_PROVIDER")
+    try:
+        provider = validate_provider(raw_provider)
+    except ValueError as exc:
+        provider_error = str(exc)
+        provider = (raw_provider or "").strip().lower() or "<invalid>"
     model = _env_clean("LLM_MODEL", "") or "<default>"
     provider_key_name = _PROVIDER_ENV_KEYS.get(provider, "")
     provider_key_ok = bool(_env_clean(provider_key_name, "")) if provider_key_name else False
@@ -194,6 +201,7 @@ def get_runtime_config_summary() -> dict:
         "llm_model": model,
         "llm_provider_key": provider_key_name or "<invalid-provider>",
         "llm_provider_key_present": provider_key_ok,
+        "llm_provider_error": provider_error,
         "mongodb_uri_present": bool(mongodb_uri),
         "tavily_key_present": bool(_env_clean("TAVILY_API_KEY", "")),
         "openai_key_present": bool(openai_key),
@@ -207,6 +215,8 @@ def print_runtime_config_summary() -> None:
     print("ENVIRONMENT — CONFIGURATION SUMMARY")
     print("-" * 70)
     print(f"LLM_PROVIDER          : {summary['llm_provider']}")
+    if summary.get("llm_provider_error"):
+        print(f"LLM_PROVIDER error    : {summary['llm_provider_error']}")
     print(f"LLM_MODEL             : {summary['llm_model']}")
     print(
         f"Provider key     : {summary['llm_provider_key']} "
@@ -253,7 +263,7 @@ def validate_runtime_config(strict: bool = False) -> list[str]:
         key_name = _PROVIDER_ENV_KEYS[
             provider
         ]  # safe — validate_provider already guaranteed it's valid
-        if not _env_clean(key_name, ""):
+        if key_name != "OPENAI_API_KEY" and not _env_clean(key_name, ""):
             issues.append(f"Missing key for current provider: {key_name}")
 
     mongodb_uri = _env_clean("MONGODB_URI", "")
@@ -298,16 +308,7 @@ def get_llm(temperature: float = 0.3) -> Any:
         from .utils.llm_utils.llm_providers import LLMProvider
         from .utils.llm_utils.llm_providers import get_llm as _get_llm
 
-        provider_map = {
-            "GOOGLE": LLMProvider.GOOGLE,
-            "GROQ": LLMProvider.GROQ,
-            "OPENAI": LLMProvider.OPENAI,
-            "OPENROUTER": LLMProvider.OPENROUTER,
-        }
-        provider = provider_map.get(
-            validate_provider(os.getenv("LLM_PROVIDER")),
-            LLMProvider.OPENAI,
-        )
+        provider = LLMProvider(validate_provider(os.getenv("LLM_PROVIDER")))
         print(f"   🤖 Using LLM: {provider.name} (temp={temperature})")
         llm = _get_llm(provider=provider, temperature=temperature)
 
@@ -372,13 +373,13 @@ def llm_call(
     """
     from .utils.llm_utils.date_context import add_date_context_to_prompt
 
-    provider = validate_provider(os.getenv("LLM_PROVIDER"))
-    model = os.getenv("LLM_MODEL", "") or "<default>"
-
-    # Add current date context to ensure agents know today's date
-    prompt_with_date = add_date_context_to_prompt(prompt)
-
     try:
+        provider = validate_provider(os.getenv("LLM_PROVIDER"))
+        model = os.getenv("LLM_MODEL", "") or "<default>"
+
+        # Add current date context to ensure agents know today's date
+        prompt_with_date = add_date_context_to_prompt(prompt)
+
         from .utils.llm_utils.llm_providers import get_llm as _provider_get_llm
 
         llm = _provider_get_llm(temperature=temperature)
@@ -391,6 +392,8 @@ def llm_call(
         return resp.content if hasattr(resp, "content") else str(resp)
 
     except Exception as e:
+        provider = os.getenv("LLM_PROVIDER", "openai")
+        model = os.getenv("LLM_MODEL", "") or "<default>"
         msg = f"LLM call failed [{provider}/{model}]"
         print(f"   ⚠️  {msg}: {e}")
         raise LLMInvocationError(msg) from e

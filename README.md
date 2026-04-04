@@ -114,12 +114,12 @@ CHECKPOINT_TYPE=memory       # memory | sqlite | postgres
 
 | Funcionalidade         | OpenAI (sempre) | Tavily (sempre) | MongoDB (sempre) | Gemini/Groq/OpenRouter |
 |-----------------------|-----------------|-----------------|------------------|------------------------|
-| Planejar revisão      | ✔ (embeddings)  | —               | ✔                | opcional (LLM)         |
+| Planejar revisão      | ✔ (embeddings)  | ✔               | ✔                | opcional (LLM)         |
 | Escrever seção técnica| ✔               | ✔               | ✔                | opcional               |
-| Escrever seção acadêmica| ✔             | opcional        | ✔                | opcional               |
-| Revisão Interativa    | ✔               | opcional        | ✔                | opcional               |
-| Indexar PDFs          | ✔ (embeddings)  | —               | ✔                | —                      |
-| Formatar referências  | opcional        | opcional        | —                | opcional               |
+| Escrever seção acadêmica| ✔             | ✔               | ✔                | opcional               |
+| Revisão Interativa    | ✔               | ✔               | ✔                | opcional               |
+| Indexar PDFs          | ✔ (embeddings)  | ✔               | ✔                | —                      |
+| Formatar referências  | ✔ (embeddings)  | ✔               | ✔                | opcional               |
 
 > **Atenção:** As chaves de OpenAI, Tavily e MongoDB são sempre obrigatórias. OpenAI é usada para geração de embeddings (`text-embedding-3-small`), mesmo se outro provedor LLM for escolhido.
 
