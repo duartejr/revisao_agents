@@ -83,8 +83,10 @@ uv run revisao-agents plans/plano_revisao_tecnica_tema.md \
 
 ```bash
 uv run revisao-agents "Energia solar fotovoltaica no Nordeste" \
-  --model gemini-1.5-flash
+  --model gemini-2.5-flash
 ```
+
+> Para modelos `gemini-*`, configure `LLM_PROVIDER=google` no `.env`.
 
 #### Modo debug (ver eventos internos do LangGraph)
 

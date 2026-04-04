@@ -133,11 +133,36 @@ CLOSING_REMARKS = {
 # ── Runtime config validation ───────────────────────────────────────────────
 
 _PROVIDER_ENV_KEYS = {
-    "gemini": "GOOGLE_API_KEY",
+    "google": "GOOGLE_API_KEY",
     "groq": "GROQ_API_KEY",
     "openai": "OPENAI_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
 }
+
+_CANONICAL_PROVIDERS = frozenset(_PROVIDER_ENV_KEYS.keys())
+
+
+def validate_provider(value: str | None) -> str:
+    """Validate and canonicalize the LLM provider name from environment variable.
+
+    Args:
+        value: The raw provider name from the environment variable.
+
+    Returns:
+        The canonicalized provider name (lowercase) if valid.
+
+    Raises:
+        ValueError: If the provider name is not supported.
+    """
+    canonical = (value or "").strip().lower()
+
+    if not canonical:
+        return "openai"
+
+    if canonical not in _CANONICAL_PROVIDERS:
+        supported = " | ".join(sorted(_CANONICAL_PROVIDERS))
+        raise ValueError(f"LLM_PROVIDER '{value}' is not supported. Accepted: {supported}")
+    return canonical
 
 
 def get_runtime_config_summary() -> dict:
@@ -156,7 +181,7 @@ def get_runtime_config_summary() -> dict:
             - tavily_key_present: bool indicating if TAVILY_API_KEY is set
             - openai_key_present: bool indicating if OPENAI_API_KEY is set
     """
-    provider = _env_clean("LLM_PROVIDER", "groq").lower()
+    provider = _env_clean("LLM_PROVIDER", "openai").lower()
     model = _env_clean("LLM_MODEL", "") or "<default>"
     provider_key_name = _PROVIDER_ENV_KEYS.get(provider, "")
     provider_key_ok = bool(_env_clean(provider_key_name, "")) if provider_key_name else False
@@ -211,18 +236,22 @@ def validate_runtime_config(
         List of strings describing any configuration issues found (empty if all good)
     """
     issues: list[str] = []
-    provider = _env_clean("LLM_PROVIDER", "groq").lower()
-    mongodb_uri = _env_clean("MONGODB_URI", "")
-    openai_key = _env_clean("OPENAI_API_KEY", "")
 
-    if provider not in _PROVIDER_ENV_KEYS:
-        issues.append(
-            f"LLM_PROVIDER invalid: '{provider}'. Use: gemini | groq | openai | openrouter"
-        )
-    else:
-        key_name = _PROVIDER_ENV_KEYS[provider]
+    try:
+        provider = validate_provider(os.getenv("LLM_PROVIDER", "openai"))
+    except ValueError as e:
+        issues.append(str(e))
+        provider = None
+
+    if provider is not None:
+        key_name = _PROVIDER_ENV_KEYS[
+            provider
+        ]  # safe — validate_provider already guaranteed it's valid
         if not _env_clean(key_name, ""):
             issues.append(f"Missing key for current provider: {key_name}")
+
+    mongodb_uri = _env_clean("MONGODB_URI", "")
+    openai_key = _env_clean("OPENAI_API_KEY", "")
 
     if require_mongodb and not mongodb_uri:
         issues.append("MONGODB_URI missing")
@@ -246,7 +275,7 @@ def get_llm(temperature: float = 0.3) -> Any:
     """
     Returns a language model configured with available tools based on environment variables.
 
-    This function attempts to load a provider-specific LLM (Gemini, Groq, OpenAI, or
+    This function attempts to load a provider-specific LLM (Google, Groq, OpenAI, or
     OpenRouter) and bind all discovered tools to it. If the primary utility
     module is missing, it falls back to a default Google Generative AI instance.
 
@@ -263,14 +292,14 @@ def get_llm(temperature: float = 0.3) -> Any:
         from .utils.llm_utils.llm_providers import get_llm as _get_llm
 
         provider_map = {
-            "GEMINI": LLMProvider.GEMINI,
+            "GOOGLE": LLMProvider.GOOGLE,
             "GROQ": LLMProvider.GROQ,
             "OPENAI": LLMProvider.OPENAI,
             "OPENROUTER": LLMProvider.OPENROUTER,
         }
         provider = provider_map.get(
-            os.getenv("LLM_PROVIDER", "GEMINI").upper().strip(),
-            LLMProvider.GEMINI,
+            os.getenv("LLM_PROVIDER", "OPENAI").upper().strip(),
+            LLMProvider.OPENAI,
         )
         print(f"   🤖 Using LLM: {provider.name} (temp={temperature})")
         llm = _get_llm(provider=provider, temperature=temperature)
@@ -317,8 +346,8 @@ def llm_call(
     response schema is provided.
 
     Environment Variables:
-        LLM_PROVIDER: 'openai' | 'gemini' | 'groq' | 'openrouter' (default: 'groq')
-        LLM_MODEL: Specific model name (e.g., 'gpt-4o', 'gemini-2.0-flash',
+        LLM_PROVIDER: 'openai' | 'google' | 'groq' | 'openrouter' (default: 'openai')
+        LLM_MODEL: Specific model name (e.g., 'gpt-4o', 'gemini-2.5-flash',
                   'llama-3.3-70b-versatile', 'anthropic/claude-3.5-sonnet')
 
     Args:
@@ -336,7 +365,7 @@ def llm_call(
     """
     from .utils.llm_utils.date_context import add_date_context_to_prompt
 
-    provider = os.getenv("LLM_PROVIDER", "groq").lower().strip()
+    provider = os.getenv("LLM_PROVIDER", "openai").lower().strip()
     model = os.getenv("LLM_MODEL", "") or "<default>"
 
     # Add current date context to ensure agents know today's date

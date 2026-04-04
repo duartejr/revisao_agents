@@ -32,6 +32,25 @@ def test_validate_runtime_config_reports_mode_requirements(monkeypatch):
     assert any("OPENAI_API_KEY" in issue for issue in issues)
 
 
+def test_validate_runtime_config_accumulates_issues_when_provider_invalid(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "gemini")
+    monkeypatch.setenv("MONGODB_URI", "")
+    monkeypatch.setenv("TAVILY_API_KEY", "")
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+
+    issues = validate_runtime_config(
+        require_mongodb=True,
+        require_tavily=True,
+        require_openai_embeddings=True,
+        strict=False,
+    )
+
+    assert any("LLM_PROVIDER" in issue for issue in issues)
+    assert any("MONGODB_URI" in issue for issue in issues)
+    assert any("TAVILY_API_KEY" in issue for issue in issues)
+    assert any("OPENAI_API_KEY" in issue for issue in issues)
+
+
 def test_runtime_summary_has_expected_keys():
     summary = get_runtime_config_summary()
 

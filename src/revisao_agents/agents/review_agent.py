@@ -153,7 +153,7 @@ def run_review_agent(
           ``"apply_edit"`` | ``"cancel_edit"``
         - ``trace`` (list[dict]) – tool-call trace for debugging
     """
-    provider_name = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
+    provider_name = os.getenv("LLM_PROVIDER", "openai").strip().lower()
     is_groq = provider_name == "groq"
 
     compact_history, history_summary = _compact_chat_history(
@@ -359,7 +359,7 @@ def _compact_chat_history(
 
     Args:
         chat_history: List of message dicts with 'role' and 'content'.
-        provider_name: Name of the LLM provider (e.g., "gemini", "groq") to adjust limits.
+        provider_name: Name of the LLM provider (e.g., "google", "groq") to adjust limits.
 
     Returns:
         (recent_messages, summary_text)

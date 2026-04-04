@@ -112,7 +112,7 @@ agents/review_agent.py  (ReAct loop, MAX_ITERATIONS=6)
 | Provider | `LLM_PROVIDER` | Variável de chave | Modelo padrão |
 |---------|---------|-----------|---------|
 | OpenAI | `openai` | `OPENAI_API_KEY` | `gpt-4o-mini` |
-| Google Gemini | `google` | `GOOGLE_API_KEY` | `gemini-1.5-flash` |
+| Google Gemini | `google` | `GOOGLE_API_KEY` | `gemini-2.5-flash` |
 | Groq | `groq` | `GROQ_API_KEY` | `llama-3.3-70b-versatile` |
 | OpenRouter | `openrouter` | `OPENROUTER_API_KEY` | configurável |
 

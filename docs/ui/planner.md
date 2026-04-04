@@ -22,7 +22,7 @@ O plano gerado é salvo automaticamente na pasta `plans/` e pode ser usado como 
 | **Botão Iniciar** | Botão | Inicia a sessão de planejamento |
 | **Campo de resposta** | Caixa de texto (3 linhas) | Aparece durante a sessão para o usuário responder às perguntas do agente |
 | **Botão Responder** | Botão | Envia a resposta do usuário para o agente continuar |
-| **Seletor de provedor LLM** | Dropdown (topo da tela) | Escolha entre gemini, groq, openai, openrouter |
+| **Seletor de provedor LLM** | Dropdown (topo da tela) | Escolha entre google, groq, openai, openrouter |
 
 ---
 

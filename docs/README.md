@@ -33,7 +33,7 @@ Documentação detalhada de cada aba da interface Gradio:
 
 ## Contas e Credenciais
 
-→ [contas_e_credenciais.md](contas_e_credenciais.md) — passo a passo para configurar MongoDB, OpenAI, Gemini, Groq, Tavily e OpenRouter
+→ [contas_e_credenciais.md](contas_e_credenciais.md) — passo a passo para configurar MongoDB, OpenAI, Google, Groq, Tavily e OpenRouter
 
 ---
 
