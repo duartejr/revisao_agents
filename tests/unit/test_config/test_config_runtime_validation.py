@@ -71,15 +71,14 @@ def test_validate_runtime_config_reports_missing_provider_key(monkeypatch):
 
 
 def test_validate_runtime_config_missing_global_mandatory_requirements_reports(monkeypatch):
-    """Test that when specific requirements are set (e.g. require_mongodb, require_tavily, require_openai_embeddings), the validation reports all missing configurations.
-    This verifies that validate_runtime_config correctly accumulates issues for all missing requirements when strict mode is
-    disabled.
+    """Test that validate_runtime_config(strict=False) reports all missing always-required runtime configuration values.
+    This verifies that validate_runtime_config correctly accumulates issues for missing mandatory configuration when strict mode is disabled.
 
     Args:
         monkeypatch: pytest fixture for modifying environment variables
 
     Asserts:
-        The validation issues include all missing configurations for the specified requirements.
+        The validation issues include all missing always-required configurations.
     """
     monkeypatch.setenv("LLM_PROVIDER", "openai")
     monkeypatch.setenv("OPENAI_API_KEY", "")
@@ -94,16 +93,16 @@ def test_validate_runtime_config_missing_global_mandatory_requirements_reports(m
 
 
 @pytest.mark.parametrize("provider", ["gemini", "azure", "aws", "custom"])
-def test_validate_runtime_config_accumulates_issues_when_provider_invalid(monkeypatch, provider):
-    """Test that when an invalid provider is set, the validation accumulates issues for all missing configurations.
-    This ensures that validate_runtime_config correctly reports issues for invalid providers in combination with other missing requirements.
+def test_validate_runtime_config_reports_invalid_provider_error(monkeypatch, provider):
+    """Test that when an invalid provider is set, the validation reports the LLM_PROVIDER error.
+    This ensures that validate_runtime_config correctly identifies unsupported provider names and reports them as issues.
 
     Args:
         monkeypatch: pytest fixture for modifying environment variables
         provider: the invalid LLM provider to test
 
     Asserts:
-        The validation issues include an LLM_PROVIDER error and all missing configurations for the specified requirements.
+        The validation issues include an LLM_PROVIDER error.
     """
     monkeypatch.setenv("LLM_PROVIDER", provider)
     monkeypatch.setenv("OPENAI_API_KEY", "openai_key-value")

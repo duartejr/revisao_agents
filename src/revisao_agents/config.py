@@ -173,7 +173,7 @@ def get_runtime_config_summary() -> dict:
 
     Returns:
         Dict with keys:
-            - llm_provider: normalized provider name (lowercase) or raw invalid value
+            - llm_provider: normalized provider name (lowercase) or normalized invalid value (lowercase, stripped)
             - llm_model: model name or "<default>"
             - llm_provider_key: provider API env var name or "<invalid-provider>"
             - llm_provider_key_present: bool indicating if the key is set

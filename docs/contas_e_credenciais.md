@@ -1,4 +1,3 @@
-
 # Guia de Contas e Credenciais
 
 Este guia explica como criar conta e obter as chaves de API para cada serviço usado pelo sistema.
