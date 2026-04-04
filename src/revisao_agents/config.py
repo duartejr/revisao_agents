@@ -173,7 +173,7 @@ def get_runtime_config_summary() -> dict:
 
     Returns:
         Dict with keys:
-            - llm_provider: normalized provider name (lowercase) or normalized invalid value (lowercase, stripped)
+            - llm_provider: normalized provider name (lowercase) or raw invalid value
             - llm_model: model name or "<default>"
             - llm_provider_key: provider API env var name or "<invalid-provider>"
             - llm_provider_key_present: bool indicating if the key is set
@@ -188,7 +188,7 @@ def get_runtime_config_summary() -> dict:
         provider = validate_provider(raw_provider)
     except ValueError as exc:
         provider_error = str(exc)
-        provider = (raw_provider or "").strip().lower() or "<invalid>"
+        provider = raw_provider or "<invalid>"
     model = _env_clean("LLM_MODEL", "") or "<default>"
     provider_key_name = _PROVIDER_ENV_KEYS.get(provider, "")
     provider_key_ok = bool(_env_clean(provider_key_name, "")) if provider_key_name else False
