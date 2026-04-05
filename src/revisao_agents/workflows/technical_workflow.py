@@ -34,7 +34,7 @@ def build_technical_workflow():
     builder.add_conditional_edges(
         "refine_technical_plan",
         interview_router,
-        {"continue": "interview", "finalize": "finalize_technical_plan"},
+        {"continue": "interview", "finish": "finalize_technical_plan"},
     )
     builder.add_edge("finalize_technical_plan", END)
 
