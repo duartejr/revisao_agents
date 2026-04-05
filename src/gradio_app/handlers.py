@@ -41,6 +41,7 @@ from revisao_agents.agents.review_agent import run_review_agent
 from revisao_agents.config import (
     get_runtime_config_summary,
     llm_call,
+    validate_provider,
     validate_runtime_config,
 )
 from revisao_agents.core.schemas.writer_config import WriterConfig
@@ -72,30 +73,51 @@ _SRC = os.path.join(os.path.dirname(__file__), "..")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
-_SUPPORTED_LLM_PROVIDERS = ("google", "groq", "openai", "openrouter")
-
 
 def list_llm_providers() -> list[str]:
-    """Return supported LLM providers for UI selector."""
-    return list(_SUPPORTED_LLM_PROVIDERS)
+    """Return supported LLM providers for UI selector, dynamically from the Factory.
+
+    Returns:
+        List of supported provider names (e.g., ["openai", "google", "groq", "openrouter"]).
+    """
+    from revisao_agents.utils.llm_utils.llm_providers import LLMProvider
+
+    return [p.value for p in LLMProvider]
 
 
 def get_current_llm_provider() -> str:
-    """Return normalized current LLM provider from env."""
-    provider = os.getenv("LLM_PROVIDER", "openai").strip().lower()
-    return provider if provider in _SUPPORTED_LLM_PROVIDERS else "openai"
+    """Return normalized current LLM provider from env.
+
+    Returns:
+        Normalized provider name (lowercase) if valid, else 'openai' as fallback.
+    """
+    try:
+        provider = os.getenv("LLM_PROVIDER", "")
+        return validate_provider(provider)
+    except ValueError:
+        return "openai"  # Default to 'openai' if invalid
 
 
 def get_llm_provider_status() -> str:
-    """Build concise status line for the global LLM selector."""
+    """Build concise status line for the global LLM selector.
+
+    Returns:
+        A string representing the status of the current LLM provider, including provider name,
+        model, and key status.
+    """
     summary = get_runtime_config_summary()
-    provider = summary["llm_provider"]
+    provider = summary["llm_provider"].capitalize()
     model = summary["llm_model"]
     key_ok = summary["llm_provider_key_present"]
     key_name = summary["llm_provider_key"]
     marker = "✅" if key_ok else "⚠️"
     key_msg = "key ok" if key_ok else f"missing {key_name}"
-    return f"{marker} Provider: {provider} | Model: {model} | {key_msg}"
+    provider_error = summary.get("llm_provider_error")
+
+    if provider_error:
+        return f"⚠️ Erro na Configuração: {provider_error}"
+
+    return f"{marker} Provedor: {provider} | Modelo: {model} | {key_msg}"
 
 
 def set_llm_provider(provider: str) -> tuple[str, str]:
@@ -107,10 +129,7 @@ def set_llm_provider(provider: str) -> tuple[str, str]:
     Returns:
         (normalized_provider_value_for_dropdown, status_message)
     """
-    normalized = (provider or "").strip().lower()
-    if normalized not in _SUPPORTED_LLM_PROVIDERS:
-        normalized = "openai"
-
+    normalized = validate_provider(provider)
     current = get_current_llm_provider()
     switched = normalized != current
 
@@ -543,7 +562,14 @@ def continue_planning(
 
 
 def list_plan_files(mode: str) -> list[str]:
-    """List available plan files for the given mode (Academic or Technical)."""
+    """List available plan files for the given mode.
+
+    Args:
+        mode: The mode to filter plans by ("Academic" or "Technical").
+
+    Returns:
+        List of plan file paths matching the mode, or a fallback list if none found.
+    """
     os.makedirs("plans", exist_ok=True)
     pattern = (
         "plans/plano_revisao_tecnica_*.md" if mode == "Technical" else "plans/plano_revisao_*.md"
@@ -564,18 +590,23 @@ def start_writing(
     tavily_enabled: bool,
     history: list,
 ) -> Generator[tuple[list, str, str], None, None]:
-    """
-    Stream writing progress with live logs to the Gradio chatbot.
+    """Stream writing progress with live logs to the Gradio chatbot.
 
     Runs the LangGraph workflow in a background thread and captures every
     print() call via _StdoutCapture, funnelling lines through a queue so
     the UI updates line-by-line as the agent works.
 
-    Yields
-    ------
-    (updated_history, status_msg, rendered_content)
-    rendered_content is empty during streaming; it contains the final .md
-    document when the workflow finishes.
+    Args:
+        plan_path: Path to the plan file to use for writing.
+        mode: The writing mode ("Academic" or "Technical").
+        language: The language for the output ("Portuguese" or "English").
+        min_src: Minimum number of sources required.
+        tavily_enabled: Whether to enable Tavily web search.
+        history: The current conversation history.
+
+    Yields:
+        tuple: (updated_history, status_msg, rendered_content) where rendered_content
+        is empty during streaming and contains the final .md document when finished.
     """
     os.makedirs("reviews", exist_ok=True)
 
@@ -721,6 +752,14 @@ def start_writing(
 
 
 def index_pdfs(folder_path: str) -> str:
+    """Index PDFs from the specified folder into the vector database.
+
+    Args:
+        folder_path: Path to the folder containing PDF files to index.
+
+    Returns:
+        A status message indicating success or failure, with statistics if successful.
+    """
     cfg_issues = validate_runtime_config(strict=False)
     if cfg_issues:
         return "❌ Configuração incompleta:\n- " + "\n- ".join(cfg_issues)
@@ -754,6 +793,16 @@ def format_references(
     tavily_enabled: bool,
     output_dir: str,
 ) -> tuple[str, str]:
+    """Format references from a YAML file into markdown.
+
+    Args:
+        yaml_file_obj: The YAML file object or path to process.
+        tavily_enabled: Whether to enable Tavily for additional data retrieval.
+        output_dir: Directory to save the formatted output file (optional).
+
+    Returns:
+        tuple: (formatted_markdown, status_message)
+    """
     if yaml_file_obj is None:
         return "", "❌ Nenhum arquivo selecionado."
 
@@ -786,6 +835,11 @@ def format_references(
 
 
 def list_review_files() -> list[str]:
+    """List available review files in the reviews directory.
+
+    Returns:
+        Sorted list of review file paths (*.md files in reviews/).
+    """
     os.makedirs("reviews", exist_ok=True)
     return sorted(glob.glob("reviews/*.md"))
 
