@@ -34,7 +34,7 @@ def build_academic_workflow():
     builder.add_conditional_edges(
         "refine_plan",
         interview_router,
-        {"continue": "interview", "finalize": "finalize_plan"},
+        {"continue": "interview", "finish": "finalize_plan"},
     )
     builder.add_edge("finalize_plan", END)
 
