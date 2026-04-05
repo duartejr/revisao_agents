@@ -150,12 +150,12 @@ def _load_file(path: str) -> str:
         The content of the file as a string, or an error message if the file cannot be read.
     """
     if not path or not os.path.exists(path):
-        return "*(file not found)*"
+        return f"*(Arquivo {path} não encontrado)*"
     try:
-        with open(path, encoding="utf-8").read() as f:
-            return f
+        with open(path, encoding="utf-8") as f:
+            return f.read()
     except Exception as exc:
-        return f"❌ Error reading file: {exc}"
+        return f"❌ Erro ao ler o arquivo {path}: {exc}"
 
 
 def _refresh_file_list(folder: str) -> gr.update:

@@ -25,6 +25,7 @@ import shutil
 import sys
 import tempfile
 import threading
+import traceback
 from collections.abc import Generator
 from datetime import datetime
 from typing import Any
@@ -359,9 +360,9 @@ def _read_md(path: str | None) -> str:
 
 
 def start_planning(
-    tema: str,
-    tipo: str,
-    rodadas: int,
+    theme: str,
+    type: str,
+    rounds: int,
 ) -> tuple[list, dict, str, str]:
     """Launch planning workflow until the first HITL pause.
 
@@ -369,9 +370,9 @@ def start_planning(
     rendered_plan is empty until the workflow fully completes.
 
     Args:
-        tema: The review topic/theme provided by the user.
-        tipo: The review type ("academico", "tecnico", or "ambos").
-        rodadas: The number of refinement rounds for HITL steps.
+        theme: The review topic/theme provided by the user.
+        type: The review type ("academico", "tecnico", or "ambos").
+        rounds: The number of refinement rounds for HITL steps.
 
     Returns:
         tuple: A tuple containing:
@@ -380,45 +381,57 @@ def start_planning(
             - status_msg: A string message indicating the current status or next steps.
             - rendered_plan: A string with the rendered plan in markdown, empty until completion.
     """
-    if not tema.strip():
-        return [], {}, "❌ Please provide a topic before starting.", ""
+    from openai import AuthenticationError
+
+    if not theme.strip():
+        return [], {}, "❌ Por favor, forneça um tema antes de iniciar.", ""
 
     cfg_issues = validate_runtime_config(strict=False)
 
     if cfg_issues:
-        msg = "❌ Incomplete configuration:\n- " + "\n- ".join(cfg_issues)
+        msg = "❌ Configuração incompleta:\n- " + "\n- ".join(cfg_issues)
         return [], {}, msg, ""
 
-    tipos_list = ["academico", "tecnico"] if tipo == "ambos" else [tipo]
-    tipo_atual = tipos_list[0]
-    label = "ACADEMIC" if tipo_atual == "academico" else "TECHNICAL"
+    types_list = ["academico", "tecnico"] if type == "ambos" else [type]
+    current_type = types_list[0]
+    label = "ACADEMIC" if current_type == "academico" else "TECHNICAL"
 
     state_init: ReviewState = {
-        "theme": tema,
-        "review_type": tipo_atual,
+        "theme": theme,
+        "review_type": current_type,
         "relevant_chunks": [],
         "technical_snippets": [],
         "technical_urls": [],
         "current_plan": "",
         "interview_history": [],
         "questions_asked": 0,
-        "max_questions": int(rodadas),
+        "max_questions": int(rounds),
         "final_plan": "",
         "final_plan_path": "",
         "status": "starting",
     }
 
-    thread_id = f"revisao_{tipo_atual}_{tema[:20]}"
+    thread_id = f"revisao_{current_type}_{theme[:20]}"
     config = {"configurable": {"thread_id": thread_id}}
-    app = build_academic_workflow() if tipo_atual == "academico" else build_technical_workflow()
+    app = build_academic_workflow() if current_type == "academico" else build_technical_workflow()
 
     log_q: queue.Queue[str] = queue.Queue()
     with _StdoutCapture(log_q):
         try:
             for _ in app.stream(state_init, config):
                 pass
+        except AuthenticationError:
+            return (
+                [],
+                {},
+                "❌ Error in Authentication: Your API Key for OpenAI is invalid or not properly configured in the .env file.",
+                "",
+            )
         except Exception as exc:
-            return [], {}, f"❌ Error starting: {exc}", ""
+            tb = traceback.format_exc()
+
+            short_tb = "\n".join(tb.splitlines()[-5:])
+            return [], {}, f"❌ Unexpected error: {exc}\n\nError summary:\n{short_tb}", ""
 
     history: list[dict] = []
     lines = []
@@ -447,21 +460,21 @@ def start_planning(
             break
 
     p = graph_state.values.get("questions_asked", 0)
-    mp = graph_state.values.get("max_questions", rodadas)
+    mp = graph_state.values.get("max_questions", rounds)
     history.append(
         {
             "role": "assistant",
-            "content": f"[Round {p}/{mp} — {tipo_atual}]\n\n{agent_question}",
+            "content": f"[Round {p}/{mp} — {current_type}]\n\n{agent_question}",
         }
     )
 
     session_state = {
         "app": app,
         "config": config,
-        "tipo": tipo_atual,
-        "tipos_pendentes": tipos_list[1:],
-        "theme": tema,
-        "rodadas": rodadas,
+        "type": current_type,
+        "types_pending": types_list[1:],
+        "theme": theme,
+        "rounds": rounds,
     }
 
     return history, session_state, f"🔄 {label} in progress — waiting for reply…", ""
@@ -487,8 +500,8 @@ def continue_planning(
 
     app = session_state["app"]
     config = session_state["config"]
-    tipo = session_state["tipo"]
-    label = "ACADEMIC" if tipo == "academico" else "TECHNICAL"
+    type = session_state["type"]
+    label = "ACADEMIC" if type == "academico" else "TECHNICAL"
 
     history = history + [{"role": "user", "content": user_msg}]
 
@@ -549,7 +562,7 @@ def continue_planning(
     history = history + [
         {
             "role": "assistant",
-            "content": f"[Round {p}/{mp} — {tipo}]\n\n{agent_question}",
+            "content": f"[Round {p}/{mp} — {type}]\n\n{agent_question}",
         }
     ]
 

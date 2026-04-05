@@ -1,6 +1,6 @@
 # Agente de Revisão da Literatura
 
-Sistema agêntico para planejamento e escrita de revisões acadêmicas e capítulos técnicos, baseado em LangGraph com suporte a múltiplos provedores de LLM (OpenAI, Gemini, Groq, OpenRouter).
+Sistema agêntico para planejamento e escrita de revisões acadêmicas e capítulos técnicos, baseado em LangGraph com suporte a múltiplos provedores de LLM (OpenAI, Google, Groq, OpenRouter).
 
 ## O que este projeto faz
 
@@ -112,7 +112,7 @@ CHECKPOINT_TYPE=memory       # memory | sqlite | postgres
 
 ### Matriz de requisitos por funcionalidade
 
-| Funcionalidade         | OpenAI (sempre) | Tavily (sempre) | MongoDB (sempre) | Gemini/Groq/OpenRouter |
+| Funcionalidade         | OpenAI (sempre) | Tavily (sempre) | MongoDB (sempre) | Google/Groq/OpenRouter |
 |-----------------------|-----------------|-----------------|------------------|------------------------|
 | Planejar revisão      | ✔ (embeddings)  | ✔               | ✔                | opcional (LLM)         |
 | Escrever seção técnica| ✔               | ✔               | ✔                | opcional               |
@@ -197,6 +197,16 @@ ServerSelectionTimeoutError
 ### Erro de chave de API (`AuthenticationError`, `Invalid API key`)
 - Confirme que o `.env` foi salvo com a chave correta (sem espaços extras ou aspas).
 - Troque `LLM_PROVIDER` para o provedor cuja chave você configurou.
+
+### Erro de configuração obrigatória (`ValueError` com lista de problemas)
+- **Chaves sempre obrigatórias:** `MONGODB_URI`, `TAVILY_API_KEY`, `OPENAI_API_KEY` (usada para embeddings).
+- **Erro típico:** "MONGODB_URI missing", "TAVILY_API_KEY missing", "Missing OPENAI_API_KEY (required for embeddings)".
+- Execute o bootstrap novamente: `./scripts/bootstrap.sh` (Linux/macOS) ou `.\scripts\bootstrap.ps1` (Windows).
+
+### Provedor LLM inválido (`ValueError: Invalid provider 'xyz'. Accepted providers: google, openai, groq, openrouter`)
+- Configure `LLM_PROVIDER` no `.env` com um dos valores aceitos: `google`, `openai`, `groq`, `openrouter`.
+- Para Google Gemini, use `LLM_PROVIDER=google` (não `gemini`).
+- Lista completa de provedores aceitos está nesta seção do README.
 
 ### Tavily retorna resultados vazios
 - Confirme que `TAVILY_API_KEY` está preenchida no `.env`.
