@@ -137,21 +137,21 @@ def test_runtime_summary_has_expected_keys():
 
 
 def test_runtime_summary_invalid_provider_does_not_raise(monkeypatch):
-    """Test that runtime summary gracefully reports invalid provider values.
+    """Test that runtime summary gracefully handles invalid provider values
+    by falling back to the default (openai) instead of crashing.
 
     Args:
         monkeypatch: pytest fixture for modifying environment variables
 
     Asserts:
-        Summary includes a provider error and invalid-provider sentinel key when LLM_PROVIDER is invalid.
+        Summary reports 'openai' as provider and empty error for invalid input.
     """
-    monkeypatch.setenv("LLM_PROVIDER", "gemini")
+    monkeypatch.setenv("LLM_PROVIDER", "invalid-provider-name")
     monkeypatch.setenv("OPENAI_API_KEY", "openai_key-value")
     monkeypatch.setenv("MONGODB_URI", "mongodb_uri-value")
     monkeypatch.setenv("TAVILY_API_KEY", "tavily_key-value")
 
     summary = get_runtime_config_summary()
 
-    assert summary["llm_provider"] == "gemini"
-    assert summary["llm_provider_key"] == "<invalid-provider>"
-    assert "not supported" in summary["llm_provider_error"]
+    assert summary["llm_provider"] == "openai"
+    assert summary["llm_provider_error"] == ""

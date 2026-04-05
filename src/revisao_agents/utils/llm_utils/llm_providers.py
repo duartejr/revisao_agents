@@ -305,10 +305,10 @@ class LLMFactory:
             provider = LLMProvider(provider_name)
         except ValueError:
             provider_name = os.getenv("LLM_PROVIDER", "openai")
-            validos = [p.value for p in LLMProvider]
+            valids = [p.value for p in LLMProvider]
             print(
                 f"⚠️  LLM_PROVIDER='{provider_name}' invalid. "
-                f"Accepted values: {validos}. Using 'openai'."
+                f"Accepted values: {valids}. Using 'openai'."
             )
             provider = LLMProvider.OPENAI
 

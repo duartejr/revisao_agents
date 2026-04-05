@@ -24,7 +24,7 @@ def _env_clean(name: str, default: str = "") -> str:
 
 
 # Caminhos e modelos
-VECTOR_DB_PATH = _env_clean("VECTOR_DB_PATH", "./vector_db_suelen/vector_index")
+VECTOR_DB_PATH = _env_clean("VECTOR_DB_PATH", "./vector_db/vector_index")
 EMBEDDINGS_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 # MongoDB Atlas
@@ -173,23 +173,27 @@ def get_runtime_config_summary() -> dict:
 
     Returns:
         Dict with keys:
-            - llm_provider: normalized provider name (lowercase) or raw invalid value
-            - llm_model: model name or "<default>"
-            - llm_provider_key: provider API env var name or "<invalid-provider>"
+            - llm_provider: normalized provider name (lowercase), defaults to 'openai' if invalid
+            - llm_model: model name from provider instance, or provider default if not specified
+            - llm_provider_key: provider API env var name
             - llm_provider_key_present: bool indicating if the key is set
-            - llm_provider_error: validation message when LLM_PROVIDER is invalid
+            - llm_provider_error: always empty string (fallback handled internally)
             - mongodb_uri_present: bool indicating if MONGODB_URI is set
             - tavily_key_present: bool indicating if TAVILY_API_KEY is set
             - openai_key_present: bool indicating if OPENAI_API_KEY is set
     """
+    from .utils.llm_utils.llm_providers import LLMFactory
+
     provider_error = ""
-    raw_provider = os.getenv("LLM_PROVIDER")
     try:
-        provider = validate_provider(raw_provider)
+        llm_provider_obj = LLMFactory.from_env()
+        provider = llm_provider_obj.__class__.__name__.replace("Provider", "").lower()
+        model = llm_provider_obj.model_name
     except ValueError as exc:
-        provider_error = str(exc)
-        provider = raw_provider or "<invalid>"
-    model = _env_clean("LLM_MODEL", "") or "<default>"
+        provider_error = f"LLM_PROVIDER error: {exc}"
+        provider = "<invalid-provider>"
+        model = "<unknown>"
+
     provider_key_name = _PROVIDER_ENV_KEYS.get(provider, "")
     provider_key_ok = bool(_env_clean(provider_key_name, "")) if provider_key_name else False
 
