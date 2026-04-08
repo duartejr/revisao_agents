@@ -32,6 +32,8 @@ def build_academic_workflow(
 
     Args:
         checkpointer (BaseCheckpointSaver | None): An optional BaseCheckpointSaver instance for checkpointing the workflow state.
+            Enables persistence of workflow execution across sessions, allowing resumption from interruptions.
+            If None, defaults to MemorySaver (in-memory, non-persistent).
 
     Returns:
         StateGraph[ReviewState]: The compiled state graph representing the academic review workflow.

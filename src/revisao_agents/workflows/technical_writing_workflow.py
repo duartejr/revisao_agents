@@ -9,7 +9,16 @@ from ..state import TechnicalWriterState
 
 
 def build_technical_writing_workflow():
-    """Build the technical writing workflow graph."""
+    """Build the technical writing workflow graph.
+
+    The workflow consists of the following steps:
+    1. Parse Plan: Parse the plan file to extract sections to write.
+    2. Write Sections: Write each section using evidence from the corpus and web search.
+    3. Consolidate: Consolidate all written sections into a final document.
+
+    Returns:
+        StateGraph[TechnicalWriterState]: The compiled state graph representing the technical writing workflow.
+    """
     builder = StateGraph(TechnicalWriterState)
     builder.add_node("parse_plan", parse_plan_node)
     builder.add_node("write_sections", write_sections_node)
@@ -23,5 +32,9 @@ def build_technical_writing_workflow():
 
 # Backward compatibility alias
 def build_workflow():
-    """Backward-compatible alias for build_technical_writing_workflow."""
+    """Backward-compatible alias for build_technical_writing_workflow.
+
+    Returns:
+        StateGraph[TechnicalWriterState]: The compiled state graph representing the technical writing workflow.
+    """
     return build_technical_writing_workflow()
