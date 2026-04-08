@@ -107,7 +107,7 @@ MONGODB_DB=revisao_agents
 # Opcional
 TEMPERATURE=0.3
 LLM_MODEL=gpt-4o-mini
-CHECKPOINT_TYPE=memory       # memory | sqlite | postgres
+CHECKPOINT_TYPE=memory       # memory | sqlite | postgres — Tipo de persistência para workflows LangGraph (memory = em memória, não persistente)
 ```
 
 ### Matriz de requisitos por funcionalidade

@@ -53,6 +53,18 @@ revisao_agents/
 | 📚 References | `run_reference_formatter()` | markdown formatado |
 | 📄 View | leitura direta de arquivo | renderização local |
 
+## Persistência e Checkpointing
+
+Os workflows de planejamento (acadêmico e técnico) suportam checkpointing opcional via parâmetro `checkpointer` nas funções `build_academic_workflow()` e `build_technical_workflow()`. Isso permite:
+
+- **Persistência de estado**: Salvar o progresso do workflow em memória, SQLite ou PostgreSQL.
+- **Resumo de execuções interrompidas**: Capacidade de retomar workflows pausados (devido a interrupções manuais ou erros).
+- **Configuração via `.env`**: O tipo de checkpointer é controlado pela variável `CHECKPOINT_TYPE` (memory/sqlite/postgres).
+
+Por padrão, usa `MemorySaver` (não persistente). Para persistência, instale dependências extras e configure `CHECKPOINT_TYPE=sqlite` ou `postgres`.
+
+---
+
 ## Fluxo de dados — Planejamento
 
 ```

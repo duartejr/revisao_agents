@@ -50,3 +50,4 @@ tavily_searchs/
 roadmap/
 reports/
 uv.lock
+.github/agents/ai_engineering*
