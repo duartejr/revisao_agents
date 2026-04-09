@@ -46,6 +46,7 @@ from revisao_agents.config import (
     validate_runtime_config,
 )
 from revisao_agents.core.schemas.writer_config import WriterConfig
+from revisao_agents.graphs.checkpoints import get_checkpointer
 from revisao_agents.state import ReviewState, TechnicalWriterState
 from revisao_agents.tools.reference_formatter import format_references_from_file
 from revisao_agents.tools.tavily_web_search import (
@@ -371,7 +372,7 @@ def start_planning(
 
     Args:
         theme: The review topic/theme provided by the user.
-        type: The review type ("academico", "tecnico", or "ambos").
+        type: The review type ("academic", "technical", or "ambos").
         rounds: The number of refinement rounds for HITL steps.
 
     Returns:
@@ -392,9 +393,9 @@ def start_planning(
         msg = "❌ Configuração incompleta:\n- " + "\n- ".join(cfg_issues)
         return [], {}, msg, ""
 
-    types_list = ["academico", "tecnico"] if type == "ambos" else [type]
+    types_list = ["academic", "technical"] if type == "ambos" else [type]
     current_type = types_list[0]
-    label = "ACADEMIC" if current_type == "academico" else "TECHNICAL"
+    label = "ACADEMIC" if current_type == "academic" else "TECHNICAL"
 
     state_init: ReviewState = {
         "theme": theme,
@@ -413,7 +414,11 @@ def start_planning(
 
     thread_id = f"revisao_{current_type}_{theme[:20]}"
     config = {"configurable": {"thread_id": thread_id}}
-    app = build_academic_workflow() if current_type == "academico" else build_technical_workflow()
+
+    if current_type == "academic":
+        app = build_academic_workflow(checkpointer=get_checkpointer())
+    else:
+        app = build_technical_workflow(checkpointer=get_checkpointer())
 
     log_q: queue.Queue[str] = queue.Queue()
     with _StdoutCapture(log_q):

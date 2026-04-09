@@ -6,6 +6,7 @@ from .agents.reference_formatter_agent import (
 )
 from .config import print_runtime_config_summary, validate_runtime_config
 from .core.schemas.writer_config import WriterConfig
+from .graphs.checkpoints import get_checkpointer
 from .hitl import run_hitl_loop
 from .state import ReviewState, TechnicalWriterState
 from .utils.vector_utils.pdf_ingestor import ingest_pdf_folder
@@ -223,7 +224,10 @@ def main():
         }
         config = {"configurable": {"thread_id": f"review_{review_type}_{theme[:20]}"}}
 
-        app = build_academic_workflow() if review_type == "academic" else build_technical_workflow()
+        if review_type == "academic":
+            app = build_academic_workflow(checkpointer=get_checkpointer())
+        else:
+            app = build_technical_workflow(checkpointer=get_checkpointer())
 
         try:
             run_hitl_loop(app, config, state_init)

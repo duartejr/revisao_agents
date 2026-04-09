@@ -428,3 +428,15 @@ def parse_json_safe(texto: str) -> dict | None:
         except json.JSONDecodeError:
             pass
     return None
+
+
+def get_checkpointer_vars() -> dict:
+    """Helper to expose checkpointer config variables for testing and graph construction.
+
+    Returns:
+        dict: A dictionary containing the checkpoint type and path from environment variables.
+    """
+    return {
+        "CHECKPOINT_TYPE": os.getenv("CHECKPOINT_TYPE", "memory").lower(),
+        "CHECKPOINT_PATH": os.getenv("CHECKPOINT_PATH", "checkpoints/checkpoints.db"),
+    }
