@@ -15,9 +15,12 @@ from .workflows.technical_writing_workflow import build_technical_writing_workfl
 
 
 def main():
-    # Ensure output directories exist
-    os.makedirs("plans", exist_ok=True)
-    os.makedirs("reviews", exist_ok=True)
+    """Main CLI entry point for the review agent.
+
+    Provides an interactive menu for selecting and running various workflows:
+    planning academic/technical reviews, writing from plans, indexing PDFs,
+    and formatting references.
+    """
 
     print_runtime_config_summary()
     startup_issues = validate_runtime_config(strict=False)

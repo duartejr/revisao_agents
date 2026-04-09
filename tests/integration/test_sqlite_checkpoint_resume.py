@@ -16,17 +16,11 @@ from revisao_agents.workflows.technical_workflow import build_technical_workflow
     ],
 )
 def test_sqlite_valid_checkpoint_resume(env_vars: dict, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test that build_academic_workflow successfully creates a StateGraph with valid checkpoint configurations.
-    This ensures that the workflow can be built with both in-memory and SQLite checkpointers, and that the SQLite checkpoint file is created as expected.
-    After the test, it cleans up any created SQLite checkpoint files to maintain a clean test environment.
+    """Test build_academic_workflow with valid checkpoint configurations.
 
     Args:
-        env_vars (dict): A dictionary of environment variables to set for the test, including CHECKPOINT_TYPE and optionally CHECKPOINT_PATH.
-        monkeypatch (pytest.MonkeyPatch): The pytest fixture for modifying environment variables.
-
-    Raises:
-        AssertionError: If the returned object is not a CompiledStateGraph or if the SQLite checkpoint file is not created when expected.
-        ValueError: If the CHECKPOINT_TYPE is unsupported or if there are issues creating the SQLite checkpoint file.
+        env_vars: Environment variables for the test.
+        monkeypatch: Pytest fixture for environment manipulation.
     """
     for key, value in env_vars.items():
         monkeypatch.setenv(key, value)
@@ -53,15 +47,11 @@ def test_sqlite_valid_checkpoint_resume(env_vars: dict, monkeypatch: pytest.Monk
 def test_build_technical_workflow_with_valid_checkpointers(
     env_vars: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Test that build_technical_workflow returns a valid StateGraph for various valid checkpointers.
-    This ensures the function accepts None, MemorySaver, and SqliteSaver without errors, maintaining backward compatibility.
+    """Test build_technical_workflow with valid checkpointer configurations.
 
     Args:
-        env_vars (dict): Environment variables for the test.
-        monkeypatch (pytest.MonkeyPatch): Pytest fixture for environment manipulation.
-
-    Raises:
-        AssertionError: If the returned object is not a StateGraph instance.
+        env_vars: Environment variables for the test.
+        monkeypatch: Pytest fixture for environment manipulation.
     """
     for key, value in env_vars.items():
         monkeypatch.setenv(key, value)
@@ -86,16 +76,12 @@ def test_build_technical_workflow_with_valid_checkpointers(
     ],
 )
 def test_sqlite_invalid_checkpoint(monkeypatch, env_vars, expected_exception):
-    """Test that build_academic_workflow raises appropriate exceptions for invalid checkpoint configurations.
-    This ensures that the function properly validates the CHECKPOINT_TYPE and CHECKPOINT_PATH environment variables, and raises ValueError for unsupported checkpoint types or invalid paths.
+    """Test build_academic_workflow raises exceptions for invalid checkpoint configurations.
 
     Args:
-        monkeypatch (pytest.MonkeyPatch): The pytest fixture for modifying environment variables.
-        env_vars (dict): A dictionary of environment variables to set for the test, including invalid CHECKPOINT_TYPE or CHECKPOINT_PATH.
-        expected_exception (Exception): The type of exception expected to be raised for the given invalid configuration.
-
-    Raises:
-        ValueError: If the CHECKPOINT_TYPE is unsupported or if the CHECKPOINT_PATH is invalid.
+        monkeypatch: Pytest fixture for environment manipulation.
+        env_vars: Invalid environment variables for the test.
+        expected_exception: Expected exception type.
     """
     for key, value in env_vars.items():
         monkeypatch.setenv(key, value)
@@ -113,16 +99,12 @@ def test_sqlite_invalid_checkpoint(monkeypatch, env_vars, expected_exception):
 def test_build_technical_workflow_with_invalid_checkpointer(
     monkeypatch, env_vars, expected_exception
 ):
-    """Test that build_technical_workflow raises a ValueError when given an invalid checkpointer.
-    This ensures that the function properly validates the type of the checkpointer argument and raises an appropriate error for unsupported types.
+    """Test build_technical_workflow raises exceptions for invalid checkpoint configurations.
 
     Args:
-        monkeypatch (pytest.MonkeyPatch): Pytest fixture for environment manipulation.
-        env_vars (dict): Invalid environment variables.
-        expected_exception (Exception): Expected exception type.
-
-    Raises:
-        ValueError: If the checkpointer is not an instance of BaseCheckpointSaver.
+        monkeypatch: Pytest fixture for environment manipulation.
+        env_vars: Invalid environment variables for the test.
+        expected_exception: Expected exception type.
     """
     for key, value in env_vars.items():
         monkeypatch.setenv(key, value)
@@ -131,15 +113,10 @@ def test_build_technical_workflow_with_invalid_checkpointer(
 
 
 def test_sqlite_no_checkpoint_type(monkeypatch):
-    """Test that build_academic_workflow defaults to MemorySaver when CHECKPOINT_TYPE is not set.
-    This ensures that the function maintains backward compatibility by using an in-memory checkpointer when no checkpoint
-    type is specified, and that it successfully builds the workflow without errors.
+    """Test build_academic_workflow defaults to memory checkpointer when CHECKPOINT_TYPE is not set.
 
     Args:
-        monkeypatch (pytest.MonkeyPatch): The pytest fixture for modifying environment variables.
-
-    Raises:
-        AssertionError: If the returned object is not a CompiledStateGraph.
+        monkeypatch: Pytest fixture for environment manipulation.
     """
     monkeypatch.delenv("CHECKPOINT_TYPE", raising=False)
     app = build_academic_workflow(checkpointer=get_checkpointer())
