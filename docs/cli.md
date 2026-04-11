@@ -1,25 +1,20 @@
 # Documentação da CLI
 
-O sistema oferece dois modos de uso pela linha de comando:
-
-1. **`revisao-agents`** — CLI script direto (Typer), focada em planejamento automatizado
-2. **`python -m revisao_agents`** — menu interativo com todas as funcionalidades
+O sistema oferece uma CLI unificada que pode ser usada tanto como menu interativo quanto por comandos diretos.
 
 ---
 
-## `revisao-agents` — CLI Script
+## `revisao-agents` — CLI Unificada
 
 ### Instalação / Ativação
 
-Após executar `./scripts/bootstrap.sh` (ou `uv sync --extra dev` para ambiente de desenvolvimento), o comando fica disponível como:
+Após executar `./scripts/bootstrap.sh` (ou `uv sync` para ambiente de desenvolvimento), o comando fica disponível via `uv run`:
 
 ```bash
 uv run revisao-agents
 ```
 
-> Se o ambiente estiver ativado (`source .venv/bin/activate`), pode-se usar `revisao-agents` diretamente.
-
-Para uso somente em runtime (sem lint/test/typecheck), `uv sync` também é suficiente.
+Este comando inicia o **Menu Interativo** por padrão se nenhum argumento for passado.
 
 ### Ajuda geral
 
@@ -27,176 +22,84 @@ Para uso somente em runtime (sem lint/test/typecheck), `uv sync` também é sufi
 uv run revisao-agents --help
 ```
 
-### Sintaxe
+---
 
+## Modo Interativo (Menu)
+
+Execute sem argumentos para abrir o assistente:
+
+```bash
+uv run revisao-agents
 ```
-revisao-agents [TEMA_OU_ARQUIVO] [OPÇÕES]
+
+### Opções do Menu:
+1. **Plan Academic Review**: Inicia workflow de planejamento para revisões narrativas/acadêmicas.
+2. **Plan Technical Review**: Inicia workflow para capítulos técnicos ou revisões de ferramentas.
+3. **Execute Writing**: Permite escolher um plano gerado anteriormente (na pasta `plans/`) e iniciar a escrita automática das seções.
+4. **Index Local PDFs**: Processa uma pasta de arquivos PDF, extrai texto e salva no banco vetorial MongoDB.
+5. **Format References**: Lê um arquivo YAML/JSON e gera referências formatadas em ABNT/APA/IEEE via LLM.
+
+---
+
+## Modo Direto (Flags e Automação)
+
+Você pode pular o menu e executar o planejamento diretamente informando um tema:
+
+```bash
+uv run revisao-agents [TEMA_OU_ARQUIVO] [OPÇÕES]
 ```
 
 O primeiro argumento pode ser:
 - **Texto do tema** direto: `"Previsão de vazões com LSTM"`
-- **Caminho para arquivo** `.md` ou `.txt` contendo o tema ou plano
+- **Caminho para arquivo** `.md` ou `.txt` contendo o tema ou plano. O sistema tentará extrair o tema automaticamente do conteúdo.
 
-### Opções
+### Opções detalhadas
 
 | Opção | Atalho | Padrão | Descrição |
 |-------|--------|--------|-----------|
-| `--review-type` | `-t` | `academic` | Tipo de revisão: `academic` ou `technical` |
-| `--rounds` | `-r` | `3` | Número de rodadas de refinamento HITL |
-| `--output` | `-o` | — | Caminho para salvar o plano gerado (opcional) |
-| `--model` | — | `.env` | Modelo LLM a usar (sobrescreve `LLM_MODEL` do `.env`) |
-| `--auto-response` | — | `"Keep the current plan."` | Resposta automática para etapas HITL (modo não interativo) |
-| `--debug` | — | `false` | Ativa saída detalhada dos eventos internos do grafo |
+| `--review-type` | `-t` | `academic` | Tipo de revisão: `academic` ou `technical`. |
+| `--rounds` | `-r` | `3` | Número de rodadas de refinamento HITL (interativas). |
+| `--thread-id` | — | gerado | ID da sessão no SQLite para persistência e retorno posterior. |
+| `--auto-response` | — | `None` | Resposta automática para etapas HITL (torna o planning não-interativo). |
+| `--model` | — | `.env` | Modelo LLM a usar (sobrescreve o `LLM_MODEL` configurado). |
+| `--debug` | — | `false` | Exibe logs de execução interna do LangGraph. |
 
-### Exemplos
+### Exemplos de uso direto
 
-#### Planejamento acadêmico (padrão)
-
+#### Planejamento acadêmico padrão
 ```bash
-uv run revisao-agents "Uso de LSTM para previsão de cheias"
+uv run revisao-agents "Blockchain em cadeias de suprimentos"
 ```
 
-#### Planejamento técnico com mais rodadas
-
+#### Planejamento técnico com persistência em thread específica
 ```bash
-uv run revisao-agents "Chronos-2 vs LSTM para previsão de streamflow" \
-  --review-type technical \
-  --rounds 5
+uv run revisao-agents "Arquitetura Clean em Python" --review-type technical --thread-id "proj-001"
 ```
 
-#### Salvar o plano gerado em arquivo
-
+#### Automação total (sem interação humana)
 ```bash
-uv run revisao-agents "Modelos de previsão de secas" \
-  --review-type academic \
-  --output plans/meu_plano.md
+uv run revisao-agents "Meu tema" --auto-response "Ok, prossiga com o plano padrão." --rounds 2
 ```
-
-#### Usar tema a partir de arquivo
-
-```bash
-uv run revisao-agents plans/plano_revisao_tecnica_tema.md \
-  --review-type technical
-```
-
-#### Usar modelo específico
-
-```bash
-uv run revisao-agents "Energia solar fotovoltaica no Nordeste" \
-  --model gemini-2.5-flash
-```
-
-> Para modelos `gemini-*`, configure `LLM_PROVIDER=google` no `.env`.
-
-#### Modo debug (ver eventos internos do LangGraph)
-
-```bash
-uv run revisao-agents "Meu tema" --debug
-```
-
-#### Modo não interativo (resposta automática para HITL)
-
-```bash
-uv run revisao-agents "Meu tema" \
-  --auto-response "Mantenha o plano atual." \
-  --rounds 2
-```
-
-### Comportamento esperado
-
-1. O agente inicia o workflow de planejamento e processa as rodadas automaticamente.
-2. Em cada rodada HITL, usa o valor de `--auto-response` sem interromper.
-3. Ao final, imprime o plano gerado no terminal.
-4. Se `--output` for informado, salva o plano no arquivo.
-5. O plano também é salvo automaticamente em `plans/`.
 
 ---
 
-## `python -m revisao_agents` — Menu Interativo
+## Persitência (SQLite Checkpointer)
 
-### Como iniciar
+O sistema agora suporta persistência de estado via SQLite. Isso permite que você pare uma execução e retorne a ela usando o mesmo `--thread-id`.
 
-```bash
-uv run python -m revisao_agents
-```
+Configuração no `.env`:
+- `CHECKPOINT_TYPE=sqlite` (ativa o banco de dados)
+- `CHECKPOINT_PATH=checkpoints/checkpoints.db` (local do arquivo)
 
-### Menu principal
+Se `CHECKPOINT_TYPE=memory` (padrão), o estado é perdido após fechar o terminal.
 
-```
-Options:
-  [1] Plan Academic Review (narrative)
-  [2] Plan Technical Review (chapter)
-  [3] Execute Writing from Existing Plan (Technical or Academic)
-  [4] Index Local PDFs → vectorize and save to MongoDB
-  [5] Format References (ABNT, APA, IEEE, etc.) from YAML/JSON file
+---
 
-Choose [1/2/3/4/5]:
-```
+## Observações de Troubleshooting
 
-### Opção 1 — Planejar revisão acadêmica
-
-```
-Choose [1/2/3/4/5]: 1
-Review theme: Modelos de previsão de cheias com deep learning
-```
-
-O agente executa o workflow acadêmico com entrevista HITL. O plano é salvo em `plans/`.
-
-### Opção 2 — Planejar revisão técnica
-
-```
-Choose [1/2/3/4/5]: 2
-Review theme: Comparação entre Chronos-2 e LSTM
-```
-
-Idêntico à opção 1, mas usa o workflow técnico.
-
-### Opção 3 — Escrever a partir de plano existente
-
-```
-Choose [1/2/3/4/5]: 3
-WRITING STYLE:
-  [a] Technical section — didactic chapter (web search + MongoDB)
-  [b] Academic — narrative literature review (corpus-first)
-
-Choose [a/b, default=a]: a
-
-REVIEW LANGUAGE:
-  [pt] Portuguese (standard)
-  [en] English
-
-Choose [pt/en, default=pt]: pt
-
-MINIMUM NUMBER OF DISTINCT SOURCES PER SECTION:
-(default = 0; 0 = no restriction)
-Minimum sources per section [0]:
-
-Do you want to enable web/image search via Tavily?
-  [y] Yes (web and image search)
-  [n] No (local corpus only)
-
-Enable Tavily? [y/N]: y
-
-Plans found:
-  [1] plans/plano_revisao_tecnica_tema.md
-  [2] plans/plano_revisao_academico_outro.md
-
-Choose [1-2 or path]: 1
-```
-
-O agente escreve as seções do plano selecionado. O resultado é salvo em `reviews/`.
-
-### Opção 4 — Indexar PDFs locais
-
-```
-Choose [1/2/3/4/5]: 4
-Path to folder with PDFs: ~/artigos/hidrologia
-```
-
-Indexa todos os PDFs da pasta no MongoDB.
-
-```
-INDEXING RESULT
+- **Caminhos de Arquivos**: Ao informar caminhos no Linux/macOS, use `~` ou caminhos relativos ao diretório raiz do projeto.
+- **Tavily/MongoDB**: Certifique-se de que as chaves estão corretas no `.env` antes de rodar o Writing ou Indexing.
+- **Ambiente**: O comando `uv run` garante que todas as dependências isoladas sejam carregadas corretamente.
   ✅ New PDFs indexed : 12
   ⏭️  Already in DB     : 3
   ⚠️  Insufficient text : 1

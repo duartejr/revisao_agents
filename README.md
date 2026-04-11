@@ -104,10 +104,11 @@ TAVILY_API_KEY=tvly-...
 MONGODB_URI=mongodb://localhost:27017
 MONGODB_DB=revisao_agents
 
-# Opcional
+# Opcional (Persistência e Checkpoints)
 TEMPERATURE=0.3
 LLM_MODEL=gpt-4o-mini
-CHECKPOINT_TYPE=memory       # memory | sqlite | postgres — Tipo de persistência para workflows LangGraph (memory = em memória, não persistente)
+CHECKPOINT_TYPE=sqlite       # memory | sqlite — Tipo de persistência para workflows LangGraph
+CHECKPOINT_PATH=checkpoints/checkpoints.db  # Caminho para o banco SQLite (se CHECKPOINT_TYPE=sqlite)
 ```
 
 ### Matriz de requisitos por funcionalidade
@@ -121,51 +122,44 @@ CHECKPOINT_TYPE=memory       # memory | sqlite | postgres — Tipo de persistên
 | Indexar PDFs          | ✔ (embeddings)  | ✔               | ✔                | —                      |
 | Formatar referências  | ✔ (embeddings)  | ✔               | ✔                | opcional               |
 
-> **Atenção:** As chaves de OpenAI, Tavily e MongoDB são sempre obrigatórias. OpenAI é usada para geração de embeddings (`text-embedding-3-small`), mesmo se outro provedor LLM for escolhido.
-
 ---
 
-## Primeiro uso via UI
+## Uso via CLI
 
-Após iniciar com `uv run python run_ui.py`:
+### Menu unificado interativo
 
-1. **Abra** http://localhost:7860 no navegador
-2. **Selecione o provedor LLM** no seletor no topo da tela
-3. Acesse a aba **📋 Plan** e informe um tema para planejar sua revisão
-4. Após gerar o plano, vá à aba **✍️ Write** para escrever as seções
-5. Use a aba **🤖 Revisão Interativa** para refinar o texto gerado
-
-Veja a documentação detalhada de cada aba em [`docs/ui/`](docs/ui/).
-
----
-
-## Uso via CLI (alternativa à UI)
-
-### Menu interativo
+O aplicativo centraliza todas as funcionalidades em um menu interativo:
 
 ```bash
-uv run python -m revisao_agents
+uv run revisao-agents
 ```
 
-Exibe opções numeradas para planejamento, escrita, indexação e referências.
+Este comando exibe opções para:
+1. **Planejar revisão acadêmica** (narrativa)
+2. **Planejar revisão técnica** (capítulo estruturado)
+3. **Executar escrita** a partir de planos existentes (acadêmico ou técnico)
+4. **Indexar PDFs** locais para o banco vetorial (MongoDB)
+5. **Formatar referências** (ABNT, APA, IEEE) a partir de arquivos YAML/JSON
 
-### CLI script
+### CLI automatizada (Flags)
+
+Para automação ou execuções diretas de planejamento:
 
 ```bash
 # Ajuda geral
 uv run revisao-agents --help
 
-# Planejar revisão acadêmica
+# Planejar revisão acadêmica direta
 uv run revisao-agents "meu tema de pesquisa" --review-type academic
 
-# Planejar revisão técnica
-uv run revisao-agents "meu tema de pesquisa" --review-type technical --rounds 4
+# Planejar com número específico de rodadas e thread ID manual (SQLite)
+uv run revisao-agents "meu tema" --rounds 4 --thread-id "sessao-001"
 
-# Salvar o plano gerado em arquivo
-uv run revisao-agents "meu tema" --output plans/meu_plano.md
+# Modo não interativo (envia resposta automática em pausas HITL)
+uv run revisao-agents "meu tema" --auto-response "Ok, prossiga com o plano."
 ```
 
-Veja documentação completa da CLI em [`docs/cli.md`](docs/cli.md).
+Veja documentação detalhada em [`docs/cli.md`](docs/cli.md).
 
 ---
 

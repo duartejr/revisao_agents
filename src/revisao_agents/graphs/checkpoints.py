@@ -40,6 +40,7 @@ def get_checkpointer() -> Any:
     if checkpoint_type == "sqlite":
         try:
             os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
+            print(os.path.dirname(checkpoint_path))
         except OSError as e:
             raise ValueError(f"Failed to create directory for SQLite checkpoint: {e}") from e
 
@@ -55,7 +56,13 @@ def get_checkpointer() -> Any:
 
             # check_same_thread=False allows the connection to be used across threads,
             # which is necessary for LangGraph's async operations
-            return SqliteSaver(sqlite3.connect(checkpoint_path, check_same_thread=False))
+            conn = sqlite3.connect(checkpoint_path, check_same_thread=False)
+            saver = SqliteSaver(conn)
+
+            # Ensure tables (checkpoints, writes, etc.) are created
+            saver.setup()
+
+            return saver
         except ImportError as e:
             raise ImportError(
                 "langgraph-checkpoint-sqlite is not installed. "

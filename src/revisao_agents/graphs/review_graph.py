@@ -31,9 +31,16 @@ def _normalize_review_type(review_type: str | None) -> str:
 # ---------------------------------------------------------------------------
 
 
-def build_academic_graph(checkpointer=None):
-    """Build academic planning graph using canonical workflow implementation."""
-    return build_academic_workflow()
+def build_academic_graph(checkpointer=None) -> object:
+    """Build academic planning graph using canonical workflow implementation.
+
+    Args:
+        checkpointer: optional LangGraph checkpointer (defaults to MemorySaver)
+
+    Returns:
+        compiled LangGraph graph instance for academic review workflow
+    """
+    return build_academic_workflow(checkpointer=checkpointer)
 
 
 # ---------------------------------------------------------------------------
@@ -41,9 +48,16 @@ def build_academic_graph(checkpointer=None):
 # ---------------------------------------------------------------------------
 
 
-def build_technical_graph(checkpointer=None):
-    """Build technical planning graph using canonical workflow implementation."""
-    return build_technical_workflow()
+def build_technical_graph(checkpointer=None) -> object:
+    """Build technical planning graph using canonical workflow implementation.
+
+    Args:
+        checkpointer: optional LangGraph checkpointer (defaults to MemorySaver)
+
+    Returns:
+        compiled LangGraph graph instance for technical review workflow
+    """
+    return build_technical_workflow(checkpointer=checkpointer)
 
 
 # ---------------------------------------------------------------------------
