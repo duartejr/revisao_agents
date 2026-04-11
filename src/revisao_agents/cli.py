@@ -7,8 +7,8 @@ import typer
 from rich.console import Console
 
 from .graphs.checkpoints import get_checkpointer
-from .graphs.review_graph import build_review_graph
 from .hitl import run_hitl_loop
+from .workflows import build_review_graph
 
 console = Console()
 
