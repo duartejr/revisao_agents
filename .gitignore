@@ -51,3 +51,4 @@ roadmap/
 reports/
 uv.lock
 .github/agents/ai_engineering*
+*.db

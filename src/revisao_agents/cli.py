@@ -7,23 +7,23 @@ import typer
 from rich.console import Console
 
 from .graphs.checkpoints import get_checkpointer
-from .graphs.review_graph import build_review_graph
 from .hitl import run_hitl_loop
+from .workflows import build_review_graph
 
 console = Console()
 
 
 def resolve_topic(input_value: str) -> str:
-    """
-    Resolves the input as either raw topic text or a file path containing a topic/plan.
+    """Resolves the input as either raw topic text or a file path containing a topic/plan.
 
     Args:
         input_value: A string that is either the review theme/topic or a path to a file
-                        containing the theme/plan. If it's a file, the function will attempt
-                        to extract the theme from it.
+            containing the theme/plan. If it's a file, the function will attempt
+            to extract the theme from it.
 
     Returns:
-        A string representing the review theme/topic, either directly from the input or extracted from the file.
+        A string representing the review theme/topic, either directly from the input
+        or extracted from the file.
     """
     path = Path(input_value)
 
