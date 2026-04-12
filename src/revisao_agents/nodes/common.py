@@ -25,6 +25,68 @@ TERMINATION_EN = {"end", "finish", "exit", "done", "stop", "quit"}
 TERMINATION = TERMINATION_PT | TERMINATION_EN
 
 
+def build_search_query(state: ReviewState) -> str:
+    """Builds a focused search query from the latest interview Q&A pair via LLM.
+
+    Walks the ``interview_history`` in reverse to locate the most recent
+    assistant question and user response.  When found, invokes the
+    ``common/refine_search_query`` prompt to generate a concise query string.
+    Falls back to the raw ``theme`` when no Q&A pair exists or when the LLM
+    call fails.
+
+    Args:
+        state (ReviewState): The current graph state, expected to contain:
+            - "theme": str, the review topic used as fallback query.
+            - "interview_history": list of ``(role, content)`` tuples.
+            - "current_plan": str, the latest draft plan (used as context).
+
+    Returns:
+        str: A concise search query string (3–8 words).
+
+    Raises:
+        None: All exceptions from ``load_prompt`` or the LLM call are caught
+            internally; the function always returns a usable string.
+    """
+    theme = state["theme"]
+    current_plan = state.get("current_plan", "")
+
+    last_question = ""
+    user_response = ""
+
+    history = state.get("interview_history", [])
+    for i in range(len(history) - 1, -1, -1):
+        entry = history[i]
+        if not (isinstance(entry, list | tuple) and len(entry) == 2):
+            continue
+        role, msg = entry
+        if role == "user" and not user_response:
+            user_response = msg
+        elif role == "assistant" and user_response and not last_question:
+            last_question = msg
+            break
+
+    if last_question and user_response:
+        try:
+            prompt = load_prompt(
+                "common/refine_search_query",
+                theme=theme,
+                current_plan=truncate(current_plan, 500),
+                last_question=truncate(last_question, 400),
+                user_response=truncate(user_response, 400),
+            )
+            resp = get_llm(temperature=prompt.temperature).invoke(prompt.text)
+            raw = resp.content if hasattr(resp, "content") else str(resp)
+            query = next(
+                (line.strip().strip('"').strip("'") for line in raw.splitlines() if line.strip()),
+                theme,
+            )
+            return query or theme
+        except Exception:
+            return theme
+
+    return theme
+
+
 def human_pause_node(state: ReviewState) -> dict:
     """Human-in-the-loop pause node."""
     return {}

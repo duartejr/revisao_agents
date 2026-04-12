@@ -15,6 +15,7 @@ from ..utils.file_utils.helpers import fmt_chunks, save_md, truncate
 from ..utils.llm_utils.llm_providers import get_llm
 from ..utils.llm_utils.prompt_loader import load_prompt
 from ..utils.vector_utils.vector_store import accumulate_chunks, search_chunks
+from .common import build_search_query
 
 # Constants (may need to be moved to config)
 CHUNKS_PER_QUERY = 10  # TODO: Move to config if it should be configurable
@@ -59,20 +60,26 @@ def initial_academic_plan_node(state: ReviewState) -> dict:
 def refine_academic_search_node(state: ReviewState) -> dict:
     """Refines the vector search based on the user's last question.
 
+    Uses an LLM to translate the latest interview question/answer pair into a
+    focused query string, then re-searches the vector store and accumulates the
+    results with previously retrieved chunks.
+
     Args:
         state (ReviewState): The current state of the review, expected to contain:
             - "theme": str, the review topic/theme to search for.
             - "interview_history": list of tuples, the history of the interview.
+            - "current_plan": str, the current draft academic plan.
+            - "relevant_chunks": list, chunks accumulated from previous searches.
 
     Returns:
         dict: Updated state with refined relevant chunks and status.
+
+    Raises:
+        None: LLM and prompt errors are handled internally by ``build_search_query``;
+            the node always returns a valid state dict.
     """
-    query = state["theme"]
-    for role, c in reversed(state["interview_history"]):
-        if role == "user":
-            query = c[:150]
-            break
-    print("\n[MONGODB re-query] query:", repr(query[:60]))
+    query = build_search_query(state)
+    print("\n[MONGODB re-query] interpreted query:", repr(query[:70]))
     novos = search_chunks(query)
     acum = accumulate_chunks(state["relevant_chunks"], novos)
     print("   ", len(novos), "retrieved | total:", len(acum))
