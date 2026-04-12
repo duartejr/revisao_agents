@@ -3,17 +3,19 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from gradio_app.handlers import (
+from gradio_app.handlers import review_chat_turn
+from gradio_app.handlers.review_parts.intent import (
     _classify_reference_intent,
-    _collect_reference_inventory,
     _extract_provided_reference_items,
     _extract_requested_citation_numbers,
+    _is_reference_request,
+)
+from gradio_app.handlers.review_parts.references import (
+    _collect_reference_inventory,
     _format_abnt_entry,
     _handle_format_provided_references_request,
     _handle_reference_request,
     _is_metadata_complete,
-    _is_reference_request,
-    review_chat_turn,
 )
 
 
@@ -149,11 +151,11 @@ def test_provided_format_guidance_when_web_disabled():
 """
     with (
         patch(
-            "gradio_app.handlers.run_reference_extractor_agent",
+            "gradio_app.handlers.review_parts.references.run_reference_extractor_agent",
             return_value="[1] TITLE: Test | AUTHORS: A. Author | YEAR: 2024 | DOI: N/A",
         ),
         patch(
-            "gradio_app.handlers.run_reference_formatter_agent",
+            "gradio_app.handlers.review_parts.references.run_reference_formatter_agent",
             return_value="[1] AUTHOR, A. **Test**. 2024.",
         ),
     ):
@@ -187,11 +189,11 @@ def test_reference_list_requires_confirmation_before_execution(tmp_path: Path):
 
     with (
         patch(
-            "gradio_app.handlers.run_reference_extractor_agent",
+            "gradio_app.handlers.review_parts.references.run_reference_extractor_agent",
             return_value="[1] TITLE: Título A | AUTHORS: AUTOR, A. | YEAR: N/A | DOI: N/A",
         ),
         patch(
-            "gradio_app.handlers.run_reference_formatter_agent",
+            "gradio_app.handlers.review_parts.references.run_reference_formatter_agent",
             return_value="[1] AUTOR, A. **Título A**. [s.d.].",
         ),
     ):
@@ -224,7 +226,7 @@ def test_format_confirmation_blocks_without_web(tmp_path: Path):
     )
     assert "Aguardando confirmação" in status
     assert session_state.get("awaiting_reference_confirmation") is True
-    assert "habilite **Allow web search**" in history[-1]["content"]
+    assert "Ative **Allow web search**" in history[-1]["content"]
 
     history, session_state, status, _ = review_chat_turn(
         "sim",
@@ -361,7 +363,7 @@ def test_phrase_reference_yes_runs_mongo_and_finishes(tmp_path: Path):
     }
 
     with patch(
-        "gradio_app.handlers.search_chunk_records",
+        "gradio_app.handlers.review_parts.references.search_chunk_records",
         return_value=[
             {
                 "source_title": "Chronos paper",
@@ -400,7 +402,7 @@ def test_phrase_reference_confirmation_uses_original_message_language(tmp_path: 
         "awaiting_phrase_reference_confirmation": True,
     }
 
-    with patch("gradio_app.handlers.search_chunk_records", return_value=[]):
+    with patch("gradio_app.handlers.review_parts.references.search_chunk_records", return_value=[]):
         history, session_state, status, _ = review_chat_turn(
             "sim",
             history,
@@ -429,7 +431,7 @@ def test_phrase_reference_confirmation_falls_back_to_original_message_language(t
         "awaiting_phrase_reference_confirmation": True,
     }
 
-    with patch("gradio_app.handlers.search_chunk_records", return_value=[]):
+    with patch("gradio_app.handlers.review_parts.references.search_chunk_records", return_value=[]):
         history, session_state, status, _ = review_chat_turn(
             "sim",
             history,
@@ -488,7 +490,7 @@ def test_phrase_reference_no_mongo_with_web_disabled_preserves_pending_action(tm
         "awaiting_phrase_reference_confirmation": True,
     }
 
-    with patch("gradio_app.handlers.search_chunk_records", return_value=[]):
+    with patch("gradio_app.handlers.review_parts.references.search_chunk_records", return_value=[]):
         history, session_state, status, _ = review_chat_turn(
             "yes",
             history,
@@ -519,7 +521,7 @@ def test_phrase_reference_continue_after_enabling_web(tmp_path: Path):
         "awaiting_phrase_reference_confirmation": True,
     }
 
-    with patch("gradio_app.handlers.search_chunk_records", return_value=[]):
+    with patch("gradio_app.handlers.review_parts.references.search_chunk_records", return_value=[]):
         history, session_state, status, _ = review_chat_turn(
             "yes",
             history,
@@ -533,11 +535,11 @@ def test_phrase_reference_continue_after_enabling_web(tmp_path: Path):
 
     with (
         patch(
-            "gradio_app.handlers.search_tavily_incremental",
+            "gradio_app.handlers.review_parts.references.search_tavily_incremental",
             return_value={"new_urls": ["https://example.org/chronos"]},
         ),
         patch(
-            "gradio_app.handlers.extract_tavily",
+            "gradio_app.handlers.review_parts.references.extract_tavily",
             new=type(
                 "_FakeExtractTool",
                 (),
@@ -614,11 +616,11 @@ def test_phrase_reference_yes_internet_runs_when_enabled(tmp_path: Path):
 
     with (
         patch(
-            "gradio_app.handlers.search_tavily_incremental",
+            "gradio_app.handlers.review_parts.references.search_tavily_incremental",
             return_value={"new_urls": ["https://example.org/chronos"]},
         ),
         patch(
-            "gradio_app.handlers.extract_tavily",
+            "gradio_app.handlers.review_parts.references.extract_tavily",
             new=type(
                 "_FakeExtractTool",
                 (),

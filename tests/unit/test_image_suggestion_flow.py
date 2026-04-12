@@ -4,11 +4,11 @@ from unittest.mock import patch
 
 import pytest
 
-from gradio_app.handlers import (
+from gradio_app.handlers import review_chat_turn
+from gradio_app.handlers.review_parts.images import (
     _build_image_confirmation_prompt,
     _build_image_scope_description,
     _is_image_request,
-    review_chat_turn,
 )
 
 # ---------------------------------------------------------------------------
@@ -159,12 +159,16 @@ def base_state(working_copy):
 
 class TestImageStateMachine:
     def test_first_image_request_sets_awaiting_confirmation(self, base_state):
-        _, state, _, _ = review_chat_turn("adicione uma imagem nesta seção", [], base_state)
+        _, state, _, _ = review_chat_turn(
+            "adicione uma imagem nesta seção", [], base_state, web_enabled=True
+        )
         assert state.get("awaiting_image_confirmation") is True
         assert state.get("pending_image_action")
 
     def test_first_image_request_returns_confirmation_in_history(self, base_state):
-        history, _, _, _ = review_chat_turn("adicione uma imagem nesta seção", [], base_state)
+        history, _, _, _ = review_chat_turn(
+            "adicione uma imagem nesta seção", [], base_state, web_enabled=True
+        )
         last_reply = history[-1]["content"]
         assert any(kw in last_reply.lower() for kw in ["sim", "yes", "confirme", "confirm"])
 
@@ -196,10 +200,10 @@ class TestImageStateMachine:
             "original_request": "find image",
         }
         with patch(
-            "gradio_app.handlers.run_image_suggestion_agent",
+            "gradio_app.handlers.review.run_image_suggestion_agent",
             return_value="![img](https://example.com/img.png)",
         ) as mock_agent:
-            history, state, _, _ = review_chat_turn("sim", [], base_state)
+            history, state, _, _ = review_chat_turn("sim", [], base_state, web_enabled=True)
             mock_agent.assert_called_once()
 
         assert not state.get("awaiting_image_confirmation")
@@ -212,8 +216,8 @@ class TestImageStateMachine:
             "excerpt": "some text",
             "original_request": "find image",
         }
-        with patch("gradio_app.handlers.run_image_suggestion_agent", return_value="result"):
-            _, state, _, _ = review_chat_turn("yes", [], base_state)
+        with patch("gradio_app.handlers.review.run_image_suggestion_agent", return_value="result"):
+            _, state, _, _ = review_chat_turn("yes", [], base_state, web_enabled=True)
         assert state.get("pending_image_action") == {}
 
     def test_scope_override_during_confirmation_updates_scope(self, base_state):
@@ -224,10 +228,10 @@ class TestImageStateMachine:
             "original_request": "find image",
         }
         with patch(
-            "gradio_app.handlers.run_image_suggestion_agent", return_value="result"
+            "gradio_app.handlers.review.run_image_suggestion_agent", return_value="result"
         ) as mock_agent:
             _, state, _, _ = review_chat_turn(
-                "busque imagens apenas para o parágrafo 1", [], base_state
+                "busque imagens apenas para o parágrafo 1", [], base_state, web_enabled=True
             )
             # Agent should have been called with the overridden scope, not "all sections"
             call_kwargs = mock_agent.call_args[1]

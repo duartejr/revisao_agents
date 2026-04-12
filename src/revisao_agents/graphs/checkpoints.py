@@ -76,3 +76,31 @@ def get_checkpointer() -> Any:
         return MemorySaver()
     else:
         raise ValueError(f"Unsupported CHECKPOINT_TYPE: {checkpoint_type}")
+
+
+def list_thread_ids() -> list[str]:
+    """
+    Returns a list of all unique thread_ids stored in the checkpoint backend (SQLite).
+
+    If the backend is not SQLite or the database is unavailable, returns an empty list.
+
+    Returns:
+        list[str]: List of unique thread_ids found in the checkpoints table.
+    """
+    vars = get_checkpointer_vars()
+    checkpoint_type = vars.get("CHECKPOINT_TYPE", "memory")
+    checkpoint_path = vars.get("CHECKPOINT_PATH", "checkpoints/checkpoints.db")
+
+    if checkpoint_type != "sqlite":
+        return []
+    try:
+        import sqlite3
+
+        conn = sqlite3.connect(checkpoint_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT thread_id FROM checkpoints ORDER BY rowid DESC;")
+        rows = cursor.fetchall()
+        conn.close()
+        return [row[0] for row in rows if row[0]]
+    except Exception:
+        return []
