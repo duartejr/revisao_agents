@@ -19,7 +19,9 @@ O plano gerado é salvo automaticamente na pasta `plans/` e pode ser usado como 
 | **Tema** | Caixa de texto | O tema ou pergunta central da revisão (ex: "Previsão de vazão com modelos de deep learning") |
 | **Tipo de revisão** | Seleção (Radio) | `Academic (literature narrative)` · `Technical (didactic chapter)` · `Both` |
 | **Rodadas de refinamento** | Slider (1–6) | Quantas rodadas de perguntas o agente fará antes de finalizar o plano |
-| **Botão Iniciar** | Botão | Inicia a sessão de planejamento |
+| **Thread ID (Sessões existentes)** | Dropdown (vazio por padrão) | Lista as sessões salvas anteriormente; selecione uma para restaurar seu estado e histórico de conversa |
+| **Botão 🔄 Atualizar sessões** | Botão | Recarrega a lista de sessões disponíveis no dropdown |
+| **Botão Iniciar** | Botão | Inicia uma nova sessão de planejamento |
 | **Campo de resposta** | Caixa de texto (3 linhas) | Aparece durante a sessão para o usuário responder às perguntas do agente |
 | **Botão Responder** | Botão | Envia a resposta do usuário para o agente continuar |
 | **Seletor de provedor LLM** | Dropdown (topo da tela) | Escolha entre google, groq, openai, openrouter |
@@ -27,6 +29,8 @@ O plano gerado é salvo automaticamente na pasta `plans/` e pode ser usado como 
 ---
 
 ## Fluxo passo a passo
+
+### Iniciar uma nova sessão
 
 1. **Selecione o provedor LLM** no dropdown no topo da tela e aguarde o status mostrar `✅`.
 2. **Digite o tema** da revisão no campo "Tema". Seja específico — quanto mais detalhado, melhor o plano gerado.
@@ -40,6 +44,14 @@ O plano gerado é salvo automaticamente na pasta `plans/` e pode ser usado como 
 10. O arquivo é salvo automaticamente em `plans/plano_revisao_<tema>_<data>.md`.
 
 > **Dica:** Se não souber responder a uma pergunta do agente, escreva "Não tenho preferência" ou "Pode decidir" — o agente continuará com escolhas padrão razoáveis.
+
+### Retomar uma sessão existente
+
+1. Clique em **"🔄 Atualizar sessões"** para carregar as sessões salvas no checkpoint.
+2. No dropdown **Thread ID**, selecione a sessão desejada — o tema, tipo, rodadas e histórico de conversa serão restaurados automaticamente.
+3. Continue enviando respostas normalmente a partir de onde parou.
+
+> **Formato do Thread ID:** cada sessão recebe um identificador único no formato `revisao_<tipo>_<tema>_<YYYY-MM-DD_HH-MM>`, garantindo unicidade mesmo para o mesmo tema aberto em horários diferentes.
 
 ---
 
@@ -76,3 +88,8 @@ AuthenticationError: Invalid API key
 
 ### Sessão expirada após inatividade
 - Clique em "🚀 Start Planning" novamente para reiniciar uma nova sessão.
+- Ou use o dropdown **Thread ID** para retomar a sessão anterior (se o checkpoint estiver em SQLite).
+
+### O dropdown de sessões está vazio
+- Certifique-se de que `CHECKPOINT_TYPE=sqlite` no `.env` (sessões em memória não são persistidas).
+- Clique em **"🔄 Atualizar sessões"** para recarregar a lista.

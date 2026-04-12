@@ -11,7 +11,18 @@ revisao_agents/
 ├── src/
 │   ├── gradio_app/        ← Interface gráfica Gradio
 │   │   ├── app.py         ← Definição das abas e componentes
-│   │   └── handlers.py    ← Lógica de negócio das abas
+│   │   └── handlers/      ← Lógica de negócio das abas (subpacote)
+│   │       ├── __init__.py          ← Re-exports de todos os handlers públicos
+│   │       ├── base.py              ← Utilitários LLM e I/O de arquivos
+│   │       ├── planning.py          ← Planejamento e gerenciamento de threads
+│   │       ├── review.py            ← Orquestração da revisão interativa
+│   │       ├── writing.py           ← Workflow de escrita
+│   │       ├── tools.py             ← Indexação de PDFs e formatação de referências
+│   │       └── review_parts/        ← Sub-módulos da revisão
+│   │           ├── document.py      ← Listagem de arquivos de revisão
+│   │           ├── intent.py        ← Detecção de intenção do usuário
+│   │           ├── images.py        ← Máquina de estados de sugestão de imagens
+│   │           └── references.py   ← Pipeline de enriquecimento de referências
 │   └── revisao_agents/    ← Pacote principal
 │       ├── agents/        ← Nós do LangGraph (funções por workflow)
 │       ├── graphs/        ← StateGraph definitions
@@ -71,6 +82,9 @@ Por padrão, usa `MemorySaver` (não persistente). Para persistência, instale d
 UI (📋 Plan) / CLI revisao-agents
         │
         ▼
+handlers/planning.py  (start_planning / continue_planning / load_thread_state)
+        │
+        ▼
 graphs/review_graph.py  ←─ build_review_graph(tipo)
         │
         ▼ LangGraph StateGraph (HITL)
@@ -112,11 +126,13 @@ workflows/technical_writing_workflow.py
 UI (🤖 Revisão Interativa)
         │
         ▼
-agents/review_agent.py  (ReAct loop, MAX_ITERATIONS=6)
+handlers/review.py  (review_chat_turn / start_review_session)
         │
-        ├─► detecção de intenção (summarize / cite / edit / search)
-        ├─► tools/review_tools.py (busca no documento, citações)
-        └─► tools/review_tools.py (Tavily, se web ativado)
+        ├─► review_parts/intent.py     (detecção de intenção)
+        ├─► review_parts/images.py     (sugestão de imagens)
+        ├─► review_parts/references.py (enriquecimento de referências)
+        ├─► agents/review_agent.py     (ReAct loop, MAX_ITERATIONS=6)
+        └─► tools/review_tools.py      (Tavily, se web ativado)
 ```
 
 ## Provedores LLM suportados
