@@ -100,6 +100,8 @@ def run_planning(
         safe_theme = re.sub(r"[^a-zA-Z0-9_\-]", "_", theme[:20])
         thread_id = f"cli_{review_type_norm}_{safe_theme}"
 
+    console.print(f"[bold yellow]Thread ID:[/bold yellow] [blue]{thread_id}[/blue]")
+
     config = {"configurable": {"thread_id": thread_id}}
 
     if interactive:
@@ -270,7 +272,7 @@ def show_menu():
         theme = input("\nReview theme: ").strip()
         if not theme:
             return
-        review_type = "academic" if choice == "1" else "technical"
+        review_type = "academico" if choice == "1" else "tecnico"
         rounds_input = input("\nNumber of refinement rounds [3]: ").strip()
         rounds = int(rounds_input) if rounds_input.isdigit() else 3
         run_planning(theme=theme, review_type=review_type, rounds=rounds, interactive=True)

@@ -35,9 +35,11 @@ from gradio_app.handlers import (  # noqa: E402
     get_current_llm_provider,
     get_llm_provider_status,
     index_pdfs,
+    list_available_threads,
     list_llm_providers,
     list_plan_files,
     list_review_files,
+    load_thread_state,
     review_chat_turn,
     save_review_manual_edit,
     set_llm_provider,
@@ -204,6 +206,27 @@ def _auto_refresh_view_file_list(folder: str, current_value: str | None) -> gr.u
     return gr.update(choices=files, value=value)
 
 
+def _update_ui_from_thread(thread_id: str) -> tuple:
+    """Load thread state and update the UI components accordingly.
+
+    Args:
+        thread_id: The unique identifier of the thread/session to load.
+
+    Returns:
+        A tuple containing the updated UI components (theme, type, rounds,
+        session state, chatbot history, thread display label).
+    """
+    theme, r_type, rounds, state, history = load_thread_state(thread_id)
+    return (
+        theme,
+        r_type,
+        rounds,
+        state,
+        history,
+        gr.update(value=f"**Thread ID: {thread_id}**", visible=True),
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Build Gradio App
 # ═══════════════════════════════════════════════════════════════════════════
@@ -249,6 +272,12 @@ def build_app() -> gr.Blocks:
         # TAB 1 — Plan Review
         # ══════════════════════════════════════════════════════════════════
         with gr.Tab("📋 Plan"):
+            # Move state and display declarations up to avoid UnboundLocalError
+            plan_session = gr.State({})
+            plan_current_thread_display = gr.Markdown(
+                value="No active thread", visible=False, elem_id="thread-id-bar"
+            )
+
             gr.Markdown(
                 "### Plan Literature Review\n"
                 "The agent will ask refinement questions to improve the plan. "
@@ -257,12 +286,12 @@ def build_app() -> gr.Blocks:
 
             with gr.Row():
                 with gr.Column(scale=1):
-                    plan_tema = gr.Textbox(
+                    plan_theme = gr.Textbox(
                         label="Topic",
                         placeholder="e.g.: Streamflow forecasting with deep learning models",
                         lines=2,
                     )
-                    plan_tipo = gr.Radio(
+                    plan_type = gr.Radio(
                         label="Review Type",
                         choices=[
                             ("Academic (literature narrative)", "academico"),
@@ -271,12 +300,26 @@ def build_app() -> gr.Blocks:
                         ],
                         value="academico",
                     )
-                    plan_rodadas = gr.Slider(
+                    plan_rounds = gr.Slider(
                         label="Refinement rounds",
                         minimum=1,
                         maximum=6,
                         step=1,
                         value=3,
+                    )
+                    plan_thread_refresh = gr.Button("🔄 Atualizar sessões")
+                    plan_thread_id = gr.Dropdown(
+                        label="Thread ID (Sessões existentes)",
+                        choices=list_available_threads(),
+                        value=None,
+                        interactive=True,
+                        allow_custom_value=True,
+                    )
+
+                    plan_thread_refresh.click(
+                        fn=lambda: gr.update(choices=list_available_threads()),
+                        inputs=[],
+                        outputs=[plan_thread_id],
                     )
                     plan_start_btn = gr.Button("🚀 Start Planning", variant="primary")
 
@@ -306,13 +349,48 @@ def build_app() -> gr.Blocks:
                         visible=False,
                     )
 
-            # Persistent state for the LangGraph session
-            plan_session = gr.State({})
+            plan_thread_id.change(
+                fn=_update_ui_from_thread,
+                inputs=[plan_thread_id],
+                outputs=[
+                    plan_theme,
+                    plan_type,
+                    plan_rounds,
+                    plan_session,
+                    plan_chatbot,
+                    plan_current_thread_display,
+                ],
+            )
 
-            # ── Wire up ──────────────────────────────────────────────────
+            def _on_start(theme: str, review_type: str, rounds: int):
+                """Delegate the planning process to the start_planning generator.
 
-            def _on_start(tema, tipo, rodadas):
-                history, state, status, rendered = start_planning(tema, tipo, int(rodadas))
+                This function acts as a bridge, streaming the agent's questions, intermediate states,
+                and the final rendered plan back to the UI.
+
+                Args:
+                    theme (str): The initial topic or theme for the literature review.
+                    review_type (str): The type of review to plan (e.g., 'academic',
+                        'technical', or 'both').
+                    rounds (int): The number of refinement rounds the agent should perform.
+
+                Returns:
+                    tuple: A tuple containing (history, state, status_msg, user_input_visibility,
+                    reply_btn_visibility, user_input_value, rendered_plan, rendered_visibility, thread_id)
+                        where:
+                    - history: A list of dicts representing the conversation history with the agent.
+                    - state: A dict containing the session state for continuing the workflow.
+                    - status_msg: A string message indicating the current status or next steps.
+                    - user_input_visibility: A gr.update object to show/hide the user input field.
+                    - reply_btn_visibility: A gr.update object to show/hide the reply button.
+                    - user_input_value: A gr.update object to set the value of the user input field (usually cleared on new question).
+                    - rendered_plan: A string with the rendered plan in markdown, empty until completion.
+                    - rendered_visibility: A gr.update object to show/hide the rendered plan field.
+                    - thread_id: A string representing the unique thread ID for the current planning session.
+                """
+                history, state, status, rendered, thread_id = start_planning(
+                    theme, review_type, int(rounds)
+                )
                 has_session = bool(state)
                 has_rendered = bool(rendered)
                 return (
@@ -323,11 +401,12 @@ def build_app() -> gr.Blocks:
                     gr.update(visible=has_session),
                     gr.update(value=""),
                     gr.update(value=rendered, visible=has_rendered),
+                    gr.update(value=f"Thread ID: {thread_id}", visible=has_session),
                 )
 
             plan_start_btn.click(
                 fn=_on_start,
-                inputs=[plan_tema, plan_tipo, plan_rodadas],
+                inputs=[plan_theme, plan_type, plan_rounds],
                 outputs=[
                     plan_chatbot,
                     plan_session,
@@ -336,6 +415,7 @@ def build_app() -> gr.Blocks:
                     plan_reply_btn,
                     plan_user_input,
                     plan_rendered,
+                    plan_current_thread_display,
                 ],
             )
 

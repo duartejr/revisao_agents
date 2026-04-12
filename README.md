@@ -223,6 +223,10 @@ revisao_agents/
 │   └── bootstrap.ps1      ← Bootstrap Windows PowerShell
 ├── src/
 │   ├── gradio_app/        ← Interface gráfica (Gradio)
+│   │   ├── app.py         ← Abas e componentes Gradio
+│   │   └── handlers/      ← Lógica de negócio das abas (subpacote)
+│   │       ├── base.py, planning.py, review.py, writing.py, tools.py
+│   │       └── review_parts/  ← document, intent, images, references
 │   └── revisao_agents/    ← Pacote principal
 │       ├── agents/        ← Nós do LangGraph
 │       ├── tools/         ← Ferramentas LangChain

@@ -149,7 +149,9 @@ def test_start_planning_with_invalid_provider(monkeypatch, provider):
         The status message includes an error about the invalid provider, and session_state is not set.
     """
     monkeypatch.setenv("LLM_PROVIDER", provider)
-    history, session_state, status_msg, rendered_plan = start_planning("Tema", "academico", 2)
+    history, session_state, status_msg, rendered_plan, thread_id = start_planning(
+        "Tema", "academico", 2
+    )
     assert "Invalid provider" in status_msg or "LLM_PROVIDER error" in status_msg
     assert not session_state
 
@@ -165,7 +167,9 @@ def test_start_planning_with_missing_api_keys(monkeypatch):
         The status message includes an error about missing API keys, and session_state is not set.
     """
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    history, session_state, status_msg, rendered_plan = start_planning("Tema", "academico", 2)
+    history, session_state, status_msg, rendered_plan, thread_id = start_planning(
+        "Tema", "academico", 2
+    )
     assert "Missing OPENAI_API_KEY" in status_msg or "LLM_PROVIDER error" in status_msg
     assert not session_state
 
@@ -206,7 +210,9 @@ def test_start_planning_with_valid_provider(monkeypatch, provider):
         lambda *args, **kwargs: mock_llm_instance,
     )
 
-    history, session_state, status_msg, rendered_plan = start_planning("Tema", "academico", 2)
+    history, session_state, status_msg, rendered_plan, thread_id = start_planning(
+        "Tema", "academico", 2
+    )
 
     assert "in progress" in status_msg and session_state
     assert rendered_plan == ""

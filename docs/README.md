@@ -41,6 +41,8 @@ Documentação detalhada de cada aba da interface Gradio:
 
 → [architecture.md](architecture.md) — estrutura do projeto, fluxos de dados, provedores suportados
 
+→ [mermaid_diagram.md](mermaid_diagram.md) — diagramas Mermaid dos grafos LangGraph (planejamento acadêmico, técnico e escrita)
+
 ---
 
 ## Referência rápida de comandos

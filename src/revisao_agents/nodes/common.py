@@ -45,7 +45,7 @@ def interview_node(state: ReviewState) -> dict:
         dict: Updated state with the new question added to the interview history and incremented question count.
     """
     theme = state["theme"]
-    review_type = state.get("review_type", "academic")
+    review_type = state.get("review_type", "academico")
     questions_asked = state["questions_asked"]
     max_questions = state["max_questions"]
     current_plan = truncate(state["current_plan"], 500)

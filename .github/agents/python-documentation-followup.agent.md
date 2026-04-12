@@ -16,7 +16,8 @@ You must follow the `documenting-python-libraries` skill, especially the `Docstr
 - Improve or add Google-style docstrings for public Python functions, methods, and classes when documentation is missing, weak, or inconsistent.
 - Update `README.md` when setup, usage, quick-start behavior, or user-facing capabilities change.
 - Update files in `docs/` when behavior, workflows, UI, or architecture documentation becomes stale because of the current change.
-- Keep developer-facing documentation artifacts in English unless the content is intentionally localized for end users.
+- ALL Markdown (`.md`) files in this repository (including `README.md` and files in `docs/`) MUST be written in **Portuguese**.
+- Developer-facing documentation artifacts (Docstrings, comments, code, commit messages) MUST be in **English**.
 
 ## Priorities
 
