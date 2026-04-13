@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 # 3. Internal Imports
-from .core.utils import parse_json_safe as parse_json_safe  # noqa: F401 — re-export
+from .core.utils import parse_json_safe  # noqa: F401 — re-export
 
 load_dotenv()
 
@@ -61,7 +61,6 @@ TOP_K_VERIFICATION = 6
 MAX_CORPUS_PROMPT = 25000
 CHUNK_MAX_CHARS = 600
 MAX_CHUNKS_TOTAL = 100
-CHUNKS_CACHE_DIR = _env_clean("CHUNKS_CACHE_DIR", "./chunks_cache")
 
 # Anchors verify similarity threshold (cosine similarity)
 ANCHOR_MIN_SIM = 0.82
@@ -140,7 +139,15 @@ CHUNKS_CACHE_DIR = _env_clean("CHUNKS_CACHE_DIR", "./chunks_cache")
 
 
 def ensure_runtime_dirs() -> None:
-    """Ensure that all necessary runtime directories exist."""
+    """Ensure that all necessary runtime output directories exist.
+
+    Creates ``PLANS_DIR``, ``REVIEWS_DIR``, ``SEARCH_LOGS_DIR``, and
+    ``CHUNKS_CACHE_DIR`` if they do not already exist.  Safe to call
+    multiple times (uses ``exist_ok=True``).
+
+    Returns:
+        None
+    """
     for directory in [PLANS_DIR, REVIEWS_DIR, SEARCH_LOGS_DIR, CHUNKS_CACHE_DIR]:
         os.makedirs(directory, exist_ok=True)
 

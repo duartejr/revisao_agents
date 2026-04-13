@@ -316,6 +316,10 @@ def main(
     Returns:
         None. The function executes the selected workflow or agent and prints results to the console.
     """
+    from .config import ensure_runtime_dirs
+
+    ensure_runtime_dirs()
+
     if model:
         os.environ["LLM_MODEL"] = model
 

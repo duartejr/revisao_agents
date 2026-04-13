@@ -8,7 +8,7 @@ import os
 import re
 from datetime import datetime
 
-from ...config import llm_call
+from ...config import REVIEWS_DIR, llm_call
 from ...core.schemas.writer_config import WriterConfig
 from ...state import TechnicalWriterState
 from ...utils.llm_utils.prompt_loader import load_prompt
@@ -290,11 +290,11 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
     )
 
     slug = re.sub(r"[^\w\s-]", "", theme[:40]).strip().replace(" ", "_").lower()
-    output_path = f"reviews/{config.output_prefix}_{slug}.md"
-    log_path = f"reviews/{config.output_prefix}_{slug}.log"
+    output_path = f"{REVIEWS_DIR}/{config.output_prefix}_{slug}.md"
+    log_path = f"{REVIEWS_DIR}/{config.output_prefix}_{slug}.log"
 
     try:
-        os.makedirs("reviews", exist_ok=True)
+        os.makedirs(REVIEWS_DIR, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(document)
         print(f"\n💾 {output_path} ({len(document):,} chars)")
@@ -322,7 +322,7 @@ def consolidate_node(state: TechnicalWriterState) -> dict:
                 f"  [{a}/{t} = {tx:.0f}% | {s.get('approved', 0)} appr "
                 f"{aj} adj {r} corr] {s.get('section', '?')[:55]}"
             )
-        os.makedirs("reviews", exist_ok=True)
+        os.makedirs(REVIEWS_DIR, exist_ok=True)
         with open(log_path, "w", encoding="utf-8") as f:
             f.write("\n".join(header + [""] + react_log))
         print(f"📋 {log_path}")

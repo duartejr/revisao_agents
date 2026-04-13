@@ -860,8 +860,10 @@ def main(share: bool = False, port: int = 7860):
         share: Whether to create a public share link (useful when running in a remote environment)
         port: The local port to serve the app on (default: 7860)
     """
-    os.makedirs("plans", exist_ok=True)
-    os.makedirs("reviews", exist_ok=True)
+    from revisao_agents.config import ensure_runtime_dirs
+
+    ensure_runtime_dirs()
+
     demo = build_app()
     demo.launch(
         server_name="0.0.0.0",

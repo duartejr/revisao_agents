@@ -10,6 +10,7 @@ Nodes for the technical review workflow:
 Prompts are loaded from YAML files in prompts/technical/.
 """
 
+from ..config import PLANS_DIR
 from ..state import ReviewState
 from ..utils.file_utils.helpers import fmt_snippets, save_md, truncate
 from ..utils.llm_utils.llm_providers import get_llm
@@ -179,5 +180,5 @@ def finalize_technical_plan_node(state: ReviewState) -> dict:
         + urls_md
         + "\n"
     )
-    path = save_md(md, "plans/technical_review_plan", theme)
+    path = save_md(md, f"{PLANS_DIR}/technical_review_plan", theme)
     return {"final_plan": final_plan, "final_plan_path": path, "status": "completed"}

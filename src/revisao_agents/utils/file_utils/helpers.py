@@ -2,7 +2,7 @@ import difflib
 import re
 
 from ...config import HIST_MAX_TURNS
-from ...core.utils import truncate as truncate  # noqa: F401 — re-export
+from ...core.utils import truncate  # noqa: F401 — re-export
 
 
 def fmt_chunks(chunks: list[str], max_chars: int = 1200) -> str:
@@ -13,7 +13,8 @@ def fmt_chunks(chunks: list[str], max_chars: int = 1200) -> str:
         max_chars: Maximum total characters in the output string.
 
     Returns:
-        A single string with numbered chunks, truncated to max_chars."""
+        A single string with numbered chunks, truncated to max_chars.
+    """
     block = ""
     for i, c in enumerate(chunks, 1):
         row = f"[{i}] {c}\n"
@@ -52,7 +53,8 @@ def summarize_hist(history: list[tuple], max_turns: int = HIST_MAX_TURNS) -> str
         history: List of (role, content) tuples representing the conversation history.
         max_turns: Maximum number of recent turns to include in the summary.
     Returns:
-        A formatted string summarizing the recent conversation history."""
+        A formatted string summarizing the recent conversation history.
+    """
     if not history:
         return "(without conversation history)"
     recent = history[-(max_turns * 2) :]

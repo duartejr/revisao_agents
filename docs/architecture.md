@@ -50,8 +50,8 @@ revisao_agents/
 | Modo | Comando | Porta/Saída |
 |------|---------|-------------|
 | UI Gradio | `uv run python run_ui.py` | http://localhost:7860 |
-| CLI script | `uv run revisao-agents [TEMA]` | stdout + plans/ |
-| Menu interativo | `uv run python -m revisao_agents` | stdout + plans/ + reviews/ |
+| CLI script | `uv run revisao-agents [TEMA]` | stdout + `$PLANS_DIR` (padrão: `plans/`) |
+| Menu interativo | `uv run python -m revisao_agents` | stdout + `$PLANS_DIR` + `$REVIEWS_DIR` |
 
 ## Abas da UI
 

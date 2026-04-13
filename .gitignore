@@ -47,8 +47,10 @@ vector_db*/
 plans/
 reviews/
 tavily_searchs/
+search_logs/
 roadmap/
 reports/
 uv.lock
 .github/agents/ai_engineering*
 *.db
+chunks_cache/

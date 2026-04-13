@@ -11,33 +11,16 @@ from datetime import datetime
 from langchain_core.tools import tool
 from tavily import TavilyClient
 
+from ..config import SEARCH_LOGS_DIR
 from ..utils.core.commons import get_clean_key
-
-# ============================================================================
-# PASTA DE RASTREABILIDADE
-# ============================================================================
-
-_SEARCH_LOG_DIR = "tavily_searchs"
-
-
-def _guarantee_log_folder():
-    """Create the tavily_searches folder if it doesn't already exist.
-
-    Args:
-        None (no input parameters)
-
-    Returns:
-        None (creates directory if needed)
-    """
-    os.makedirs(_SEARCH_LOG_DIR, exist_ok=True)
 
 
 def _slug(text: str, max_chars: int = 50) -> str:
     """Generate a safe slug for use as a filename.
 
     Args:
-        texto: the input string to slugify (e.g. a search query)
-        max_chars: the maximum number of characters to include in the slug
+        text: The input string to slugify (e.g. a search query).
+        max_chars: Maximum number of characters to include in the slug.
 
     Returns:
         A slugified version of the input string.
@@ -53,23 +36,21 @@ def _save_search_md(
     results: list[dict],
     extra: dict | None = None,
 ) -> str:
-    """
-    Saves the results of a Tavily search to a Markdown file.
+    """Save the results of a Tavily search to a Markdown file.
 
     Args:
-        type       : type of the search (academic, technical, images, extract)
-        query      : the query or URL searched
-        results    : list of results (each item is a dict)
-        extra      : optional additional information (e.g., found URLs) to include in the log
+        type: Type of the search (``academic``, ``technical``, ``images``, or ``extract``).
+        query: The query string or URL that was searched.
+        results: List of result dicts returned by Tavily.
+        extra: Optional mapping of extra metadata (e.g. found URLs) to append to the log header.
 
     Returns:
-        The path to the saved file.
+        Path to the saved Markdown file.
     """
-    _guarantee_log_folder()
-
+    os.makedirs(SEARCH_LOGS_DIR, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]  # ms precision
     slug_q = _slug(query)
-    filename = f"{_SEARCH_LOG_DIR}/{ts}_{type}_{slug_q}.md"
+    filename = f"{SEARCH_LOGS_DIR}/{ts}_{type}_{slug_q}.md"
 
     lines = [
         f"# Tavily Search — {type.upper()}",
