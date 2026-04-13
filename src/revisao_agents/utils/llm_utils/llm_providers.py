@@ -425,18 +425,11 @@ def llm_call(
         return None if response_schema else ""
 
 
-def parse_json_safe(texto: str) -> dict | None:
-    """Extract JSON from an LLM response even when surrounded by other text."""
-    import json as _json
-    import re as _re
+def parse_json_safe(text: str, default: Any = None) -> Any:
+    """Extract and parse JSON from text; delegates to core.utils.parse_json_safe."""
+    from ...core.utils import parse_json_safe as _parse
 
-    match = _re.search(r"\{[\s\S]*\}", texto)
-    if match:
-        try:
-            return _json.loads(match.group())
-        except _json.JSONDecodeError:
-            pass
-    return None
+    return _parse(text, default)
 
 
 # ============================================================================
