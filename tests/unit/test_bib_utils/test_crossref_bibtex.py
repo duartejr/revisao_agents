@@ -22,10 +22,10 @@ class _FakeCorpus:
 def test_search_doi_in_mongo_chunks_with_chunk_objects():
     chunks = [
         Chunk(
-            texto="This study DOI: 10.1590/s1678-86212019000200316 presents results.",
+            text="This study DOI: 10.1590/s1678-86212019000200316 presents results.",
             url="http://example.com/a",
-            titulo="paper",
-            fonte_idx=1,
+            title="paper",
+            source_idx=1,
             file_path="/tmp/a.txt",
             chunk_idx="1",
         )

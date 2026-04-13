@@ -61,18 +61,3 @@ def truncate(text: str, max_chars: int = 2000, suffix: str = "…") -> str:
     if len(text) <= max_chars:
         return text
     return text[:max_chars] + suffix
-
-
-def slugify(text: str) -> str:
-    """Convert *text* to a filesystem-safe slug (lowercase, hyphens).
-
-    Args:
-        text: Input string to slugify.
-
-    Returns:
-        Slugified version of the input string.
-    """
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text)
-    text = re.sub(r"[\s_]+", "-", text)
-    return text

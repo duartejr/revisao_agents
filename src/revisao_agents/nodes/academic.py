@@ -10,6 +10,7 @@ Nodes for the academic review workflow:
 Prompts are loaded from YAML files in prompts/academic/.
 """
 
+from ..config import PLANS_DIR
 from ..state import ReviewState
 from ..utils.file_utils.helpers import fmt_chunks, save_md, truncate
 from ..utils.llm_utils.llm_providers import get_llm
@@ -148,5 +149,5 @@ def finalize_academic_plan_node(state: ReviewState) -> dict:
     print(final_plan)
     print("=" * 70)
     md = "# Plano de Revisao da Literatura\n\n**Tema:** " + theme + "\n\n" + final_plan
-    path = save_md(md, "plans/review_plan", theme)
+    path = save_md(md, f"{PLANS_DIR}/review_plan", theme)
     return {"final_plan": final_plan, "final_plan_path": path, "status": "completed"}

@@ -7,6 +7,9 @@ from dotenv import load_dotenv
 # 2. Third-Party Imports
 from pydantic import BaseModel
 
+# 3. Internal Imports
+from .core.utils import parse_json_safe  # noqa: F401 — re-export
+
 load_dotenv()
 
 
@@ -23,7 +26,7 @@ def _env_clean(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip().strip("'").strip('"')
 
 
-# Caminhos e modelos
+# ── Configuration Constants ────────────────────────────────────────────────
 VECTOR_DB_PATH = _env_clean("VECTOR_DB_PATH", "./vector_db/vector_index")
 EMBEDDINGS_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
@@ -37,7 +40,7 @@ VECTOR_INDEX_NAME = "vector_index"
 OPENAI_API_KEY = _env_clean("OPENAI_API_KEY", "")
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 
-# Parâmetros de busca técnica
+# Parameters to techinical extraction and plan generation
 TECHNICAL_MAX_RESULTS = 10
 MAX_URLS_EXTRACT = 7
 CTX_PLAN_CHARS = 1200
@@ -49,7 +52,7 @@ MAX_REACT_ITERATIONS = 2
 EXTRACT_MIN_CHARS = 500
 SNIPPET_MIN_SCORE = 0.7
 
-# Chunking e embeddings
+# Chunking and embeddings
 CHUNK_SIZE = 2400
 CHUNK_OVERLAP = 480
 TOP_K_WRITER = 6
@@ -58,7 +61,6 @@ TOP_K_VERIFICATION = 6
 MAX_CORPUS_PROMPT = 25000
 CHUNK_MAX_CHARS = 600
 MAX_CHUNKS_TOTAL = 100
-CHUNKS_CACHE_DIR = _env_clean("CHUNKS_CACHE_DIR", "./chunks_cache")
 
 # Anchors verify similarity threshold (cosine similarity)
 ANCHOR_MIN_SIM = 0.82
@@ -69,7 +71,7 @@ CHUNKS_PER_QUERY = 5
 JUDGE_TOP_K = 12
 JUDGE_MAX_CORPUS_CHARS = 8000
 
-# Domínios
+# Domains
 PRIORITY_DOMAINS = [
     ".pdf",
     "doi.org",
@@ -108,7 +110,7 @@ BLOCKED_DOMAINS_EXTRACT = [
     "web.b.ebscohost.com",
 ]
 
-# closing remarks
+# Closing remarks
 CLOSING_REMARKS = {
     "ok",
     "pronto",
@@ -128,6 +130,26 @@ CLOSING_REMARKS = {
     "finaliza",
     "terminar",
 }
+
+# Output path constants
+PLANS_DIR = _env_clean("PLANS_DIR", "./plans")
+REVIEWS_DIR = _env_clean("REVIEWS_DIR", "./reviews")
+SEARCH_LOGS_DIR = _env_clean("SEARCH_LOGS_DIR", "./search_logs")
+CHUNKS_CACHE_DIR = _env_clean("CHUNKS_CACHE_DIR", "./chunks_cache")
+
+
+def ensure_runtime_dirs() -> None:
+    """Ensure that all necessary runtime output directories exist.
+
+    Creates ``PLANS_DIR``, ``REVIEWS_DIR``, ``SEARCH_LOGS_DIR``, and
+    ``CHUNKS_CACHE_DIR`` if they do not already exist.  Safe to call
+    multiple times (uses ``exist_ok=True``).
+
+    Returns:
+        None
+    """
+    for directory in [PLANS_DIR, REVIEWS_DIR, SEARCH_LOGS_DIR, CHUNKS_CACHE_DIR]:
+        os.makedirs(directory, exist_ok=True)
 
 
 # ── Runtime config validation ───────────────────────────────────────────────
@@ -401,33 +423,6 @@ def llm_call(
         msg = f"LLM call failed [{provider}/{model}]"
         print(f"   ⚠️  {msg}: {e}")
         raise LLMInvocationError(msg) from e
-
-
-def parse_json_safe(texto: str) -> dict | None:
-    """
-    Safely extracts and parses a JSON object from a string, even if surrounded by text.
-
-    This is particularly useful for cleaning LLM outputs where the model might
-    include conversational filler or markdown blocks (e.g., ```json ... ```)
-    alongside the raw JSON.
-
-    Args:
-        text (str): The raw string content received from the LLM.
-
-    Returns:
-        Optional[Dict[str, Any]]: A dictionary representing the parsed JSON if
-            successful; None if no valid JSON structure is found or if parsing fails.
-    """
-    import json
-    import re
-
-    match = re.search(r"\{[\s\S]*\}", texto)
-    if match:
-        try:
-            return json.loads(match.group())
-        except json.JSONDecodeError:
-            pass
-    return None
 
 
 def get_checkpointer_vars() -> dict:

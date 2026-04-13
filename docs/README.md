@@ -78,3 +78,7 @@ uv run revisao-agents --help
 | `OPENROUTER_API_KEY` | se provider=openrouter | Chave OpenRouter |
 | `LLM_MODEL` | opcional | Modelo LLM específico |
 | `TEMPERATURE` | opcional | Temperatura do modelo (padrão: 0.3) |
+| `PLANS_DIR` | opcional | Diretório de saída para planos gerados (padrão: `./plans`) |
+| `REVIEWS_DIR` | opcional | Diretório de saída para revisões/capítulos gerados (padrão: `./reviews`) |
+| `SEARCH_LOGS_DIR` | opcional | Diretório de logs de buscas Tavily (padrão: `./search_logs`) |
+| `CHUNKS_CACHE_DIR` | opcional | Diretório de cache de chunks (padrão: `./chunks_cache`) |

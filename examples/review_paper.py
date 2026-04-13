@@ -9,14 +9,24 @@ Usage:
 
 import sys
 
-from revisao_agents.graphs.review_graph import build_review_graph
+from revisao_agents.config import ensure_runtime_dirs
+from revisao_agents.graphs import build_review_graph
 
 
-def main(tema: str):
+def main(theme: str) -> None:
+    """Run the academic review workflow for a given theme.
+
+    Args:
+        theme (str): The review topic/theme to search for and plan around.
+
+    Returns:
+        None
+    """
+    ensure_runtime_dirs()
     graph = build_review_graph(tipo="academico")
     config = {"configurable": {"thread_id": "example-run"}}
     state = {
-        "theme": tema,
+        "theme": theme,
         "review_type": "academico",
         "relevant_chunks": [],
         "technical_snippets": [],
@@ -30,7 +40,7 @@ def main(tema: str):
         "status": "starting",
     }
 
-    print(f"Starting academic review for: {tema!r}\n")
+    print(f"Starting academic review for: {theme!r}\n")
 
     for step in graph.stream(state, config=config):
         node_name = list(step.keys())[0]

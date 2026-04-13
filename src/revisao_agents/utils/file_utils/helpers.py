@@ -1,8 +1,8 @@
 import difflib
-import os
 import re
 
-from ...config import HIST_MAX_TURNS, PLAN_MAX_CHARS
+from ...config import HIST_MAX_TURNS
+from ...core.utils import truncate  # noqa: F401 — re-export
 
 
 def fmt_chunks(chunks: list[str], max_chars: int = 1200) -> str:
@@ -13,7 +13,8 @@ def fmt_chunks(chunks: list[str], max_chars: int = 1200) -> str:
         max_chars: Maximum total characters in the output string.
 
     Returns:
-        A single string with numbered chunks, truncated to max_chars."""
+        A single string with numbered chunks, truncated to max_chars.
+    """
     block = ""
     for i, c in enumerate(chunks, 1):
         row = f"[{i}] {c}\n"
@@ -52,7 +53,8 @@ def summarize_hist(history: list[tuple], max_turns: int = HIST_MAX_TURNS) -> str
         history: List of (role, content) tuples representing the conversation history.
         max_turns: Maximum number of recent turns to include in the summary.
     Returns:
-        A formatted string summarizing the recent conversation history."""
+        A formatted string summarizing the recent conversation history.
+    """
     if not history:
         return "(without conversation history)"
     recent = history[-(max_turns * 2) :]
@@ -62,19 +64,6 @@ def summarize_hist(history: list[tuple], max_turns: int = HIST_MAX_TURNS) -> str
         resumo = c[:300] + "..." if len(c) > 300 else c
         lines.append(f"{label}: {resumo}")
     return "\n".join(lines)
-
-
-def truncate(s: str, n: int = PLAN_MAX_CHARS) -> str:
-    """Truncates a string to n characters, adding an ellipsis if truncated.
-
-    Args:
-        s: The input string to truncate.
-        n: The maximum number of characters allowed in the output string.
-
-    Returns:
-        The original string if its length is less than or equal to n, otherwise a truncated version with an ellipsis.
-    """
-    return s if len(s) <= n else s[:n] + "\n...[truncated]"
 
 
 def save_md(content: str, prefix: str, theme: str) -> str:
@@ -91,9 +80,6 @@ def save_md(content: str, prefix: str, theme: str) -> str:
     slug = re.sub(r"[^\w\s-]", "", theme[:40]).strip().replace(" ", "_").lower()
     path = f"{prefix}_{slug}.md"
     try:
-        parent = os.path.dirname(path)
-        if parent:
-            os.makedirs(parent, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
         print("\nSaved in:", path)
