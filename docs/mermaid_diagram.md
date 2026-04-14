@@ -4,14 +4,18 @@
 
 ```mermaid
 flowchart TD
-    A([Start]) --> B[consulta_vetorial]
-    B --> C[plano_inicial_academico]
-    C --> D{pausa_humana\nHITL}
-    D --> E[entrevista]
-    E -->|refinar| F[refinar_consulta_academico]
-    E -->|finalizar| G[finalizar_plano_academico]
-    F --> H[refinar_plano_academico]
-    H --> D
+    A([Start]) --> IR[identify_and_refine]
+    IR -->|proceed| B[vector_search]
+    IR -->|clarify| D{human_pause\nHITL}
+    D -->|re_evaluate| IR
+    D -->|proceed| B
+    D -->|interview| F[refine_search]
+    B --> C[initial_plan]
+    C --> E[interview]
+    E --> D
+    F --> H[refine_plan]
+    H -->|continue| E
+    H -->|finish| G[finalize_plan]
     G --> Z([END])
 ```
 
@@ -19,14 +23,18 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A([Start]) --> B[busca_tecnica_inicial]
-    B --> C[plano_inicial_tecnico]
-    C --> D{pausa_humana\nHITL}
-    D --> E[entrevista]
-    E -->|refinar| F[refinar_busca_tecnica]
-    E -->|finalizar| G[finalizar_plano_tecnico]
-    F --> H[refinar_plano_tecnico]
-    H --> D
+    A([Start]) --> IR[identify_and_refine]
+    IR -->|proceed| B[initial_technical_search]
+    IR -->|clarify| D{human_pause\nHITL}
+    D -->|re_evaluate| IR
+    D -->|proceed| B
+    D -->|interview| F[refine_technical_search]
+    B --> C[initial_technical_plan]
+    C --> E[interview]
+    E --> D
+    F --> H[refine_technical_plan]
+    H -->|continue| E
+    H -->|finish| G[finalize_technical_plan]
     G --> Z([END])
 ```
 
