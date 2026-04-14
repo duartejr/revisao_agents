@@ -1,7 +1,7 @@
 ---
 description: "Python documentation improvement specialist. Use when applying documentation fixes after Python Review, improving public API docstrings to Google style, and updating README.md or docs/ when code changes make documentation stale."
 name: "Python Documentation Follow-up"
-tools: [read, search, edit, execute]
+tools: [read, search, edit, execute, web, playwright/*]
 argument-hint: "Apply documentation improvements for this Python change, including Google-style docstrings, README updates, and docs sync"
 user-invocable: true
 agents: []
@@ -49,6 +49,37 @@ You must follow the `documenting-python-libraries` skill, especially the `Docstr
 - Use `read` to inspect code and existing documentation before editing.
 - Use `edit` for focused documentation changes.
 - Use `execute` only for narrow validation when useful, such as doc-related tests, lint checks, or building docs if the project already supports that workflow.
+
+## UI Screenshots
+
+When documenting user-facing behavior (workflows, UI screens, chat interactions), capture screenshots of the running application and embed them in the relevant `docs/` page or `README.md`.
+Screenshots are taken via the **Playwright MCP server** (`playwright/*` tools).
+
+**Workflow:**
+
+1. Start the UI server in the background using `execute`:
+   ```
+   uv run python run_ui.py &
+   ```
+   Wait a few seconds for the server to bind to its port (check output for `Running on http://...`).
+2. Open the browser with `playwright/browser_navigate` at `http://127.0.0.1:7860`.
+3. Interact with the UI using `playwright/browser_click` and `playwright/browser_type` to reach the state you want to capture.
+4. Capture with `playwright/browser_screenshot` — save the file under `docs/assets/<feature-name>.png`.
+5. Reference the image in the Markdown file with a relative path:
+   ```markdown
+   ![Description](../assets/<feature-name>.png)
+   ```
+6. Kill the server process when done.
+
+**When to capture screenshots:**
+- A new UI tab, screen, or interaction flow is added or changed.
+- A `docs/` page describes a UI feature but has no screenshot or has a stale one.
+- The change alters visible UI copy, layout, or user flow.
+
+**When NOT to capture screenshots:**
+- Pure back-end or API-only changes with no visible UI effect.
+- The UI server cannot start (missing env vars, DB not available, etc.) — note the gap and skip.
+- Developer-facing documentation only (e.g., architecture diagrams, API references).
 
 ## Output Format
 

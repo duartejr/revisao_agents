@@ -54,3 +54,5 @@ uv.lock
 .github/agents/ai_engineering*
 *.db
 chunks_cache/
+.playwright-mcp/
+checkpoints/

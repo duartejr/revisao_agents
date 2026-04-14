@@ -30,18 +30,40 @@ O plano gerado é salvo automaticamente na pasta `plans/` e pode ser usado como 
 
 ## Fluxo passo a passo
 
-### Iniciar uma nova sessão
+### Fase 0 — Detecção de idioma e refinamento do tema (automática)
+
+Antes de qualquer busca, o agente avalia o tema submetido:
+
+- **Detecta o idioma** (Português · Inglês · Desconhecido).
+- **Classifica o tema**: específico o suficiente ou vago demais (e.g. "Machine Learning", "IA", "Redes Neurais" são considerados vagos).
+
+**Se o tema for específico e o idioma for detectado**, o agente confirma e avança direto para a busca. Nenhuma ação do usuário é necessária nessa fase.
+
+**Se o tema for vago ou o idioma for desconhecido**, o agente exibe uma mensagem pedindo ao usuário que:
+1. Refine o tema — forneça um tópico mais específico ou uma pergunta de pesquisa.
+2. Confirme o idioma — responda `PT` (Português) ou `EN` (English) se não for possível detectá-lo automaticamente.
+
+Após a resposta do usuário, a avaliação é refeita com o tema atualizado. O ciclo se repete até que o tema seja aprovado.
+
+> **Exemplo de tema vago:** "Machine Learning" → o agente pedirá refinamento.
+>
+> **Exemplo de tema aprovado:** "Impacto do ENSO na variabilidade de chuvas na Amazônia" → o agente confirma e inicia a busca imediatamente.
+
+---
+
+### Fase 1 — Iniciar uma nova sessão
 
 1. **Selecione o provedor LLM** no dropdown no topo da tela e aguarde o status mostrar `✅`.
 2. **Digite o tema** da revisão no campo "Tema". Seja específico — quanto mais detalhado, melhor o plano gerado.
 3. **Escolha o tipo** de revisão: Acadêmica (corpus MongoDB) ou Técnica (web + corpus).
 4. **Ajuste as rodadas** de refinamento (padrão: 3). Mais rodadas = plano mais detalhado, mas demora mais.
 5. **Clique em "🚀 Start Planning"**.
-6. O agente exibirá a primeira pergunta no chat. **Leia** e **responda** no campo que aparece abaixo.
-7. Clique em **"💬 Reply"** para enviar sua resposta.
-8. Repita até o agente indicar que o plano está finalizado.
-9. O **plano renderizado** aparece abaixo do chat assim que a sessão termina.
-10. O arquivo é salvo automaticamente em `plans/plano_revisao_<tema>_<data>.md`.
+6. O agente avalia o tema (Fase 0). Se necessário, responda à mensagem de refinamento no campo abaixo e clique em **"💬 Reply"**.
+7. Uma vez aprovado o tema, o agente exibirá a primeira pergunta de planejamento. **Leia** e **responda** no campo que aparece abaixo.
+8. Clique em **"💬 Reply"** para enviar sua resposta.
+9. Repita até o agente indicar que o plano está finalizado.
+10. O **plano renderizado** aparece abaixo do chat assim que a sessão termina.
+11. O arquivo é salvo automaticamente em `plans/plano_revisao_<tema>_<data>.md`.
 
 > **Dica:** Se não souber responder a uma pergunta do agente, escreva "Não tenho preferência" ou "Pode decidir" — o agente continuará com escolhas padrão razoáveis.
 
@@ -58,8 +80,17 @@ O plano gerado é salvo automaticamente na pasta `plans/` e pode ser usado como 
 
 ![Tela inicial do planner](imgs/planner_01_tela_inicial.png)
 
+![Tela inicial da aba Plan](../../docs/assets/planner_theme_refinement_01_initial.png)
 
+---
 
+### Fase 0 — Exemplo: tema vago detectado
+
+O agente identificou que "Machine Learning" é muito genérico e solicitou refinamento antes de iniciar qualquer busca. O campo **Your answer** aparece para o usuário fornecer um tema mais específico.
+
+![Refinamento de tema vago](../../docs/assets/planner_theme_refinement_02_vague_theme.png)
+
+---
 
 ![Chat do planner](imgs/planner_02_chat_em_andamento.png)
 
