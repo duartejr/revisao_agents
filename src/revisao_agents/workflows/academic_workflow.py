@@ -5,11 +5,14 @@ from langgraph.graph import END, StateGraph
 from ..nodes import (
     finalize_academic_plan_node,
     human_pause_node,
+    identify_and_refine_node,
     initial_academic_plan_node,
     interview_node,
     interview_router,
+    post_pause_router,
     refine_academic_plan_node,
     refine_academic_search_node,
+    refinement_router,
     vector_search_node,
 )
 from ..state import ReviewState
@@ -49,6 +52,7 @@ def build_academic_workflow(
         )
 
     builder = StateGraph(ReviewState)
+    builder.add_node("identify_and_refine", identify_and_refine_node)
     builder.add_node("vector_search", vector_search_node)
     builder.add_node("initial_plan", initial_academic_plan_node)
     builder.add_node("interview", interview_node)
@@ -57,11 +61,24 @@ def build_academic_workflow(
     builder.add_node("refine_plan", refine_academic_plan_node)
     builder.add_node("finalize_plan", finalize_academic_plan_node)
 
-    builder.set_entry_point("vector_search")
+    builder.set_entry_point("identify_and_refine")
+    builder.add_conditional_edges(
+        "identify_and_refine",
+        refinement_router,
+        {"proceed": "vector_search", "clarify": "human_pause"},
+    )
     builder.add_edge("vector_search", "initial_plan")
     builder.add_edge("initial_plan", "interview")
     builder.add_edge("interview", "human_pause")
-    builder.add_edge("human_pause", "refine_search")
+    builder.add_conditional_edges(
+        "human_pause",
+        post_pause_router,
+        {
+            "re_evaluate": "identify_and_refine",
+            "proceed": "vector_search",
+            "interview": "refine_search",
+        },
+    )
     builder.add_edge("refine_search", "refine_plan")
     builder.add_conditional_edges(
         "refine_plan",

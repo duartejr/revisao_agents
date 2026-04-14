@@ -7,7 +7,7 @@ import threading
 from collections.abc import Generator
 from typing import Any
 
-from revisao_agents.config import validate_runtime_config
+from revisao_agents.config import PLANS_DIR, validate_runtime_config
 from revisao_agents.core.schemas.writer_config import WriterConfig
 from revisao_agents.state import TechnicalWriterState
 from revisao_agents.workflows.technical_writing_workflow import (
@@ -33,13 +33,14 @@ def list_plan_files(mode: str) -> list[str]:
     Returns:
         A list of file paths to the available plan files matching the specified mode.
     """
-    os.makedirs("plans", exist_ok=True)
     pattern = (
-        "plans/plano_revisao_tecnica_*.md" if mode == "Technical" else "plans/plano_revisao_*.md"
+        os.path.join(PLANS_DIR, "plano_revisao_tecnica_*.md")
+        if mode == "Technical"
+        else os.path.join(PLANS_DIR, "plano_revisao_*.md")
     )
     files = sorted(glob.glob(pattern))
     if not files:
-        files = sorted(glob.glob("plans/plano_revisao_*.md"))
+        files = sorted(glob.glob(os.path.join(PLANS_DIR, "plano_revisao_*.md")))
     if not files:
         files = sorted(glob.glob("plano_revisao_*.md"))
     return files if files else ["(no plan files found)"]
@@ -67,8 +68,6 @@ def start_writing(
     Yields:
         A tuple containing the updated chat history, a status message for the UI, and the final rendered markdown output once writing is complete.
     """
-    os.makedirs("reviews", exist_ok=True)
-
     cfg_issues = validate_runtime_config(strict=False)
     if cfg_issues:
         yield (

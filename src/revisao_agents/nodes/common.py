@@ -164,3 +164,165 @@ def interview_router(state: ReviewState) -> str:
                 return "finish"
             break
     return "continue"
+
+
+def identify_and_refine_node(state: ReviewState) -> dict:
+    """Detect language and evaluate vagueness before any search starts.
+
+    When the theme is vague or the language cannot be determined, extracts the
+    USER_MESSAGE from the LLM response and appends it to ``interview_history``
+    so the Gradio handler surfaces it as a chat message without any UI changes.
+
+    If the latest ``interview_history`` entry is a user reply to a previous
+    refinement question, the user's answer is used as the candidate theme for
+    re-evaluation.
+
+    Args:
+        state (ReviewState): The current graph state, expected to contain:
+            - "theme": str, the original review topic.
+            - "interview_history": list of (role, content) tuples.
+
+    Returns:
+        dict: Partial state update with the following keys:
+
+            - ``theme`` (str): The candidate theme, possibly updated from the
+              user's last reply.
+            - ``detected_language`` (str): ``"PT"``, ``"EN"``, or ``"UNKNOWN"``.
+            - ``is_theme_vague`` (bool): Whether the LLM flagged the theme as
+              too broad.
+            - ``is_theme_refined`` (bool): ``True`` when language is known and
+              theme is specific; triggers downstream search.
+            - ``refinement_feedback`` (list[str]): Single-element list with the
+              raw LLM response. **Replaces** the previous value in the state
+              (plain ``list[str]`` reducer — last write wins).
+            - ``interview_history`` (list[tuple]): Single-element list with the
+              ``("assistant", <message>)`` tuple to display to the user.
+              **Appended** to the existing history via the
+              ``operator.add`` reducer defined on the field.
+    """
+    import re
+
+    original_theme = state.get("theme", "")
+
+    # If the user replied to a previous refinement question where the theme
+    # itself was vague (is_theme_vague=True), treat the reply as the candidate
+    # theme. When only the language was unknown we keep the original theme —
+    # the reply is a language choice, not a new topic.
+    candidate_theme = original_theme
+    was_vague = state.get("is_theme_vague", False)
+    history = state.get("interview_history", [])
+    if was_vague and history:
+        last_role, last_content = history[-1]
+        if last_role == "user" and last_content.strip():
+            candidate_theme = last_content.strip()
+
+    prompt = load_prompt("common/refine_theme", theme=candidate_theme)
+    ans = get_llm(temperature=prompt.temperature).invoke(prompt.text)
+    content = ans.content if hasattr(ans, "content") else str(ans)
+
+    is_vague = bool(
+        re.search(r"^IS THE THEME VAGUE\?\s*YES", content, re.IGNORECASE | re.MULTILINE)
+    )
+
+    lang_match = re.search(
+        r"^DETECTED LANGUAGE:\s*(PT|EN|UNKNOWN)", content, re.IGNORECASE | re.MULTILINE
+    )
+    detected_lang = lang_match.group(1).upper() if lang_match else "UNKNOWN"
+
+    language_unknown = detected_lang == "UNKNOWN"
+    needs_clarification = is_vague or language_unknown
+
+    # Extract the USER_MESSAGE block; stop at the next all-caps heading or end of string.
+    # The inline flag (?i:...) scopes IGNORECASE only to the prefix match, so the
+    # heading terminator [A-Z][A-Z_ ]+: remains case-sensitive and does not
+    # prematurely cut off message text that contains "Word: ..." sentences.
+    user_msg_match = re.search(
+        r"(?i:USER_MESSAGE:)\s*\n([\s\S]+?)(?:\n[A-Z][A-Z_ ]+:|\.?\Z)",
+        content,
+    )
+    if user_msg_match:
+        user_message = user_msg_match.group(1).strip()
+    elif is_vague and language_unknown:
+        user_message = (
+            f'⚠️ Your theme "{candidate_theme}" seems too broad and I couldn\'t detect the language. '
+            "Could you provide a more specific topic or research question? "
+            "Also, please let me know if you'd like to proceed in English (EN) or Portuguese (PT)."
+        )
+    elif language_unknown:
+        user_message = (
+            f'I couldn\'t determine the language for the theme "{candidate_theme}". '
+            "Would you like to proceed in English (EN) or Portuguese (PT)?"
+        )
+    elif is_vague and detected_lang == "PT":
+        user_message = (
+            f'⚠️ O tema "{candidate_theme}" parece muito amplo para uma revisão focada. '
+            "Você poderia fornecer um tópico mais específico ou uma pergunta de pesquisa?"
+        )
+    elif is_vague and detected_lang == "EN":
+        user_message = (
+            f'⚠️ Your theme "{candidate_theme}" seems too broad for a focused review. '
+            "Could you provide a more specific topic or research question?"
+        )
+    else:
+        if detected_lang == "PT":
+            user_message = f'✅ Tema entendido ({detected_lang}). Iniciando a revisão para: "{candidate_theme}". Um momento...'
+        else:
+            user_message = (
+                f'✅ Theme understood ({detected_lang}). Proceeding with: "{candidate_theme}".'
+            )
+
+    return {
+        "theme": candidate_theme,
+        "detected_language": detected_lang,
+        "is_theme_vague": is_vague,
+        "is_theme_refined": not needs_clarification,
+        "refinement_feedback": [content],
+        "interview_history": [("assistant", user_message)],
+    }
+
+
+def refinement_router(state: ReviewState) -> str:
+    """Route after identify_and_refine: proceed to search or pause for user clarification.
+
+    Args:
+        state: The current graph state, expected to contain:
+            - "is_theme_refined": bool, True when theme is specific and language is known.
+
+    Returns:
+        str: "proceed" if theme is ready, "clarify" if user input is needed.
+    """
+    if state.get("is_theme_refined", False):
+        return "proceed"
+    return "clarify"
+
+
+def post_pause_router(state: ReviewState) -> str:
+    """Route after human_pause: re-evaluate theme or proceed to plan interview.
+
+    If the theme has been refined, proceed to search. If still unrefined, loop
+    back to identify_and_refine so the node can re-evaluate the user's latest
+    answer. If a plan already exists, we are in the normal interview loop.
+
+    Args:
+        state: The current graph state, expected to contain:
+            - "is_theme_refined": bool
+            - "current_plan": str, empty until the first plan is generated.
+
+    Returns:
+        str: One of three routing values:
+
+            - ``"interview"``: A plan already exists, so the user is in the
+              normal plan-refinement interview loop.
+            - ``"re_evaluate"``: No plan yet and theme still needs
+              clarification — loops back to ``identify_and_refine``.
+            - ``"proceed"``: Safety-net branch. Reached only when no plan
+              exists *and* ``is_theme_refined`` is already ``True`` (e.g.
+              the theme was accepted on the first attempt and the pause was
+              triggered by an unrelated event). Skips re-evaluation and
+              moves directly to the search phase.
+    """
+    if state.get("current_plan", ""):
+        return "interview"
+    if state.get("is_theme_refined", False):
+        return "proceed"
+    return "re_evaluate"

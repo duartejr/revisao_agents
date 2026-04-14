@@ -156,7 +156,7 @@ def show_menu():
     import glob
 
     from .agents.reference_formatter_agent import run_reference_formatter_agent
-    from .config import print_runtime_config_summary, validate_runtime_config
+    from .config import PLANS_DIR, print_runtime_config_summary, validate_runtime_config
     from .core.schemas.writer_config import WriterConfig
     from .utils.vector_utils.pdf_ingestor import ingest_pdf_folder
     from .workflows.technical_writing_workflow import build_technical_writing_workflow
@@ -218,24 +218,26 @@ def show_menu():
         lang_opt = input("\nReview Language [pt/en, default=pt]: ").strip().lower() or "pt"
         if select_mode == "b":
             writer_config = WriterConfig.academic(language=lang_opt)
-            glob_pattern = "plans/plano_revisao_*.md"
+            glob_pattern = os.path.join(PLANS_DIR, "plano_revisao_*.md")
         else:
             writer_config = WriterConfig.technical(language=lang_opt)
-            glob_pattern = "plans/plano_revisao_tecnica_*.md"
+            glob_pattern = os.path.join(PLANS_DIR, "plano_revisao_tecnica_*.md")
 
         print("\nEnable web search via Tavily?")
         tavily_opt = input("Enable Tavily? [y/N]: ").strip().lower() or "n"
 
-        planos = sorted(glob.glob(glob_pattern)) + sorted(glob.glob("plans/review_plan*.md"))
-        if not planos:
-            print("❌ No plans found in plans/")
+        plans = sorted(glob.glob(glob_pattern)) + sorted(
+            glob.glob(os.path.join(PLANS_DIR, "review_plan*.md"))
+        )
+        if not plans:
+            print(f"❌ No plans found in {PLANS_DIR}")
             return
 
         print("\nPlans found:")
-        for i, p in enumerate(planos, 1):
+        for i, p in enumerate(plans, 1):
             print(f"  [{i}] {p}")
-        idx = input(f"\nChoose [1-{len(planos)}]: ").strip()
-        plan_path = planos[int(idx) - 1] if idx.isdigit() and 1 <= int(idx) <= len(planos) else idx
+        idx = input(f"\nChoose [1-{len(plans)}]: ").strip()
+        plan_path = plans[int(idx) - 1] if idx.isdigit() and 1 <= int(idx) <= len(plans) else idx
 
         if not os.path.exists(plan_path):
             print(f"❌ File not found: {plan_path}")

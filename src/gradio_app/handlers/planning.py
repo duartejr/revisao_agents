@@ -146,6 +146,12 @@ def start_planning(
         "final_plan": "",
         "final_plan_path": "",
         "status": "starting",
+        "detected_language": "",
+        "user_language_choice": "",
+        "is_theme_vague": True,
+        "is_theme_refined": False,
+        "confidence_score": 0.0,
+        "refinement_feedback": [],
     }
 
     thread_id = f"revisao_{current_type}_{theme[:20]}_{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
@@ -195,10 +201,12 @@ def start_planning(
 
     p = graph_state.values.get("questions_asked", 0)
     mp = graph_state.values.get("max_questions", rounds)
+    is_refinement_phase = p == 0 and not graph_state.values.get("is_theme_refined", False)
+    prefix = "" if is_refinement_phase else f"[Round {p}/{mp} — {current_type}]\n\n"
     history.append(
         {
             "role": "assistant",
-            "content": f"[Round {p}/{mp} — {current_type}]\n\n{agent_question}",
+            "content": f"{prefix}{agent_question}",
         }
     )
 
@@ -285,10 +293,12 @@ def continue_planning(
 
     p = graph_state.values.get("questions_asked", 0)
     mp = graph_state.values.get("max_questions", session_state.get("rounds", 3))
+    is_refinement_phase = p == 0 and not graph_state.values.get("is_theme_refined", False)
+    prefix = "" if is_refinement_phase else f"[Round {p}/{mp} — {type}]\n\n"
     history = history + [
         {
             "role": "assistant",
-            "content": f"[Round {p}/{mp} — {type}]\n\n{agent_question}",
+            "content": f"{prefix}{agent_question}",
         }
     ]
 

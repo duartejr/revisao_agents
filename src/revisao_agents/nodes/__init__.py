@@ -12,7 +12,14 @@ from .academic import (
     refine_academic_search_node,
     vector_search_node,
 )
-from .common import human_pause_node, interview_node, interview_router
+from .common import (
+    human_pause_node,
+    identify_and_refine_node,
+    interview_node,
+    interview_router,
+    post_pause_router,
+    refinement_router,
+)
 from .technical import (
     finalize_technical_plan_node,
     initial_technical_plan_node,
@@ -24,7 +31,7 @@ from .technical_writing import consolidate_node, parse_plan_node, write_sections
 
 __all__ = [
     # Academic agents
-    "vector_node_query",
+    "vector_search_node",
     "initial_academic_plan_node",
     "refine_academic_search_node",
     "finalize_academic_plan_node",
@@ -40,6 +47,9 @@ __all__ = [
     "human_pause_node",
     "interview_node",
     "interview_router",
+    "identify_and_refine_node",
+    "refinement_router",
+    "post_pause_router",
     # Technical writing agents
     "parse_plan_node",
     "write_sections_node",
