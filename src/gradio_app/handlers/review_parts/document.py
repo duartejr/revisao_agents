@@ -12,6 +12,8 @@ import os
 import re
 from datetime import datetime
 
+from src.revisao_agents.config import REVIEWS_DIR
+
 
 def list_review_files() -> list[str]:
     """List available review files in the reviews directory.
@@ -19,8 +21,7 @@ def list_review_files() -> list[str]:
     Returns:
         Sorted list of review file paths (*.md files in reviews/).
     """
-    os.makedirs("reviews", exist_ok=True)
-    return sorted(glob.glob("reviews/*.md"))
+    return sorted(glob.glob(os.path.join(REVIEWS_DIR, "*.md")))
 
 
 def _working_copy_path(review_file: str) -> str:
@@ -32,7 +33,7 @@ def _working_copy_path(review_file: str) -> str:
     Returns:
         A new file path for the working copy, incorporating a timestamp to ensure uniqueness.
     """
-    base_dir = os.path.dirname(review_file) or "reviews"
+    base_dir = os.path.dirname(review_file) or REVIEWS_DIR
     base_name = os.path.basename(review_file)
     name, ext = os.path.splitext(base_name)
     ts = datetime.now().strftime("%Y%m%d_%H%M")

@@ -17,6 +17,12 @@ class ReviewState(TypedDict):
     final_plan: str
     final_plan_path: str
     status: str
+    detected_language: str
+    user_language_choice: str
+    is_theme_vague: bool
+    is_theme_refined: bool
+    confidence_score: float
+    refinement_feedback: list[str]
 
 
 class TechnicalWriterState(TypedDict):

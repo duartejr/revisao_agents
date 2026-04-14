@@ -90,11 +90,13 @@ graphs/review_graph.py  ←─ build_review_graph(tipo)
         ▼ LangGraph StateGraph (HITL)
         │
         ├─► workflows/academic_workflow.py
-        │       consulta_vetorial → plano_inicial → interview_router
+        │       identify_and_refine → [clarify: human_pause → post_pause_router]
+        │       → consulta_vetorial → plano_inicial → interview_router
         │       → refinamento HITL → finalizar_plano
         │
         └─► workflows/technical_workflow.py
-                busca_tecnica → plano_inicial → interview_router
+                identify_and_refine → [clarify: human_pause → post_pause_router]
+                → busca_tecnica → plano_inicial → interview_router
                 → refinamento HITL → finalizar_plano
                      │
                      └─► tools/ (busca vetorial, Tavily, referências)

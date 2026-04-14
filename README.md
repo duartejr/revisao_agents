@@ -4,6 +4,7 @@ Sistema agêntico para planejamento e escrita de revisões acadêmicas e capítu
 
 ## O que este projeto faz
 
+- **Valida e refina o tema** antes de iniciar qualquer busca — detecta idioma e avisa quando o tema é vago demais, pedindo ao usuário um tópico mais específico
 - **Planeja revisões** com entrevista guiada por IA (Human-in-the-Loop)
 - **Escreve seções** completas buscando evidências no corpus local (MongoDB) e na web (Tavily)
 - **Revisa interativamente** textos gerados via chat com o agente
