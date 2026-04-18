@@ -11,7 +11,7 @@ from datetime import datetime
 from langchain_core.tools import tool
 from tavily import TavilyClient
 
-from ..config import SEARCH_LOGS_DIR
+from ..config import SEARCH_LOGS_DIR, TAVILY_CONFIG
 from ..utils.core.commons import get_clean_key
 
 
@@ -35,6 +35,7 @@ def _save_search_md(
     query: str,
     results: list[dict],
     extra: dict | None = None,
+    usage: dict | None = None,
 ) -> str:
     """Save the results of a Tavily search to a Markdown file.
 
@@ -43,6 +44,7 @@ def _save_search_md(
         query: The query string or URL that was searched.
         results: List of result dicts returned by Tavily.
         extra: Optional mapping of extra metadata (e.g. found URLs) to append to the log header.
+        usage: Optional dict of API usage statistics to include in the log.
 
     Returns:
         Path to the saved Markdown file.
@@ -60,6 +62,10 @@ def _save_search_md(
         f"- **Query:** `{query}`",
         f"- **Total Results:** {len(results)}",
     ]
+
+    if usage:
+        lines.append(f"- **Credits Used:** {usage.get('credits', 'N/A')}")
+        lines.append(f"- **Request ID:** {usage.get('id', 'N/A')}")
 
     if extra:
         for k, v in extra.items():
@@ -428,6 +434,7 @@ def search_tavily(queries: list[str], max_results: int = 5) -> dict:
     client = _get_client()
     all_urls: list[str] = []
     all_results: list[dict] = []
+    all_usage: list[dict] = []
 
     for q in queries:
         print(f"🔎 Searching (academic, EN prioritized): {q}")
@@ -439,8 +446,10 @@ def search_tavily(queries: list[str], max_results: int = 5) -> dict:
             # PHASE 1: English-priority search
             res_en = client.search(
                 query=q,
-                search_depth="advanced",
-                max_results=max_results,
+                search_depth=TAVILY_CONFIG.depth,
+                max_results=TAVILY_CONFIG.num_results,
+                include_answer=TAVILY_CONFIG.include_answer,
+                include_usage=TAVILY_CONFIG.include_usage,
                 exclude_domains=BLOCKED_DOMAINS,
             )
 
@@ -470,12 +479,15 @@ def search_tavily(queries: list[str], max_results: int = 5) -> dict:
             print(f"   📊 Languages: {n_en} English, {n_pt} Portuguese")
 
             # ── Save log for this query ────────────────────────────────────────
+            usage_data = {**res_en.get("usage", {}), "id": res_en.get("request_id", "N/A")}
             _save_search_md(
                 "academic",
                 q,
                 batch_results,
                 extra={"idioma_en": n_en, "idioma_pt": n_pt},
+                usage=usage_data,
             )
+            all_usage.append(usage_data)
 
         except Exception as e:
             print(f"   ⚠️  Error in query '{q[:50]}': {e}")
@@ -485,7 +497,7 @@ def search_tavily(queries: list[str], max_results: int = 5) -> dict:
     # Final statistics
     _print_language_totals(all_results)
 
-    return {"urls_found": unique_urls, "results": all_results}
+    return {"urls_found": unique_urls, "results": all_results, "usage": all_usage}
 
 
 # ============================================================================
@@ -517,8 +529,10 @@ def search_tavily_incremental(
 
         ans = client.search(
             query=query,
-            search_depth="advanced",
-            max_results=max_results,
+            search_depth=TAVILY_CONFIG.depth,
+            max_results=TAVILY_CONFIG.num_results,
+            include_answer=TAVILY_CONFIG.include_answer,
+            include_usage=TAVILY_CONFIG.include_usage,
             exclude_domains=BLOCKED_DOMAINS,
         )
 
@@ -563,6 +577,7 @@ def search_tavily_incremental(
                 "idioma_en": n_en,
                 "idioma_pt": n_pt,
             },
+            usage={**ans.get("usage", {}), "id": ans.get("request_id", "N/A")},
         )
 
         return {
@@ -610,8 +625,10 @@ def search_tavily_technical(queries: list[str], max_results: int = 5) -> dict:
         try:
             ans = client.search(
                 query=q[:400],
-                search_depth="advanced",
-                max_results=max_results,
+                search_depth=TAVILY_CONFIG.depth,
+                max_results=TAVILY_CONFIG.num_results,
+                include_answer=TAVILY_CONFIG.include_answer,
+                include_usage=TAVILY_CONFIG.include_usage,
                 exclude_domains=BLOCKED_DOMAINS,
             )
 
@@ -646,6 +663,7 @@ def search_tavily_technical(queries: list[str], max_results: int = 5) -> dict:
                 q,
                 batch_results,
                 extra={"idioma_en": n_en, "idioma_pt": n_pt},
+                usage={**ans.get("usage", {}), "id": ans.get("request_id", "N/A")},
             )
 
         except Exception as e:
@@ -711,10 +729,11 @@ def search_tavily_images(
         try:
             search_ans = client.search(
                 query=q[:400],
-                search_depth="advanced",
-                max_results=max_results,
+                search_depth=TAVILY_CONFIG.depth,
+                max_results=TAVILY_CONFIG.num_results,
                 include_images=True,
                 include_image_descriptions=True,
+                include_usage=TAVILY_CONFIG.include_usage,
                 exclude_domains=BLOCKED_DOMAINS,
             )
 
@@ -765,6 +784,7 @@ def search_tavily_images(
                     {"url": i["image_url"], "title": i["page_title"], "snippet": i["description"]}
                     for i in batch_images
                 ],
+                usage={**search_ans.get("usage", {}), "id": search_ans.get("request_id", "N/A")},
             )
 
         except Exception as e:
@@ -862,6 +882,7 @@ def extract_tavily(urls: list[str], include_images: bool = True) -> dict:
             "extracted": len(extracted),
             "failed": len(flawed),
         },
+        usage={**res.get("usage", {}), "id": res.get("request_id", "N/A")} if lots else {},
     )
 
     return {"extracted": extracted, "failed": flawed}
@@ -896,8 +917,10 @@ def search_tavily_incremental_technician(
 
         ans = client.search(
             query=query[:400],
-            search_depth="advanced",
-            max_results=max_results,
+            search_depth=TAVILY_CONFIG.depth,
+            max_results=TAVILY_CONFIG.num_results,
+            include_answer=TAVILY_CONFIG.include_answer,
+            include_usage=TAVILY_CONFIG.include_usage,
             exclude_domains=BLOCKED_DOMAINS,
         )
 
@@ -912,7 +935,7 @@ def search_tavily_incremental_technician(
             if r.get("score", 0) >= 0.7
         ]
 
-        # Prioritiza por idioma
+        # Prioritize by language
         results = _prioritize_by_language(results, boost_en=0.3)
 
         all_urls = [r["url"] for r in results]
@@ -921,14 +944,14 @@ def search_tavily_incremental_technician(
         new_urls = [u for u in all_urls if u not in previous_urls]
         total_accumulated = list(dict.fromkeys(previous_urls + all_urls))
 
-        # Estatístics
+        # Language statistics
         n_en = sum(1 for r in results if r.get("language") == "en")
         n_pt = sum(1 for r in results if r.get("language") == "pt")
 
-        print(f"   ✔ Founded : {len(all_urls)} URLs")
-        print(f"   ✔ News       : {len(new_urls)} URLs")
-        print(f"   ✔ Total acum. : {len(total_accumulated)} URLs")
-        print(f"   📊 Languages    : {n_en} english, {n_pt} portuguese")
+        print(f"   ✔ Found      : {len(all_urls)} URLs")
+        print(f"   ✔ New        : {len(new_urls)} URLs")
+        print(f"   ✔ Total acum.: {len(total_accumulated)} URLs")
+        print(f"   📊 Languages : {n_en} English, {n_pt} Portuguese")
 
         # ── Log ──────────────────────────────────────────────────────────────
         _save_search_md(
@@ -941,6 +964,7 @@ def search_tavily_incremental_technician(
                 "language_en": n_en,
                 "language_pt": n_pt,
             },
+            usage={**ans.get("usage", {}), "id": ans.get("request_id", "N/A")},
         )
 
         return {

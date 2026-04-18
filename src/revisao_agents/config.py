@@ -1,11 +1,11 @@
 # 1. Standard Library Imports
 import os
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 from dotenv import load_dotenv
 
 # 2. Third-Party Imports
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 # 3. Internal Imports
 from .core.utils import parse_json_safe  # noqa: F401 — re-export
@@ -435,3 +435,87 @@ def get_checkpointer_vars() -> dict:
         "CHECKPOINT_TYPE": os.getenv("CHECKPOINT_TYPE", "memory").lower(),
         "CHECKPOINT_PATH": os.getenv("CHECKPOINT_PATH", "checkpoints/checkpoints.db"),
     }
+
+
+class TavilySearchConfig(BaseModel):
+    """Configuration model for Tavily search parameters.
+
+    Attributes:
+        depth: Search depth for Tavily. One of ``'ultra-fast'``, ``'fast'``,
+            ``'basic'`` (default), or ``'advanced'``. ``'advanced'`` costs
+            2 API credits per request.
+        num_results: Number of results to retrieve per query (1–10).
+        include_answer: Whether to request an LLM-generated answer alongside
+            the search results.
+        include_usage: Whether to request credit usage metadata in the API
+            response. When ``True``, each response includes a ``usage`` dict
+            and a top-level ``request_id`` field.
+    """
+
+    depth: Literal["ultra-fast", "fast", "basic", "advanced"] = Field(
+        default="basic",
+        description=(
+            "Search depth setting for Tavily. 'ultra-fast' prioritizes speed with fewer results, "
+            "'fast' provides a balance, 'basic' is the default for general use, and 'advanced' "
+            "retrieves more comprehensive results at the cost of speed."
+        ),
+    )
+
+    num_results: int = Field(
+        10,
+        description="Number of search results to retrieve from Tavily. Adjust based on needs and API limits.",
+        ge=1,
+        le=10,
+    )
+    include_answer: bool = Field(
+        True,
+        description="Whether to include the answer in the search results. If False, only metadata will be returned.",
+    )
+    include_usage: bool = Field(
+        True,
+        description="Whether to include credit usage information in the Tavily API response.",
+    )
+
+    @field_validator("include_answer")
+    def validate_include_answer(cls, v):
+        if not isinstance(v, bool):
+            raise ValueError("include_answer must be a boolean value")
+        return v
+
+    @classmethod
+    def load_from_env(cls) -> "TavilySearchConfig":
+        """Load Tavily search configuration from environment variables.
+
+        Environment Variables:
+            TAVILY_SEARCH_DEPTH: Search depth ('ultra-fast', 'fast', 'basic', 'advanced')
+            TAVILY_NUM_RESULTS: Number of results to retrieve (1-10)
+            TAVILY_INCLUDE_ANSWER: Whether to include answers in results ('true'/'false')
+            TAVILY_INCLUDE_USAGE: Whether to include credit usage in the response ('true'/'false')
+
+        Returns:
+            A ``TavilySearchConfig`` populated from the current environment.
+        """
+        depth = os.getenv("TAVILY_SEARCH_DEPTH", "basic").lower()
+        num_results_str = os.getenv("TAVILY_NUM_RESULTS", "5")
+        include_answer_str = os.getenv("TAVILY_INCLUDE_ANSWER", "true").lower()
+        include_usage_str = os.getenv("TAVILY_INCLUDE_USAGE", "true").lower()
+
+        try:
+            num_results = int(num_results_str)
+            if not (1 <= num_results <= 10):
+                raise ValueError("TAVILY_NUM_RESULTS must be between 1 and 10")
+        except ValueError as e:
+            raise ValueError(f"Invalid TAVILY_NUM_RESULTS: {num_results_str}") from e
+
+        include_answer = include_answer_str in ("true", "1", "yes")
+        include_usage = include_usage_str in ("true", "1", "yes")
+
+        return cls(
+            depth=depth,
+            num_results=num_results,
+            include_answer=include_answer,
+            include_usage=include_usage,
+        )
+
+
+TAVILY_CONFIG = TavilySearchConfig.load_from_env()
