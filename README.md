@@ -100,6 +100,9 @@ OPENROUTER_API_KEY=sk-or-... # https://openrouter.ai/keys
 
 # Tavily (busca web)
 TAVILY_API_KEY=tvly-...
+TAVILY_SEARCH_DEPTH=basic       # ultra-fast | fast | basic | advanced (padrão: basic)
+TAVILY_NUM_RESULTS=5            # número de resultados por consulta (1–10, padrão: 5)
+TAVILY_INCLUDE_USAGE=true       # inclui metadados de créditos na resposta (padrão: true)
 
 # MongoDB (corpus vetorial)
 MONGODB_URI=mongodb://localhost:27017
