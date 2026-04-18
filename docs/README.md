@@ -82,3 +82,6 @@ uv run revisao-agents --help
 | `REVIEWS_DIR` | opcional | Diretório de saída para revisões/capítulos gerados (padrão: `./reviews`) |
 | `SEARCH_LOGS_DIR` | opcional | Diretório de logs de buscas Tavily (padrão: `./search_logs`) |
 | `CHUNKS_CACHE_DIR` | opcional | Diretório de cache de chunks (padrão: `./chunks_cache`) |
+| `TAVILY_SEARCH_DEPTH` | opcional | Profundidade da busca Tavily: `ultra-fast`, `fast`, `basic` (padrão), `advanced` |
+| `TAVILY_NUM_RESULTS` | opcional | Número de resultados por consulta Tavily (1–10, padrão: `5`) |
+| `TAVILY_INCLUDE_USAGE` | opcional | Inclui metadados de créditos usados na resposta Tavily (`true`/`false`, padrão: `true`) |
