@@ -45,6 +45,17 @@ Documentação detalhada de cada aba da interface Gradio:
 
 ---
 
+## Guias para desenvolvedores e operadores
+
+| Guide | Description |
+|---|---|
+| [setup_guide.md](setup_guide.md) | Configuração passo a passo do ambiente local para novos desenvolvedores |
+| [tavily_tuning_guide.md](tavily_tuning_guide.md) | Ajuste de parâmetros do Tavily — profundidade, créditos, perfis |
+| [session_management.md](session_management.md) | Ciclo de vida de sessões, backends de checkpoint e retomada de sessões |
+| [troubleshooting.md](troubleshooting.md) | Erros comuns e FAQ |
+
+---
+
 ## Referência rápida de comandos
 
 ```bash
