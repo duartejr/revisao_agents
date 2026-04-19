@@ -57,6 +57,15 @@ def review_dir(tmp_path):
 
 
 def _fake_llm_response(content, tool_calls=None):
+    """Create a lightweight fake LLM response object.
+
+    Args:
+        content: The text content of the response.
+        tool_calls: Optional list of tool-call objects. Defaults to an empty list.
+
+    Returns:
+        A ``SimpleNamespace`` with ``content`` and ``tool_calls`` attributes.
+    """
     return SimpleNamespace(content=content, tool_calls=tool_calls or [])
 
 
@@ -157,13 +166,23 @@ class TestChatTurn:
         )
         return history, state
 
-    def test_answer_turn(self, review_dir):
+    def test_answer_turn(self, review_dir: str) -> None:
+        """Test that a simple question to the agent returns an answer and updates the chat history.
+        This test verifies that when a user asks a question, the review_chat_turn handler correctly invokes
+        the agent, receives a response, and updates the chat history with the assistant's reply. The test uses a mock agent response to simulate the LLM's behavior.
+
+        Args:
+            review_dir (str): The path to the review document used to initialize the session.
+
+        Asserts:
+            The chat history is updated with the assistant's reply, and the status indicates success.
+        """
         from gradio_app.handlers import review_chat_turn
 
         history, state = self._start_session(review_dir)
 
         with patch(
-            "gradio_app.handlers.run_review_agent",
+            "gradio_app.handlers.review.run_review_agent",
             return_value=_mock_agent_answer("Here are the references:\n[1] Smith"),
         ):
             hist, st, status, md = review_chat_turn(
@@ -177,13 +196,24 @@ class TestChatTurn:
         assert "Smith" in hist[-1]["content"]
         assert "✅" in status
 
-    def test_edit_proposal_sets_pending(self, review_dir):
+    def test_edit_proposal_sets_pending(self, review_dir: str) -> None:
+        """Test that when the agent returns an edit proposal, the pending_edit state is set and the proposal is included in the chat history.
+        This test ensures that when the agent generates an edit proposal in response to a user message,
+        the review_chat_turn handler correctly updates the session state to indicate that there is a pending edit, and that the content of the edit proposal is included in the assistant's reply in the chat history.
+
+        Args:
+            review_dir (str): The path to the review document used to initialize the session.
+
+        Asserts:
+            The session state has pending_edit set to True, the status indicates a pending edit, and
+            the assistant's reply in the chat history contains the edit proposal details.
+        S"""
         from gradio_app.handlers import review_chat_turn
 
         history, state = self._start_session(review_dir)
 
         with patch(
-            "gradio_app.handlers.run_review_agent",
+            "gradio_app.handlers.review.run_review_agent",
             return_value=_mock_agent_edit_proposal(
                 "1. Introduction",
                 0,
@@ -199,7 +229,7 @@ class TestChatTurn:
 
         assert st.get("pending_edit")
         assert "🟡" in status
-        assert "Proposta de edição" in hist[-1]["content"]
+        assert "Edit proposal" in hist[-1]["content"]
 
     def test_confirm_edit_applies_and_clears_pending(self, review_dir):
         """
@@ -231,7 +261,7 @@ class TestChatTurn:
         intro_end = intro_start + len("Climate models have evolved significantly in recent years.")
 
         with patch(
-            "gradio_app.handlers.run_review_agent",
+            "gradio_app.handlers.review.run_review_agent",
             return_value={
                 "reply": "proposal",
                 "edit_proposal": {
@@ -253,7 +283,7 @@ class TestChatTurn:
 
         # Confirm
         with patch(
-            "gradio_app.handlers.run_review_agent",
+            "gradio_app.handlers.review.run_review_agent",
             return_value=_mock_agent_apply(),
         ):
             hist2, st2, status2, md2 = confirm_review_edit(hist, st)
@@ -290,7 +320,7 @@ class TestChatTurn:
         intro_end = intro_start + len("Climate models have evolved significantly in recent years.")
 
         with patch(
-            "gradio_app.handlers.run_review_agent",
+            "gradio_app.handlers.review.run_review_agent",
             return_value={
                 "reply": "proposal",
                 "edit_proposal": {
@@ -309,7 +339,7 @@ class TestChatTurn:
             hist, st, _, _ = review_chat_turn("edit", history, state)
 
         with patch(
-            "gradio_app.handlers.run_review_agent",
+            "gradio_app.handlers.review.run_review_agent",
             return_value=_mock_agent_apply(),
         ):
             confirm_review_edit(hist, st)
@@ -323,13 +353,22 @@ class TestChatTurn:
 
 
 class TestWebGateHandler:
-    def test_web_enabled_via_toggle(self, review_dir):
+    def test_web_enabled_via_toggle(self, review_dir: str) -> None:
+        """Test that enabling the web toggle allows the agent to use web tools, even without keywords
+        This test verifies that when the web_enabled flag is set to True (simulating the user toggling on web access), the review_chat_turn handler correctly allows the agent to use web tools, regardless of whether the user's message contains specific keywords. The test uses a mock agent response to check that the allow_web parameter is set to True when the toggle is enabled.
+
+        Args:
+            review_dir (str): The path to the review document used to initialize the session.
+
+        Asserts:
+            The mock agent is called with allow_web set to True when the web toggle is enabled.
+        """
         from gradio_app.handlers import review_chat_turn, start_review_session
 
         history, state, _, _ = start_review_session(review_dir, [], {})
 
         with patch(
-            "gradio_app.handlers.run_review_agent",
+            "gradio_app.handlers.review.run_review_agent",
             return_value=_mock_agent_answer("searched the web"),
         ) as mock_agent:
             review_chat_turn(
@@ -344,13 +383,22 @@ class TestWebGateHandler:
         call_kwargs = mock_agent.call_args.kwargs
         assert call_kwargs["allow_web"] is True
 
-    def test_web_enabled_via_keyword_even_toggle_off(self, review_dir):
+    def test_web_enabled_via_keyword_even_toggle_off(self, review_dir: str) -> None:
+        """Test that certain keywords in the user's message can enable web access for the agent, even if the web toggle is off.
+        This test ensures that the review_chat_turn handler correctly detects specific keywords in the user's message that indicate a need for web access (e.g., "search on the internet") and allows the agent to use web tools accordingly, even when the web_enabled flag is set to False. The test uses a mock agent response to verify that allow_web is set to True when such keywords are present.
+
+        Args:
+            review_dir (str): The path to the review document used to initialize the session.
+
+        Asserts:
+            The mock agent is called with allow_web set to True when the user's message contains keywords indicating a need for web access, even if the web toggle is off.
+        """
         from gradio_app.handlers import review_chat_turn, start_review_session
 
         history, state, _, _ = start_review_session(review_dir, [], {})
 
         with patch(
-            "gradio_app.handlers.run_review_agent",
+            "gradio_app.handlers.review.run_review_agent",
             return_value=_mock_agent_answer("searched the web"),
         ) as mock_agent:
             review_chat_turn(
@@ -365,13 +413,22 @@ class TestWebGateHandler:
         call_kwargs = mock_agent.call_args.kwargs
         assert call_kwargs["allow_web"] is True
 
-    def test_no_web_without_toggle_or_keyword(self, review_dir):
+    def test_no_web_without_toggle_or_keyword(self, review_dir: str) -> None:
+        """Test that if the web toggle is off and no keywords are present, the agent does not have web access.
+        This test verifies that when the web_enabled flag is set to False and the user's message does not contain any keywords indicating a need for web access, the review_chat_turn handler correctly prevents the agent from using web tools. The test uses a mock agent response to check that allow_web is set to False in this scenario.
+
+        Args:
+            review_dir (str): The path to the review document used to initialize the session.
+
+        Asserts:
+            The mock agent is called with allow_web set to False when the web toggle is off and no keywords are present in the user's message.
+        """
         from gradio_app.handlers import review_chat_turn, start_review_session
 
         history, state, _, _ = start_review_session(review_dir, [], {})
 
         with patch(
-            "gradio_app.handlers.run_review_agent",
+            "gradio_app.handlers.review.run_review_agent",
             return_value=_mock_agent_answer("local only"),
         ) as mock_agent:
             review_chat_turn(
@@ -403,13 +460,23 @@ class TestEdgeCases:
         hist, st, status, _ = review_chat_turn("hello", [], {})
         assert "❌" in status
 
-    def test_agent_exception_returns_error_message(self, review_dir):
+    def test_agent_exception_returns_error_message(self, review_dir: str) -> None:
+        """Test that if the agent raises an exception during processing, the review_chat_turn handler returns
+        an appropriate error message in the status and does not crash.
+        This test ensures that the review_chat_turn handler has proper error handling in place to catch exceptions raised by the agent (e.g., due to LLM issues) and returns a user-friendly error message in the status, while also ensuring that the chat history and session state remain intact.
+
+        Args:
+            review_dir (str): The path to the review document used to initialize the session.
+
+        Asserts:
+            When the agent raises a RuntimeError, the status message includes an error indication, and the chat history is updated with an error message without crashing the handler.
+        """
         from gradio_app.handlers import review_chat_turn, start_review_session
 
         history, state, _, _ = start_review_session(review_dir, [], {})
 
         with patch(
-            "gradio_app.handlers.run_review_agent",
+            "gradio_app.handlers.review.run_review_agent",
             side_effect=RuntimeError("LLM down"),
         ):
             hist, st, status, _ = review_chat_turn("hello", history, state)

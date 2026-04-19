@@ -46,25 +46,24 @@ def _make_state(**overrides) -> ReviewState:
     return base
 
 
-@pytest.mark.skip(reason="consulta_vetorial_node not found in academic nodes")
-@patch("revisao_agents.nodes.academic.search_chunks", return_value=[])
 @patch("revisao_agents.nodes.academic.accumulate_chunks", return_value=[])
-def test_consulta_vetorial_node_returns_dict(mock_acc: MagicMock, mock_busca: MagicMock) -> None:
-    """Test that the consulta_vetorial_node returns a dictionary, even when no relevant chunks are found.
-    This test ensures that the node handles cases where the search returns no results gracefully, without throwing errors.
+@patch("revisao_agents.nodes.academic.search_chunks", return_value=[])
+def test_vector_search_node_returns_dict(mock_busca: MagicMock, mock_acc: MagicMock) -> None:
+    """Test that vector_search_node returns a dictionary with relevant_chunks, even when empty.
 
     Args:
         mock_acc (MagicMock): Mock for the accumulate_chunks function, returning an empty list.
-        mock_busca (MagicMock): Mock for the search_chunks function, returning an empty list
+        mock_busca (MagicMock): Mock for the search_chunks function, returning an empty list.
 
     Raises:
-        AssertionError: If the result is not a dictionary, or if the function does not handle empty search results properly.
+        AssertionError: If the result is not a dictionary or missing the relevant_chunks key.
     """
-    from revisao_agents.nodes.academic import consulta_vetorial_node
+    from revisao_agents.nodes.academic import vector_search_node
 
     state = _make_state()
-    result = consulta_vetorial_node(state)
+    result = vector_search_node(state)
     assert isinstance(result, dict)
+    assert "relevant_chunks" in result
 
 
 @pytest.mark.skip(reason="plano_inicial_academico_node not found in academic nodes")
