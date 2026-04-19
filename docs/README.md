@@ -53,6 +53,7 @@ Documentação detalhada de cada aba da interface Gradio:
 | [tavily_tuning_guide.md](tavily_tuning_guide.md) | Ajuste de parâmetros do Tavily — profundidade, créditos, perfis |
 | [session_management.md](session_management.md) | Ciclo de vida de sessões, backends de checkpoint e retomada de sessões |
 | [troubleshooting.md](troubleshooting.md) | Erros comuns e FAQ |
+| [mlflow_guide.md](mlflow_guide.md) | Rastreamento de experimentos com MLflow — setup, experimentos canônicos, runs de baseline |
 
 ---
 

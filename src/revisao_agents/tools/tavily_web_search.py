@@ -416,7 +416,7 @@ def filter_technical_urls(urls: list[str]) -> list[str]:
 
 
 @tool
-def search_tavily(queries: list[str], max_results: int = 5) -> dict:
+def search_tavily(queries: list[str], max_results: int = TAVILY_CONFIG.num_results) -> dict:
     """Search for academic articles on Tavily, prioritizing English content.
 
     Search for academic articles on Tavily.
@@ -426,7 +426,7 @@ def search_tavily(queries: list[str], max_results: int = 5) -> dict:
 
     Args:
         queries: list of search queries
-        max_results: results per query (default 5)
+        max_results: results per query (default TAVILY_CONFIG.num_results)
 
     Returns:
         {"urls_found": [...], "results": [...]}
@@ -447,7 +447,7 @@ def search_tavily(queries: list[str], max_results: int = 5) -> dict:
             res_en = client.search(
                 query=q,
                 search_depth=TAVILY_CONFIG.depth,
-                max_results=TAVILY_CONFIG.num_results,
+                max_results=max_results,
                 include_answer=TAVILY_CONFIG.include_answer,
                 include_usage=TAVILY_CONFIG.include_usage,
                 exclude_domains=BLOCKED_DOMAINS,
@@ -508,7 +508,7 @@ def search_tavily(queries: list[str], max_results: int = 5) -> dict:
 def search_tavily_incremental(
     query: str,
     previous_urls: list[str],
-    max_results: int = 5,
+    max_results: int = TAVILY_CONFIG.num_results,
 ) -> dict:
     """
     Incremental academic search — accumulates URLs without duplicates.
@@ -518,41 +518,59 @@ def search_tavily_incremental(
     Args:
         query: the search query
         previous_urls: list of previously found URLs to avoid duplicates
-        max_results: number of results to return for this incremental search (default 5)
+        max_results: number of results to return for this incremental search (default TAVILY_CONFIG.num_results)
 
     Returns:
         {"new_urls": [...], "total_accumulated": [...]}
     """
+    import time
+
+    import mlflow
+    from observability.mlflow_config import EXP_PLANNING_ACADEMIC
+
     try:
         client = _get_client()
         print(f"\n🔎 Incremental Search (EN prioritized): '{query}'")
 
-        ans = client.search(
-            query=query,
-            search_depth=TAVILY_CONFIG.depth,
-            max_results=TAVILY_CONFIG.num_results,
-            include_answer=TAVILY_CONFIG.include_answer,
-            include_usage=TAVILY_CONFIG.include_usage,
-            exclude_domains=BLOCKED_DOMAINS,
-        )
+        # If a parent workflow_run is active this becomes an explicit nested run;
+        # if not, it creates a top-level run under EXP_PLANNING_ACADEMIC.
+        if not mlflow.active_run():
+            mlflow.set_experiment(EXP_PLANNING_ACADEMIC)
+        with mlflow.start_run(run_name=f"Incremental Search: {query[:30]}", nested=True):
+            start = time.perf_counter()
+            ans = client.search(
+                query=query,
+                search_depth=TAVILY_CONFIG.depth,
+                max_results=max_results,
+                include_answer=TAVILY_CONFIG.include_answer,
+                include_usage=TAVILY_CONFIG.include_usage,
+                exclude_domains=BLOCKED_DOMAINS,
+            )
 
-        # Prepare results with language prioritization
-        batch_results = [
-            {
-                "url": r["url"],
-                "title": r.get("title", ""),
-                "snippet": r.get("content", "")[:2000],
-                "score": r.get("score", 0),
-            }
-            for r in ans.get("results", [])
-            if r.get("score", 0) >= 0.7
-        ]
+            latency = time.perf_counter() - start
+            mlflow.log_param("search_depth", TAVILY_CONFIG.depth)
+            mlflow.log_metric("latency", latency)
+            mlflow.log_metric("credits_used", ans.get("usage", {}).get("credits", 0))
 
-        # Prioritizes by language
-        batch_results = _prioritize_by_language(batch_results, boost_en=0.3)
+            # Prepare results with language prioritization
+            batch_results = [
+                {
+                    "url": r["url"],
+                    "title": r.get("title", ""),
+                    "snippet": r.get("content", "")[:2000],
+                    "score": r.get("score", 0),
+                }
+                for r in ans.get("results", [])
+                if r.get("score", 0) >= 0.7
+            ]
 
-        urls_found = [r["url"] for r in batch_results]
-        urls_found = filter_academic_urls(urls_found)
+            # Prioritizes by language
+            batch_results = _prioritize_by_language(batch_results, boost_en=0.3)
+
+            urls_found = [r["url"] for r in batch_results]
+            mlflow.log_metric("urls_found", len(urls_found))
+            urls_found = filter_academic_urls(urls_found)
+            mlflow.log_metric("valid_academic_urls_found", len(urls_found))
 
         urls_new = [u for u in urls_found if u not in previous_urls]
         total_accumulated = list(dict.fromkeys(previous_urls + urls_found))
@@ -601,7 +619,9 @@ def search_tavily_incremental(
 
 
 @tool
-def search_tavily_technical(queries: list[str], max_results: int = 5) -> dict:
+def search_tavily_technical(
+    queries: list[str], max_results: int = TAVILY_CONFIG.num_results
+) -> dict:
     """
     Technical search on Tavily — allows documentation, tutorials,
     English Wikipedia, online books, reference pages, etc.
@@ -610,7 +630,7 @@ def search_tavily_technical(queries: list[str], max_results: int = 5) -> dict:
 
     Args:
         queries: list of search queries
-        max_results: results per query (default 5)
+        max_results: results per query (default TAVILY_CONFIG.num_results)
 
     Returns:
         {"found_urls": [...], "results": [...]}
@@ -626,7 +646,7 @@ def search_tavily_technical(queries: list[str], max_results: int = 5) -> dict:
             ans = client.search(
                 query=q[:400],
                 search_depth=TAVILY_CONFIG.depth,
-                max_results=TAVILY_CONFIG.num_results,
+                max_results=max_results,
                 include_answer=TAVILY_CONFIG.include_answer,
                 include_usage=TAVILY_CONFIG.include_usage,
                 exclude_domains=BLOCKED_DOMAINS,
@@ -686,7 +706,7 @@ def search_tavily_technical(queries: list[str], max_results: int = 5) -> dict:
 @tool
 def search_tavily_images(
     queries: list[str],
-    max_results: int = 4,
+    max_results: int = TAVILY_CONFIG.num_results,
 ) -> dict:
     """
     Search for images related to a topic via Tavily Search.
@@ -702,7 +722,7 @@ def search_tavily_images(
 
     Args:
         queries    : list of image-oriented search queries
-        max_results: results per query (capped at 4)
+        max_results: results per query (capped at TAVILY_CONFIG.num_results)
 
     Returns:
         {
@@ -730,7 +750,7 @@ def search_tavily_images(
             search_ans = client.search(
                 query=q[:400],
                 search_depth=TAVILY_CONFIG.depth,
-                max_results=TAVILY_CONFIG.num_results,
+                max_results=max_results,
                 include_images=True,
                 include_image_descriptions=True,
                 include_usage=TAVILY_CONFIG.include_usage,
@@ -896,7 +916,7 @@ def extract_tavily(urls: list[str], include_images: bool = True) -> dict:
 def search_tavily_incremental_technician(
     query: str,
     previous_urls: list[str],
-    max_results: int = 8,
+    max_results: int = TAVILY_CONFIG.num_results,
 ) -> dict:
     """
     Incremental technical search — accumulates URLs without duplicates.
@@ -906,7 +926,7 @@ def search_tavily_incremental_technician(
     Args:
         query: the search query
         previous_urls: list of previously found URLs to avoid duplicates
-        max_results: number of results to return for this incremental search (default 8)
+        max_results: number of results to return for this incremental search (default TAVILY_CONFIG.num_results)
 
     Returns:
         {"new_urls": [...], "total_accumulated": [...], "results": [...]}
@@ -918,7 +938,7 @@ def search_tavily_incremental_technician(
         ans = client.search(
             query=query[:400],
             search_depth=TAVILY_CONFIG.depth,
-            max_results=TAVILY_CONFIG.num_results,
+            max_results=max_results,
             include_answer=TAVILY_CONFIG.include_answer,
             include_usage=TAVILY_CONFIG.include_usage,
             exclude_domains=BLOCKED_DOMAINS,

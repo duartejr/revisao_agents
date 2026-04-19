@@ -41,3 +41,13 @@ all:            ## Run lint, typecheck, and tests
 clean:          ## Remove build artifacts and caches
 	rm -rf .pytest_cache htmlcov .ruff_cache .mypy_cache dist build
 	find . -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
+MLFLOW_BACKEND_STORE_URI ?= sqlite:///./mlruns/mlflow.db
+MLFLOW_HOST ?= 127.0.0.1
+MLFLOW_PORT ?= 5000
+
+mlflow-start:   ## Start MLflow UI with local SQLite backend (http://localhost:5000)
+	uv run mlflow ui \
+	  --backend-store-uri $(MLFLOW_BACKEND_STORE_URI) \
+	  --host $(MLFLOW_HOST) \
+      --port $(MLFLOW_PORT)

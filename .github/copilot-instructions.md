@@ -19,3 +19,13 @@ When handling any request that edits, adds, removes, or reviews functionality re
 5. In your response, briefly mention which LangChain doc page/feature informed the decision.
 
 If network/tool access prevents reading the docs in that moment, say so clearly and avoid claiming unsupported LangChain behavior as possible.
+
+When handling any request that edits, adds, removes, or reviews functionality related to MLflow (tracking, models, artifacts, model registry, deployments, or integrations):
+
+1. Always consult the official MLflow documentation first: https://mlflow.org/docs
+2. Validate whether the requested behavior is actually supported before implementing changes.
+3. If the request is not supported or has constraints, explicitly state the limitation and propose practical alternatives.
+4. Prefer implementation choices that match documented MLflow behavior instead of assumptions.
+5. In your response, briefly mention which MLflow doc page/feature informed the decision.
+
+If network/tool access prevents reading the docs in that moment, say so clearly and avoid claiming unsupported MLflow behavior as possible.
