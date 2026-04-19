@@ -56,3 +56,4 @@ uv.lock
 chunks_cache/
 .playwright-mcp/
 checkpoints/
+test_checkpoints/

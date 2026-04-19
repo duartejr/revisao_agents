@@ -21,8 +21,21 @@ _ROOT = os.path.dirname(os.path.abspath(__file__))
 _SRC = os.path.join(_ROOT, "src")
 if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 from gradio_app.app import main  # noqa: E402
+
+try:
+    from observability import initialize_experiments  # noqa: E402
+
+    initialize_experiments()
+except Exception as exc:  # noqa: BLE001
+    import warnings
+
+    warnings.warn(
+        f"MLflow initialization failed — experiment tracking disabled: {exc}", stacklevel=1
+    )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Launch the Revisão da Literatura Gradio UI")

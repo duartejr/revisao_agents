@@ -104,29 +104,48 @@ def run_planning(
 
     config = {"configurable": {"thread_id": thread_id}}
 
-    if interactive:
-        run_hitl_loop(graph, config, state_init)
-    else:
-        for _ in graph.stream(state_init, config=config):
-            pass
+    _run_name = f"{review_type_norm}/{theme[:40]}"
+    _params = {"review_type": review_type_norm, "rounds": rounds, "thread_id": thread_id}
 
-        while True:
-            current = graph.get_state(config)
-            if not current.next:
-                break
+    try:
+        from contextlib import nullcontext
 
-            if "human_pause" not in current.next:
-                console.print(f"[yellow]Unexpected flow: waiting for nodes {current.next}[/yellow]")
-                break
+        from observability import workflow_run as _workflow_run
+        from observability.mlflow_config import EXP_PLANNING_ACADEMIC, EXP_PLANNING_TECHNICAL
 
-            history = current.values.get("interview_history", [])
-            graph.update_state(
-                config,
-                {"interview_history": history + [("user", auto_response)]},
-                as_node="human_pause",
-            )
-            for _ in graph.stream(None, config=config):
+        _exp = EXP_PLANNING_ACADEMIC if review_type_norm == "academic" else EXP_PLANNING_TECHNICAL
+        _mlflow_ctx = _workflow_run(_exp, _run_name, params=_params)
+    except ImportError:
+        from contextlib import nullcontext
+
+        _mlflow_ctx = nullcontext()
+
+    with _mlflow_ctx:
+        if interactive:
+            run_hitl_loop(graph, config, state_init)
+        else:
+            for _ in graph.stream(state_init, config=config):
                 pass
+
+            while True:
+                current = graph.get_state(config)
+                if not current.next:
+                    break
+
+                if "human_pause" not in current.next:
+                    console.print(
+                        f"[yellow]Unexpected flow: waiting for nodes {current.next}[/yellow]"
+                    )
+                    break
+
+                history = current.values.get("interview_history", [])
+                graph.update_state(
+                    config,
+                    {"interview_history": history + [("user", auto_response)]},
+                    as_node="human_pause",
+                )
+                for _ in graph.stream(None, config=config):
+                    pass
 
     final_state = graph.get_state(config).values
     final_plan = final_state.get("final_plan", "")
@@ -321,6 +340,13 @@ def main(
     from .config import ensure_runtime_dirs
 
     ensure_runtime_dirs()
+
+    try:
+        from observability import initialize_experiments
+
+        initialize_experiments()
+    except ImportError:
+        pass  # observability package not available in this runtime environment
 
     if model:
         os.environ["LLM_MODEL"] = model
