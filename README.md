@@ -256,6 +256,10 @@ revisao_agents/
 ## Documentação completa
 
 - [Índice da documentação](docs/README.md)
+- [Guia de configuração do ambiente](docs/setup_guide.md)
+- [Guia de ajuste do Tavily](docs/tavily_tuning_guide.md)
+- [Gerenciamento de sessões e checkpoints](docs/session_management.md)
+- [Resolução de problemas e FAQ](docs/troubleshooting.md)
 - [Guia de credenciais e contas](docs/contas_e_credenciais.md)
 - [Documentação da UI por aba](docs/ui/)
 - [Documentação da CLI](docs/cli.md)

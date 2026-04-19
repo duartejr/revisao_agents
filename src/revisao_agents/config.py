@@ -1,6 +1,6 @@
 # 1. Standard Library Imports
 import os
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, TypeVar, cast
 
 from dotenv import load_dotenv
 
@@ -437,6 +437,11 @@ def get_checkpointer_vars() -> dict:
     }
 
 
+# Valid depth values accepted by the Tavily Search API, mirroring the Literal
+# constraint on TavilySearchConfig.depth and used at runtime for env-var validation.
+_TAVILY_VALID_DEPTHS: tuple[str, ...] = ("ultra-fast", "fast", "basic", "advanced")
+
+
 class TavilySearchConfig(BaseModel):
     """Configuration model for Tavily search parameters.
 
@@ -494,18 +499,34 @@ class TavilySearchConfig(BaseModel):
 
         Returns:
             A ``TavilySearchConfig`` populated from the current environment.
+
+        Raises:
+            ValueError: If ``TAVILY_SEARCH_DEPTH`` is not one of the accepted
+                depth strings (``'ultra-fast'``, ``'fast'``, ``'basic'``,
+                ``'advanced'``).
+            ValueError: If ``TAVILY_NUM_RESULTS`` cannot be parsed as an integer.
+            ValueError: If ``TAVILY_NUM_RESULTS`` is outside the range 1–10.
         """
-        depth = os.getenv("TAVILY_SEARCH_DEPTH", "basic").lower()
+        depth_raw = os.getenv("TAVILY_SEARCH_DEPTH", "basic").lower()
+        if depth_raw not in _TAVILY_VALID_DEPTHS:
+            raise ValueError(
+                f"Invalid TAVILY_SEARCH_DEPTH: {depth_raw!r}. Must be one of {_TAVILY_VALID_DEPTHS}"
+            )
+        depth = cast(Literal["ultra-fast", "fast", "basic", "advanced"], depth_raw)
         num_results_str = os.getenv("TAVILY_NUM_RESULTS", "5")
         include_answer_str = os.getenv("TAVILY_INCLUDE_ANSWER", "true").lower()
         include_usage_str = os.getenv("TAVILY_INCLUDE_USAGE", "true").lower()
 
         try:
             num_results = int(num_results_str)
-            if not (1 <= num_results <= 10):
-                raise ValueError("TAVILY_NUM_RESULTS must be between 1 and 10")
-        except ValueError as e:
-            raise ValueError(f"Invalid TAVILY_NUM_RESULTS: {num_results_str}") from e
+        except ValueError as err:
+            raise ValueError(
+                f"Invalid TAVILY_NUM_RESULTS: {num_results_str!r} is not an integer"
+            ) from err
+        if not (1 <= num_results <= 10):
+            raise ValueError(
+                f"Invalid TAVILY_NUM_RESULTS: {num_results} is out of range. Must be between 1 and 10."
+            )
 
         include_answer = include_answer_str in ("true", "1", "yes")
         include_usage = include_usage_str in ("true", "1", "yes")
