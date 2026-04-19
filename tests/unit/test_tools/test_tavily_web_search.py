@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 
 def test_search_tavily_empty_results_no_crash():
+    """Verify ``search_tavily`` returns empty lists when the client returns no results."""
     from revisao_agents.tools import tavily_web_search as tws
 
     class _FakeClient:
@@ -22,6 +23,7 @@ def test_search_tavily_empty_results_no_crash():
 
 
 def test_search_tavily_incremental_error_contract_includes_results():
+    """Verify ``search_tavily_incremental`` preserves accumulated URLs on client error."""
     from revisao_agents.tools import tavily_web_search as tws
 
     with patch.object(tws, "_get_client", side_effect=RuntimeError("boom")):
@@ -33,6 +35,7 @@ def test_search_tavily_incremental_error_contract_includes_results():
 
 
 def test_search_tavily_incremental_success_contract_includes_results():
+    """Verify ``search_tavily_incremental`` returns discovered URLs and result objects on success."""
     from revisao_agents.tools import tavily_web_search as tws
 
     class _FakeClient:
@@ -48,12 +51,14 @@ def test_search_tavily_incremental_success_contract_includes_results():
                 ]
             }
 
-    with patch.object(tws, "_get_client", return_value=_FakeClient()):
+    with (
+        patch.object(tws, "_get_client", return_value=_FakeClient()),
+        patch.object(tws, "_save_search_md"),
+    ):
         result = tws.search_tavily_incremental("q", [], max_results=3)
 
-    assert "new_urls" in result
-    assert "total_accumulated" in result
-    assert "results" in result
+    assert "https://example.org/paper" in result["total_accumulated"]
+    assert isinstance(result["new_urls"], list)
     assert isinstance(result["results"], list)
 
 
@@ -111,3 +116,52 @@ def test_search_tavily_forwards_include_usage():
     _, kwargs = fake_client.search.call_args
     assert "include_usage" in kwargs
     assert kwargs["include_usage"] == tws.TAVILY_CONFIG.include_usage
+
+
+# ── search_tavily_incremental: deduplication ──────────────────────────────
+
+
+def test_search_tavily_incremental_deduplicates_urls():
+    """URLs already in previous_urls must not appear in new_urls."""
+    from revisao_agents.tools import tavily_web_search as tws
+
+    existing = "https://example.org/paper"
+
+    class _FakeClient:
+        def search(self, **kwargs):
+            return {
+                "results": [
+                    {"url": existing, "title": "Paper", "content": "content here", "score": 0.95},
+                ]
+            }
+
+    with (
+        patch.object(tws, "_get_client", return_value=_FakeClient()),
+        patch.object(tws, "_save_search_md"),
+    ):
+        result = tws.search_tavily_incremental("q", [existing], max_results=5)
+
+    assert existing not in result["new_urls"]
+
+
+def test_search_tavily_incremental_total_accumulated_has_no_duplicates():
+    """total_accumulated must contain each URL exactly once."""
+    from revisao_agents.tools import tavily_web_search as tws
+
+    url = "https://example.org/paper"
+
+    class _FakeClient:
+        def search(self, **kwargs):
+            return {
+                "results": [
+                    {"url": url, "title": "Paper", "content": "content here", "score": 0.95},
+                ]
+            }
+
+    with (
+        patch.object(tws, "_get_client", return_value=_FakeClient()),
+        patch.object(tws, "_save_search_md"),
+    ):
+        result = tws.search_tavily_incremental("q", [url], max_results=5)
+
+    assert result["total_accumulated"].count(url) == 1
