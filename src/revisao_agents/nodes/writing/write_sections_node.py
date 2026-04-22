@@ -9,6 +9,8 @@ import re
 import time
 from datetime import datetime
 
+import mlflow
+
 # 2. Local/Existing Codebase Imports (MOVIDOS PARA CIMA)
 from ...config import (
     CTX_ABSTRACT_CHARS,
@@ -34,6 +36,7 @@ from .verification import _verify_and_correct_section_with_anchor
 logger = logging.getLogger(__name__)
 
 
+@mlflow.trace(name="write_sections", span_type="AGENT")
 def write_sections_node(state: TechnicalWriterState) -> dict:
     """Main node for writing sections with search, extraction and verification.
 
@@ -124,7 +127,7 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
         log.append("\n── PHASE 2-4: SEARCH + EXTRACTION ──")
         extracted = []
         results = []
-        urls_seen = set()
+        urls_seen: set[str] = set()
 
         # Corpus-first strategy: query existing MongoDB before hitting the web
         _corpus_sufficient = False
@@ -149,7 +152,7 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
                 new_extracted, results, urls_seen = _extract_with_fallback(
                     res,
                     queries_fallback=[q, title],
-                    urls_tried=urls_seen,
+                    urls_attempted=urls_seen,
                     corpus=corpus_check,
                 )
                 extracted.extend(new_extracted)
@@ -186,7 +189,7 @@ def write_sections_node(state: TechnicalWriterState) -> dict:
             new_emergency, _, urls_seen = _extract_with_fallback(
                 res_emergency,
                 queries_fallback=[title],
-                urls_tried=urls_seen,
+                urls_attempted=urls_seen,
                 corpus=corpus_check,
             )
             if new_emergency:

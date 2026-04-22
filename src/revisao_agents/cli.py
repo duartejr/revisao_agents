@@ -106,6 +106,10 @@ def run_planning(
 
     _run_name = f"{review_type_norm}/{theme[:40]}"
     _params = {"review_type": review_type_norm, "rounds": rounds, "thread_id": thread_id}
+    from contextlib import AbstractContextManager
+    from typing import Any
+
+    _mlflow_ctx: AbstractContextManager[Any]
 
     try:
         from contextlib import nullcontext

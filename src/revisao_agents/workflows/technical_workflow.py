@@ -1,6 +1,7 @@
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from ..nodes import (
     finalize_technical_plan_node,
@@ -20,7 +21,7 @@ from ..state import ReviewState
 
 def build_technical_workflow(
     checkpointer: BaseCheckpointSaver | None = None,
-) -> StateGraph[ReviewState]:
+) -> CompiledStateGraph:
     """Build the technical review workflow graph.
 
     The workflow consists of the following steps:

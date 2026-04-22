@@ -1,7 +1,8 @@
 from dotenv import load_dotenv
 
-load_dotenv()
 from revisao_agents.tools.tavily_web_search import search_tavily
+
+load_dotenv()
 
 
 def test_usage_logging():

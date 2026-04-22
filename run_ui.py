@@ -15,6 +15,16 @@ import os
 import sys
 
 # ---------------------------------------------------------------------------
+# Load .env FIRST — before any project import reads os.getenv() at module level
+# ---------------------------------------------------------------------------
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(override=False)  # does not override vars already set in the shell
+except ImportError:
+    pass  # python-dotenv not installed; rely on env vars being set externally
+
+# ---------------------------------------------------------------------------
 # Ensure src/ is on the path so both gradio_app and revisao_agents are found
 # ---------------------------------------------------------------------------
 _ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -34,7 +44,8 @@ except Exception as exc:  # noqa: BLE001
     import warnings
 
     warnings.warn(
-        f"MLflow initialization failed — experiment tracking disabled: {exc}", stacklevel=1
+        f"MLflow initialization failed — experiment tracking disabled: {exc}",
+        stacklevel=1,
     )
 
 if __name__ == "__main__":

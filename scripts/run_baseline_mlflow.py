@@ -38,7 +38,7 @@ if str(_ROOT) not in sys.path:
 import mlflow  # noqa: E402
 from observability.mlflow_config import (  # noqa: E402
     EXPERIMENTS,
-    MLFLOW_TRACKING_URI,
+    get_tracking_uri,
 )
 
 # ---------------------------------------------------------------------------
@@ -82,8 +82,9 @@ def log_baseline_run(experiment_name: str, description: str) -> str:
 
 def main() -> None:
     """Log baseline runs to all canonical MLflow experiments."""
-    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    print(f"MLflow tracking URI: {MLFLOW_TRACKING_URI}\n")
+    uri = get_tracking_uri()
+    mlflow.set_tracking_uri(uri)
+    print(f"MLflow tracking URI: {uri}\n")
 
     results: list[tuple[str, str]] = []
     for exp_name, description in EXPERIMENTS.items():

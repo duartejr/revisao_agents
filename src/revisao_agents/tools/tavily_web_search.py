@@ -8,6 +8,7 @@ import os
 import re
 from datetime import datetime
 
+import mlflow
 from langchain_core.tools import tool
 from tavily import TavilyClient
 
@@ -505,6 +506,7 @@ def search_tavily(queries: list[str], max_results: int = TAVILY_CONFIG.num_resul
 # ============================================================================
 
 
+@mlflow.trace(name="search_tavily_incremental", span_type="TOOL")
 def search_tavily_incremental(
     query: str,
     previous_urls: list[str],

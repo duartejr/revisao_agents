@@ -9,6 +9,8 @@ Nodes for interview, pausing, and routing decisions:
 Prompts are loaded from YAML files in prompts/common/.
 """
 
+import mlflow
+
 from ..state import ReviewState
 from ..utils.file_utils.helpers import (
     fmt_chunks,
@@ -92,6 +94,7 @@ def human_pause_node(state: ReviewState) -> dict:
     return {}
 
 
+@mlflow.trace(name="interview", span_type="AGENT")
 def interview_node(state: ReviewState) -> dict:
     """Generates a question for the user based on the current plan.
 
@@ -166,6 +169,7 @@ def interview_router(state: ReviewState) -> str:
     return "continue"
 
 
+@mlflow.trace(name="identify_and_refine", span_type="AGENT")
 def identify_and_refine_node(state: ReviewState) -> dict:
     """Detect language and evaluate vagueness before any search starts.
 

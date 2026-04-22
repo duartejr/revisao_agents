@@ -126,7 +126,55 @@ mlflow.search_runs(filter_string="tags.baseline != 'true'")
 
 ---
 
+## Rastreamento com MLflow Tracing API
+
+O pacote `observability` ativa automaticamente o rastreamento de chamadas LLM via `mlflow.langchain.autolog()`.
+
+### Como funciona
+
+`enable_tracing()` é chamado internamente por `initialize_experiments()` na inicialização da aplicação. Ela instrui o MLflow a interceptar **toda** chamada LangChain automaticamente, capturando:
+
+- Nome do modelo (ex.: `gpt-4o-mini`)
+- Tokens de entrada e saída
+- Latência da chamada
+- Prompt enviado e resposta recebida
+
+Nenhuma alteração nos arquivos de nós é necessária para capturar chamadas LLM — a instrumentação é automática.
+
+### Decoradores `@mlflow.trace` nos nós
+
+Além do autolog, os nós críticos do grafo são instrumentados com `@mlflow.trace` para criar spans hierárquicos visíveis na aba **Traces** do servidor MLflow:
+
+| Nó | `span_type` |
+|---|---|
+| `interview_node`, `identify_and_refine_node` | `AGENT` |
+| `initial_academic_plan_node`, `refine_academic_plan_node`, `finalize_academic_plan_node` | `AGENT` |
+| `initial_technical_plan_node`, `refine_technical_plan_node`, `finalize_technical_plan_node` | `AGENT` |
+| `write_sections_node` | `AGENT` |
+| `_thought_phase`, `_observation_phase`, `_draft_phase` | `CHAIN` |
+| `search_tavily_incremental` | `TOOL` |
+
+### Visualizando traces
+
+1. Acesse `http://localhost:5000` com o servidor MLflow ativo.
+2. Selecione o experimento desejado (ex.: `planning_academic`).
+3. Clique na aba **Traces** para ver a árvore de spans de cada execução.
+4. Use o filtro `run_id` para correlacionar traces com métricas do mesmo run.
+
+### Adicionando traces a novos nós
+
+```python
+import mlflow
+
+@mlflow.trace(name="nome_do_no", span_type="AGENT")
+def meu_novo_no(state: ReviewState) -> dict:
+    ...
+```
+
+`span_type` deve ser um dos valores: `"AGENT"`, `"CHAIN"`, `"TOOL"`, `"UNKNOWN"`.
+
+---
+
 ## Próximos passos (Semana 9+)
 
-- Integração com nós individuais dos grafos LangGraph
 - Módulo de avaliação em `src/revisao_agents/evaluation/`

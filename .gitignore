@@ -52,6 +52,7 @@ roadmap/
 reports/
 uv.lock
 .github/agents/ai_engineering*
+.github/agents/lin*
 *.db
 chunks_cache/
 .playwright-mcp/
