@@ -1,6 +1,7 @@
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from ..nodes import (
     finalize_academic_plan_node,
@@ -20,7 +21,7 @@ from ..state import ReviewState
 
 def build_academic_workflow(
     checkpointer: BaseCheckpointSaver | None = None,
-) -> StateGraph[ReviewState]:
+) -> CompiledStateGraph:
     """Build the academic review workflow graph.
 
     The workflow consists of the following steps:

@@ -10,6 +10,8 @@ Nodes for the technical review workflow:
 Prompts are loaded from YAML files in prompts/technical/.
 """
 
+import mlflow
+
 from ..config import PLANS_DIR
 from ..state import ReviewState
 from ..utils.file_utils.helpers import fmt_snippets, save_md, truncate
@@ -49,6 +51,7 @@ def initial_technical_search_node(state: ReviewState) -> dict:
     }
 
 
+@mlflow.trace(name="initial_technical_plan", span_type="AGENT")
 def initial_technical_plan_node(state: ReviewState) -> dict:
     """Generates the initial draft of the technical plan.
 
@@ -110,6 +113,7 @@ def refine_technical_search_node(state: ReviewState) -> dict:
     }
 
 
+@mlflow.trace(name="refine_technical_plan", span_type="AGENT")
 def refine_technical_plan_node(state: ReviewState) -> dict:
     """Updates the technical plan with new sources and feedback.
 
@@ -144,6 +148,7 @@ def refine_technical_plan_node(state: ReviewState) -> dict:
     return {"current_plan": plan, "status": "refined_technical_plan"}
 
 
+@mlflow.trace(name="finalize_technical_plan", span_type="AGENT")
 def finalize_technical_plan_node(state: ReviewState) -> dict:
     """Generates the final technical plan and saves it in Markdown.
 

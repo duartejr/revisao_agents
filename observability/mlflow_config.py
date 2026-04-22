@@ -11,13 +11,20 @@ import os
 # Tracking backend
 # ---------------------------------------------------------------------------
 
+
 #: URI for the MLflow tracking server.
 #: Defaults to a local SQLite file at ``./mlruns/mlflow.db``.
 #: Override with the ``MLFLOW_TRACKING_URI`` environment variable.
-MLFLOW_TRACKING_URI: str = os.getenv(
-    "MLFLOW_TRACKING_URI",
-    "sqlite:///./mlruns/mlflow.db",
-)
+#:
+#: .. note::
+#:     This is evaluated lazily at call time so that loading order of ``.env`` does not matter.
+def get_tracking_uri() -> str:
+    """Return the MLflow tracking URI, reading the environment variable at call time."""
+    return os.getenv("MLFLOW_TRACKING_URI", "sqlite:///./mlruns/mlflow.db")
+
+
+# Backwards-compatible alias — prefer ``get_tracking_uri()`` for new code.
+MLFLOW_TRACKING_URI: str = ""  # populated at first call via get_tracking_uri()
 
 # ---------------------------------------------------------------------------
 # Experiment registry

@@ -68,11 +68,11 @@ def ingest_pdf_folder(folder_path: str) -> dict:
             "errors"      : int,  # PDFs that failed to read
         }
     """
-    folder_path = Path(folder_path).resolve()
+    folder_path_obj = Path(folder_path).resolve()
 
-    pdf_files = sorted(folder_path.rglob("*.pdf"))
+    pdf_files = sorted(folder_path_obj.rglob("*.pdf"))
     if not pdf_files:
-        print(f"   ℹ️  No PDFs found in: {folder_path}")
+        print(f"   ℹ️  No PDFs found in: {folder_path_obj}")
         return {
             "indexed": 0,
             "skipped": 0,

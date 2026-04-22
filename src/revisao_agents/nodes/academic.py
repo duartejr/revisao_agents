@@ -10,6 +10,8 @@ Nodes for the academic review workflow:
 Prompts are loaded from YAML files in prompts/academic/.
 """
 
+import mlflow
+
 from ..config import PLANS_DIR
 from ..state import ReviewState
 from ..utils.file_utils.helpers import fmt_chunks, save_md, truncate
@@ -39,6 +41,7 @@ def vector_search_node(state: ReviewState) -> dict:
     return {"relevant_chunks": chunks, "status": "chunks_ok"}
 
 
+@mlflow.trace(name="initial_academic_plan", span_type="AGENT")
 def initial_academic_plan_node(state: ReviewState) -> dict:
     """Generates the initial draft of the academic plan.
 
@@ -58,6 +61,7 @@ def initial_academic_plan_node(state: ReviewState) -> dict:
     return {"current_plan": plan, "status": "initial_plan_ready"}
 
 
+@mlflow.trace(name="refine_academic_search", span_type="AGENT")
 def refine_academic_search_node(state: ReviewState) -> dict:
     """Refines the vector search based on the user's last question.
 
@@ -87,6 +91,7 @@ def refine_academic_search_node(state: ReviewState) -> dict:
     return {"relevant_chunks": acum, "status": "chunks_refined"}
 
 
+@mlflow.trace(name="refine_academic_plan", span_type="AGENT")
 def refine_academic_plan_node(state: ReviewState) -> dict:
     """Updates the academic plan with new chunks and feedback.
 
@@ -120,6 +125,7 @@ def refine_academic_plan_node(state: ReviewState) -> dict:
     return {"current_plan": plan, "status": "plan_refined"}
 
 
+@mlflow.trace(name="finalize_academic_plan", span_type="AGENT")
 def finalize_academic_plan_node(state: ReviewState) -> dict:
     """Generates the final academic plan and saves it in Markdown.
 

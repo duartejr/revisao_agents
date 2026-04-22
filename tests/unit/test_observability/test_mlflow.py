@@ -40,24 +40,17 @@ class TestMlflowConfig:
 
     def test_tracking_uri_reads_from_env(self, monkeypatch):
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "sqlite:///./custom.db")
-        # Re-import to pick up monkeypatched env
-        import importlib
 
         import observability.mlflow_config as cfg
 
-        importlib.reload(cfg)
-        assert cfg.MLFLOW_TRACKING_URI == "sqlite:///./custom.db"
-        importlib.reload(cfg)  # restore original state after assertion
+        assert cfg.get_tracking_uri() == "sqlite:///./custom.db"
 
     def test_tracking_uri_has_default(self, monkeypatch):
         monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
-        import importlib
 
         import observability.mlflow_config as cfg
 
-        importlib.reload(cfg)
-        assert "mlruns" in cfg.MLFLOW_TRACKING_URI
-        importlib.reload(cfg)  # restore original state after assertion
+        assert "mlruns" in cfg.get_tracking_uri()
 
 
 # ---------------------------------------------------------------------------
@@ -69,17 +62,18 @@ class TestInitializeExperiments:
     """Tests for observability.mlflow_tracking.initialize_experiments."""
 
     def test_sets_tracking_uri(self):
-        from observability.mlflow_config import MLFLOW_TRACKING_URI
+        from observability.mlflow_config import get_tracking_uri
 
+        expected_uri = get_tracking_uri()
         with (
             patch("observability.mlflow_tracking.mlflow") as mock_mlflow,
-            patch("observability.mlflow_tracking.MLFLOW_TRACKING_URI", MLFLOW_TRACKING_URI),
+            patch("observability.mlflow_tracking.get_tracking_uri", return_value=expected_uri),
         ):
             from observability import initialize_experiments
 
             initialize_experiments()
 
-        mock_mlflow.set_tracking_uri.assert_called_once_with(MLFLOW_TRACKING_URI)
+        mock_mlflow.set_tracking_uri.assert_called_with(expected_uri)
 
     def test_creates_all_five_experiments(self):
         from observability.mlflow_config import EXPERIMENTS
@@ -173,3 +167,44 @@ class TestWorkflowRun:
 
             with workflow_run("planning_academic", "run") as active:
                 assert active is mock_active_run
+
+
+# ---------------------------------------------------------------------------
+# enable_tracing
+# ---------------------------------------------------------------------------
+
+
+class TestEnableTracing:
+    """Tests for observability.mlflow_tracking.enable_tracing."""
+
+    def test_calls_langchain_autolog_with_correct_flags(self):
+        with patch("observability.mlflow_tracking.mlflow") as mock_mlflow:
+            from observability.mlflow_tracking import enable_tracing
+
+            enable_tracing()
+
+        mock_mlflow.langchain.autolog.assert_called_once_with(
+            log_traces=True,
+        )
+
+    def test_is_idempotent(self):
+        """Calling enable_tracing twice must call autolog exactly twice."""
+        with patch("observability.mlflow_tracking.mlflow") as mock_mlflow:
+            from observability.mlflow_tracking import enable_tracing
+
+            enable_tracing()
+            enable_tracing()
+
+        assert mock_mlflow.langchain.autolog.call_count == 2
+
+    def test_initialize_experiments_calls_enable_tracing(self):
+        """initialize_experiments should invoke enable_tracing internally."""
+        with (
+            patch("observability.mlflow_tracking.enable_tracing") as mock_enable,
+            patch("observability.mlflow_tracking.mlflow"),
+        ):
+            from observability.mlflow_tracking import initialize_experiments
+
+            initialize_experiments()
+
+        mock_enable.assert_called_once()

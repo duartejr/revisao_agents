@@ -280,9 +280,9 @@ def _search_for_additional_content(
     for q in complementary_queries:
         print(f"      • {q[:70]}")
         try:
-            ans = search_web(q, max_results=8)
+            search_results = search_web(q, max_results=8)
             urls_to_extract = []
-            for r in ans:
+            for r in search_results:
                 u = r.get("url", "")
                 if u and u not in attempted_urls and not current_corpus.url_exists(u):
                     urls_to_extract.append(u)
@@ -501,7 +501,7 @@ def _verify_paragraph_with_anchor(
             if anchors_with_urls:
                 print(f"     🎯 {len(anchors_with_urls)} anchors with URLs")
                 sources, used_urls, n_chunks = corpus.render_prompt_anchors(
-                    anchors_com_urls=anchors_with_urls,
+                    anchors_with_urls=anchors_with_urls,
                     max_chars=3000,
                 )
                 if sources:

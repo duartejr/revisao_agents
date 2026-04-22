@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ...utils.vector_utils.mongodb_corpus import CorpusMongoDB
 
+import mlflow
+
 from ...config import (
     CTX_ABSTRACT_CHARS,
     EXTRACT_MIN_CHARS,
@@ -32,6 +34,7 @@ from ...utils.search_utils.tavily_client import extract_urls, score_url, search_
 # ---------------------------------------------------------------------------
 
 
+@mlflow.trace(name="thought_phase", span_type="CHAIN")
 def _thought_phase(
     theme: str,
     title: str,
@@ -79,6 +82,7 @@ def _thought_phase(
 # ---------------------------------------------------------------------------
 
 
+@mlflow.trace(name="observation_phase", span_type="CHAIN")
 def _observation_phase(
     necessary_information: list[str],
     corpus: "CorpusMongoDB",
@@ -136,6 +140,7 @@ def _observation_phase(
 # ---------------------------------------------------------------------------
 
 
+@mlflow.trace(name="draft_phase", span_type="CHAIN")
 def _draft_phase(
     theme: str,
     title: str,
@@ -206,8 +211,11 @@ def _draft_phase(
         f"{'━' * 60}\n"
         f"{corpus}\n\n" + instructions.text + f"\n## {title}\n"
     )
-    result: SectionAnswer = llm_call(
-        prompt, temperature=instructions.temperature, response_schema=SectionAnswer
+    from typing import cast
+
+    result = cast(
+        SectionAnswer,
+        llm_call(prompt, temperature=instructions.temperature, response_schema=SectionAnswer),
     )
     draft = result.draft
     used_sources = result.used_sources
