@@ -512,33 +512,36 @@ def search_tavily_incremental(
     previous_urls: list[str],
     max_results: int = TAVILY_CONFIG.num_results,
 ) -> dict:
-    """
-    Incremental academic search — accumulates URLs without duplicates.
-    PRIORITIZES English content.
-    Saves log of each search in ./tavily_searches/.
+    """Incremental academic search that accumulates URLs without duplicates.
+
+    Prioritizes English content. Saves a log of each search under
+    ``./tavily_searches/`` for traceability.
 
     Args:
-        query: the search query
-        previous_urls: list of previously found URLs to avoid duplicates
-        max_results: number of results to return for this incremental search (default TAVILY_CONFIG.num_results)
+        query: The search query string.
+        previous_urls: URLs already retrieved in previous calls; used to compute
+            the ``new_urls`` set and avoid downstream duplicates.
+        max_results: Maximum number of results to request from Tavily. Defaults
+            to ``TAVILY_CONFIG.num_results``.
 
     Returns:
-        {"new_urls": [...], "total_accumulated": [...]}
+        dict: A dictionary with the following keys:
+            - ``"new_urls"``: list[str], URLs not present in ``previous_urls``.
+            - ``"total_accumulated"``: list[str], union of ``previous_urls`` and
+              newly found URLs (order-preserving, no duplicates).
+            - ``"results"``: list[dict], result objects with ``url``, ``title``,
+              ``snippet``, and ``score`` keys.
+            - ``"usage"``: dict, Tavily usage info, including a ``"credits"`` key.
     """
     import time
 
     import mlflow
-    from observability.mlflow_config import EXP_PLANNING_ACADEMIC
 
     try:
         client = _get_client()
         print(f"\n🔎 Incremental Search (EN prioritized): '{query}'")
 
-        # If a parent workflow_run is active this becomes an explicit nested run;
-        # if not, it creates a top-level run under EXP_PLANNING_ACADEMIC.
-        if not mlflow.active_run():
-            mlflow.set_experiment(EXP_PLANNING_ACADEMIC)
-        with mlflow.start_run(run_name=f"Incremental Search: {query[:30]}", nested=True):
+        with mlflow.start_run(run_name=f"search:{query[:30]}", nested=True):
             start = time.perf_counter()
             ans = client.search(
                 query=query,
@@ -577,7 +580,26 @@ def search_tavily_incremental(
         urls_new = [u for u in urls_found if u not in previous_urls]
         total_accumulated = list(dict.fromkeys(previous_urls + urls_found))
 
-        # Statistics
+        # Log all 4 quality metrics to the parent workflow run (if one is active).
+        # result_reuse_percent and credit_efficiency_aggregated are computed as
+        # per-call approximations since session state is not available here.
+        if mlflow.active_run():
+            from observability.search_metrics import SearchQualityMetrics
+
+            credits = ans.get("usage", {}).get("credits", 0.0)
+            reused = [u for u in urls_found if u in previous_urls]
+            result_reuse_pct = round(100 * len(reused) / max(len(urls_found), 1), 2)
+            # credit_efficiency_aggregated requires session-level totals, which
+            # are unavailable at the tool level; it is computed by the node callers.
+            SearchQualityMetrics.log_all_metrics_to_mlflow(
+                {
+                    "search_coverage": SearchQualityMetrics.calculate_search_coverage(urls_new),
+                    "result_reuse_percent": result_reuse_pct,
+                    "credit_efficiency_individual": SearchQualityMetrics.calculate_credit_efficiency_individual(
+                        credits
+                    ),
+                }
+            )
         n_en = sum(1 for r in batch_results if r.get("language") == "en")
         n_pt = sum(1 for r in batch_results if r.get("language") == "pt")
 
@@ -604,6 +626,7 @@ def search_tavily_incremental(
             "new_urls": urls_new,
             "total_accumulated": total_accumulated,
             "results": batch_results,
+            "usage": ans.get("usage", {}),
         }
 
     except Exception as e:
@@ -612,6 +635,7 @@ def search_tavily_incremental(
             "new_urls": [],
             "total_accumulated": previous_urls,
             "results": [],
+            "usage": {},
         }
 
 
@@ -920,18 +944,28 @@ def search_tavily_incremental_technician(
     previous_urls: list[str],
     max_results: int = TAVILY_CONFIG.num_results,
 ) -> dict:
-    """
-    Incremental technical search — accumulates URLs without duplicates.
-    Prioritizes content in ENGLISH.
-    Save log in ./tavily_searches/.
+    """Incremental technical search that accumulates URLs without duplicates.
+
+    Applies technical-domain URL filtering (see :func:`filter_technical_urls`)
+    and prioritizes English content. Saves a log under ``./tavily_searches/``.
 
     Args:
-        query: the search query
-        previous_urls: list of previously found URLs to avoid duplicates
-        max_results: number of results to return for this incremental search (default TAVILY_CONFIG.num_results)
+        query: The search query string.
+        previous_urls: URLs already retrieved in previous calls; used to compute
+            the ``new_urls`` set and avoid downstream duplicates.
+        max_results: Maximum number of results to request from Tavily. Defaults
+            to ``TAVILY_CONFIG.num_results``.
 
     Returns:
-        {"new_urls": [...], "total_accumulated": [...], "results": [...]}
+        dict: A dictionary with the following keys:
+            - ``"new_urls"``: list[str], URLs not present in ``previous_urls``.
+            - ``"total_accumulated"``: list[str], union of ``previous_urls`` and
+              newly found URLs (order-preserving, no duplicates).
+            - ``"results"``: list[dict], result objects with ``url``, ``title``,
+              ``snippet``, and ``score`` keys.
+            - ``"usage"``: dict, Tavily usage info, including a ``"credits"`` key.
+            - ``"urls_found"``: list[str], all URLs returned by this search
+              (before deduplication against ``previous_urls``).
     """
     try:
         client = _get_client()
@@ -993,6 +1027,8 @@ def search_tavily_incremental_technician(
             "new_urls": new_urls,
             "total_accumulated": total_accumulated,
             "results": results,
+            "usage": ans.get("usage", {}),
+            "urls_found": all_urls,
         }
 
     except Exception as e:
@@ -1001,4 +1037,6 @@ def search_tavily_incremental_technician(
             "new_urls": [],
             "total_accumulated": previous_urls,
             "results": [],
+            "usage": {},
+            "urls_found": [],
         }

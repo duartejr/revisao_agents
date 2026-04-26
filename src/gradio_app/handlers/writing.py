@@ -7,6 +7,9 @@ import threading
 from collections.abc import Generator
 from typing import Any
 
+from observability import workflow_run
+from observability.mlflow_config import EXP_WRITING_ACADEMIC, EXP_WRITING_TECHNICAL
+
 from revisao_agents.config import PLANS_DIR, validate_runtime_config
 from revisao_agents.core.schemas.writer_config import WriterConfig
 from revisao_agents.state import TechnicalWriterState
@@ -122,6 +125,8 @@ def start_writing(
     def _worker() -> None:
         log_q: queue.Queue[str] = queue.Queue()
         stop_logs = threading.Event()
+        exp = EXP_WRITING_ACADEMIC if mode == "Academic" else EXP_WRITING_TECHNICAL
+        run_name = f"{mode.lower()}/{os.path.basename(plan_path)[:40]}"
 
         def _forward_logs_live() -> None:
             while not stop_logs.is_set() or not log_q.empty():
@@ -136,8 +141,17 @@ def start_writing(
 
         with _StdoutCapture(log_q), _StderrCapture(log_q), _LoggingCapture(log_q):
             try:
-                for event in app.stream(state_init):
-                    result_q.put(("event", event))
+                with workflow_run(
+                    exp,
+                    run_name,
+                    params={
+                        "plan": os.path.basename(plan_path),
+                        "mode": mode,
+                        "language": language,
+                    },
+                ):
+                    for event in app.stream(state_init):
+                        result_q.put(("event", event))
             except Exception as exc:
                 result_q.put(("error", exc))
             finally:

@@ -81,3 +81,6 @@ files = ["src/"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-v --tb=short"
+markers = [
+    "integration: marks tests as integration tests that require real external services (deselect with '-m not integration')",
+]
