@@ -11,6 +11,10 @@ import os
 import shutil
 from datetime import datetime
 
+import mlflow
+from observability import workflow_run
+from observability.mlflow_config import EXP_REVIEW_CHAT, get_tracking_uri
+
 from revisao_agents.agents.image_suggestion_agent import run_image_suggestion_agent
 from revisao_agents.agents.review_agent import run_review_agent
 
@@ -92,6 +96,7 @@ def start_review_session(
         "last_target_resolution": {},
         "retrieval_trace": [],
         "status": "ready",
+        "mlflow_run_id": None,
     }
 
     history = history + [
@@ -783,15 +788,27 @@ def review_chat_turn(
 
     # ── Run the ReAct review agent ────────────────────────────────────
     try:
-        result = run_review_agent(
-            document_content=markdown,
-            document_sections=sections,
-            user_message=user_msg,
-            chat_history=session_state.get("chat_history", []),
-            allow_web=allow_web,
-            pending_edit=pending_edit or None,
-            target_hint=target_hint,
-        )
+        doc_name = os.path.basename(session_state.get("original_file_path", "unknown"))
+        run_id = session_state.get("mlflow_run_id")
+        mlflow.set_tracking_uri(get_tracking_uri())
+        if run_id:
+            run_ctx = mlflow.start_run(run_id=run_id)
+        else:
+            run_name = f"review_chat/{doc_name[:40]}"
+            run_ctx = workflow_run(
+                EXP_REVIEW_CHAT, run_name, params={"document": doc_name, "allow_web": allow_web}
+            )
+        with run_ctx as active_run:
+            session_state["mlflow_run_id"] = active_run.info.run_id
+            result = run_review_agent(
+                document_content=markdown,
+                document_sections=sections,
+                user_message=user_msg,
+                chat_history=session_state.get("chat_history", []),
+                allow_web=allow_web,
+                pending_edit=pending_edit or None,
+                target_hint=target_hint,
+            )
     except Exception as exc:
         reply = f"⚠️ Erro do agente: {exc}"
         history = history + [

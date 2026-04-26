@@ -10,17 +10,24 @@ def search_technical_content(query: str, previous_urls: list[str]) -> dict:
         previous_urls: List of URLs already retrieved in previous iterations (to avoid duplicates).
 
     Returns:
-        A dictionary with keys 'new_urls', 'total_accumulated', 'results'.
+        A dictionary with keys 'new_urls', 'total_accumulated', 'results', 'usage', 'urls_found'.
     """
     try:
         from ...tools.tavily_web_search import search_tavily_incremental_technician
 
-        return search_tavily_incremental_technician(
+        result = search_tavily_incremental_technician(
             query, previous_urls, max_results=TECHNICAL_MAX_RESULTS
         )
+        return result
     except Exception as e:
         print("   Technical search failed: " + str(e))
-        return {"new_urls": [], "total_accumulated": previous_urls, "results": []}
+        return {
+            "new_urls": [],
+            "total_accumulated": previous_urls,
+            "results": [],
+            "usage": {},
+            "urls_found": [],
+        }
 
 
 def score_url(url: str, snippet: str = "", score_tavily: float = 0.0) -> float:

@@ -23,6 +23,9 @@ class ReviewState(TypedDict):
     is_theme_refined: bool
     confidence_score: float
     refinement_feedback: list[str]
+    urls_search_history: dict[str, int]  # Maps URL → number of times it appeared across searches
+    total_credits_used: float  # Cumulative Tavily credits consumed in this session
+    total_search_queries: int  # Total number of search queries executed in this session
 
 
 class TechnicalWriterState(TypedDict):

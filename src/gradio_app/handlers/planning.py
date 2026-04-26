@@ -9,7 +9,12 @@ from __future__ import annotations
 
 import queue
 import traceback
+from contextlib import nullcontext
 from datetime import datetime
+
+import mlflow
+from observability import workflow_run
+from observability.mlflow_config import EXP_PLANNING_ACADEMIC, EXP_PLANNING_TECHNICAL
 
 from revisao_agents.config import validate_runtime_config
 from revisao_agents.graphs.checkpoints import get_checkpointer
@@ -83,6 +88,7 @@ def load_thread_state(thread_id: str) -> tuple[str, str, int, dict, list[dict]]:
         "theme": theme,
         "rounds": rounds,
         "thread_id": thread_id,
+        "mlflow_run_id": None,
     }
 
     formatted_history = _format_chatbot_history(interview_history)
@@ -152,6 +158,9 @@ def start_planning(
         "is_theme_refined": False,
         "confidence_score": 0.0,
         "refinement_feedback": [],
+        "urls_search_history": {},
+        "total_credits_used": 0.0,
+        "total_search_queries": 0,
     }
 
     thread_id = f"revisao_{current_type}_{theme[:20]}_{datetime.now().strftime('%Y-%m-%d_%H-%M')}"
@@ -163,10 +172,19 @@ def start_planning(
         app = build_technical_workflow(checkpointer=get_checkpointer())
 
     log_q: queue.Queue[str] = queue.Queue()
+    exp = EXP_PLANNING_ACADEMIC if current_type == "academico" else EXP_PLANNING_TECHNICAL
+    run_name = f"{current_type}/{theme[:40]}"
+    run_id: str | None = None
     with _StdoutCapture(log_q):
         try:
-            for _ in app.stream(state_init, config):
-                pass
+            with workflow_run(
+                exp,
+                run_name,
+                params={"theme": theme, "review_type": current_type, "rounds": rounds},
+            ) as active_run:
+                run_id = active_run.info.run_id
+                for _ in app.stream(state_init, config):
+                    pass
         except AuthenticationError:
             return [], {}, "❌ Error in Authentication: Your API Key is invalid.", "", ""
         except Exception as exc:
@@ -217,6 +235,7 @@ def start_planning(
         "types_pending": types_list[1:],
         "theme": theme,
         "rounds": rounds,
+        "mlflow_run_id": run_id,
     }
 
     return history, session_state, f"🔄 {label} planning in progress...", "", thread_id
@@ -255,10 +274,13 @@ def continue_planning(
     )
 
     log_q: queue.Queue[str] = queue.Queue()
+    run_id = session_state.get("mlflow_run_id")
+    run_ctx = mlflow.start_run(run_id=run_id) if run_id else nullcontext()
     with _StdoutCapture(log_q):
         try:
-            for _ in app.stream(None, config):
-                pass
+            with run_ctx:
+                for _ in app.stream(None, config):
+                    pass
         except Exception as exc:
             history = history + [{"role": "assistant", "content": f"❌ Error: {exc}"}]
             return history, session_state, f"❌ Error: {exc}", ""

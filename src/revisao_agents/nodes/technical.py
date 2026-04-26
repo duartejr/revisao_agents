@@ -11,6 +11,7 @@ Prompts are loaded from YAML files in prompts/technical/.
 """
 
 import mlflow
+from observability.search_metrics import SearchQualityMetrics
 
 from ..config import PLANS_DIR
 from ..state import ReviewState
@@ -21,6 +22,7 @@ from ..utils.search_utils.tavily_client import search_technical_content
 from .common import build_search_query
 
 
+@mlflow.trace(name="initial_technical_search", span_type="RETRIEVER")
 def initial_technical_search_node(state: ReviewState) -> dict:
     """Initial search for technical content via Tavily.
 
@@ -29,25 +31,43 @@ def initial_technical_search_node(state: ReviewState) -> dict:
             - "theme": str, the review topic/theme to search for.
 
     Returns:
-        dict: Updated state with retrieved technical URLs and snippets, and status.
+        dict: Updated state keys:
+            - "technical_urls": list[str], accumulated URLs from this search.
+            - "technical_snippets": list[dict], search result snippets.
+            - "status": str, set to ``"initial_technical_search_ok"``.
+            - "urls_search_history": dict[str, int], URL appearance counts
+              initialised from this first search.
+            - "total_credits_used": float, Tavily credits consumed so far.
+            - "total_search_queries": int, set to ``1`` after this node.
     """
     theme = state["theme"]
     print("\n[Initial technical search] theme:", repr(theme))
     ans = search_technical_content(theme, [])
     urls = ans.get("total_accumulated", [])
+    new_urls = ans.get("new_urls", [])
     snippets = ans.get("results", [])
-    print("\n" + "=" * 70)
-    print("TECHNICAL SOURCES FOUND")
-    print("=" * 70)
-    for i, r in enumerate(snippets, 1):
-        print("\n  [" + str(i).rjust(2) + "] " + r.get("title", "")[:70])
-        print("       " + r.get("url", "")[:80])
-        print("       " + r.get("snippet", "")[:120] + "...")
-    print("=" * 70)
+    usage = ans.get("usage", {})
+    credits_used = usage.get("credits", 0.0)
+
+    urls_search_history = SearchQualityMetrics.update_urls_search_history({}, new_urls)
+
+    metrics_to_log = SearchQualityMetrics.calculate_all_search_metrics(
+        new_urls=new_urls,
+        total_accumulated=urls,
+        urls_search_history=urls_search_history,
+        credits_used=credits_used,
+        total_credits_used=credits_used,
+        total_search_queries=1,
+    )
+    SearchQualityMetrics.log_all_metrics_to_mlflow(metrics_to_log)
+
     return {
         "technical_urls": urls,
         "technical_snippets": snippets,
         "status": "initial_technical_search_ok",
+        "urls_search_history": urls_search_history,
+        "total_credits_used": credits_used,
+        "total_search_queries": 1,
     }
 
 
@@ -71,6 +91,7 @@ def initial_technical_plan_node(state: ReviewState) -> dict:
     return {"current_plan": plano, "status": "initial_technical_plan_ready"}
 
 
+@mlflow.trace(name="refine_technical_search", span_type="RETRIEVER")
 def refine_technical_search_node(state: ReviewState) -> dict:
     """Refines the web search for technical content via Tavily.
 
@@ -83,11 +104,23 @@ def refine_technical_search_node(state: ReviewState) -> dict:
             - "theme": str, the review topic/theme to search for.
             - "interview_history": list, the history of the interview.
             - "current_plan": str, the current draft technical plan.
-            - "technical_urls": list, URLs already visited in previous searches.
-            - "technical_snippets": list, snippets accumulated from previous searches.
+            - "technical_urls": list[str], URLs already visited in previous searches.
+            - "technical_snippets": list[dict], snippets accumulated from previous searches.
+            - "urls_search_history": dict[str, int], URL appearance counts from prior
+              searches (defaults to ``{}`` if absent).
+            - "total_credits_used": float, cumulative Tavily credits so far (defaults to
+              ``0.0`` if absent).
+            - "total_search_queries": int, total queries executed so far (defaults to
+              ``0`` if absent).
 
     Returns:
-        dict: Updated state with refined technical URLs and snippets, and status.
+        dict: Updated state keys:
+            - "technical_urls": list[str], expanded set of accumulated URLs.
+            - "technical_snippets": list[dict], merged snippets (capped at 20).
+            - "status": str, set to ``"refined_technical_search"``.
+            - "urls_search_history": dict[str, int], updated URL appearance counts.
+            - "total_credits_used": float, cumulative Tavily credits after this search.
+            - "total_search_queries": int, incremented query counter.
 
     Raises:
         None: LLM and prompt errors are handled internally by ``build_search_query``;
@@ -97,19 +130,43 @@ def refine_technical_search_node(state: ReviewState) -> dict:
     print("\n[Refined technical search] interpreted query:", repr(query[:70]))
     urls_ant = state.get("technical_urls", [])
     ans = search_technical_content(query, urls_ant)
-    news = ans.get("new_urls", [])
+    urls = ans.get("total_accumulated", [])
+    new_urls = ans.get("new_urls", [])
     total = ans.get("total_accumulated", urls_ant)
-    snips_n = ans.get("results", [])
-    if news:
-        print("\nNew sources (" + str(len(news)) + "):")
-        for r in snips_n[:4]:
-            print("  * " + r.get("title", "")[:60])
-            print("    " + r.get("url", "")[:70])
-    snips_acum = (snips_n + state.get("technical_snippets", []))[:20]
+    snippets = ans.get("results", [])
+    snippets_acum = (snippets + state.get("technical_snippets", []))[:20]
+    credits_used = ans.get("usage", {}).get("credits", 0.0)
+
+    old_history = state.get("urls_search_history", {})
+    old_credits = state.get("total_credits_used", 0.0)
+    old_queries = state.get("total_search_queries", 0)
+
+    # Reconstruct the full set of URLs returned by this search:
+    # new_urls (not in previous) + any previous URLs that appeared again
+    # in the current Tavily response (detected via the raw urls_found list).
+    urls_found_this_search = set(ans.get("urls_found", []))
+    current_search_urls = new_urls + [u for u in urls_ant if u in urls_found_this_search]
+    urls_history_updated = SearchQualityMetrics.update_urls_search_history(
+        old_history, current_search_urls
+    )
+
+    metrics_to_log = SearchQualityMetrics.calculate_all_search_metrics(
+        new_urls=new_urls,
+        total_accumulated=urls,
+        urls_search_history=urls_history_updated,
+        credits_used=credits_used,
+        total_credits_used=old_credits + credits_used,
+        total_search_queries=old_queries + 1,
+    )
+    SearchQualityMetrics.log_all_metrics_to_mlflow(metrics_to_log)
+
     return {
         "technical_urls": total,
-        "technical_snippets": snips_acum,
+        "technical_snippets": snippets_acum,
         "status": "refined_technical_search",
+        "urls_search_history": urls_history_updated,
+        "total_credits_used": old_credits + credits_used,
+        "total_search_queries": old_queries + 1,
     }
 
 
