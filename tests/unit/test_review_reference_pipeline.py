@@ -140,7 +140,11 @@ def test_incomplete_metadata_guidance_when_web_disabled():
         "[10] /tmp/arquivo_local_sem_metadado.pdf\n"
     )
 
-    reply, _meta = _handle_reference_request(markdown, "resolva [10] em ABNT", allow_web=False)
+    with patch(
+        "gradio_app.handlers.review_parts.references.search_chunk_records",
+        return_value=[],
+    ):
+        reply, _meta = _handle_reference_request(markdown, "resolva [10] em ABNT", allow_web=False)
     assert "ative **Allow web search**" in reply
 
 
