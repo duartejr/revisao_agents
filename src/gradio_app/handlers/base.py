@@ -13,7 +13,7 @@ import os
 import queue
 import sys
 import tempfile
-from typing import Any
+from typing import Any, Literal
 
 from revisao_agents.config import (
     get_runtime_config_summary,
@@ -122,64 +122,75 @@ def set_llm_provider(provider: str) -> tuple[str, str]:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class _StdoutCapture:
-    """Context manager that redirects sys.stdout to a queue.
+class _StreamCapture:
+    """Base context manager that redirects a sys stream to a queue.
 
-    This class captures writes to sys.stdout, sends complete lines to a queue for real-time UI updates, and also
-    forwards all output to the original stdout to preserve normal console behavior.
+    Captures writes to the target stream, forwards complete lines to a
+    queue for real-time UI updates, and still writes through to the
+    original stream to preserve normal console behavior. Subclasses set
+    ``_stream_name`` to either ``"stdout"`` or ``"stderr"``.
 
     Args:
         q: A queue to which captured lines will be sent for UI display.
-
-    Returns:
-        An instance of _StdoutCapture.
     """
+
+    _stream_name: Literal["stdout", "stderr", ""] = ""
 
     def __init__(self, q: queue.Queue[str]) -> None:
-        """Initialize the stdout capture context manager with a queue.
+        """Initialize the capture context manager with a queue.
 
         Args:
             q: A queue to which captured lines will be sent for UI display.
 
-        Returns:
-            None
+        Raises:
+            ValueError: If a subclass didn't set ``_stream_name`` to ``"stdout"``
+                or ``"stderr"``.
         """
+        if self._stream_name not in {"stdout", "stderr"}:
+            raise ValueError(
+                f"_StreamCapture subclasses must set _stream_name to 'stdout' or "
+                f"'stderr', got {self._stream_name!r}"
+            )
         self._q = q
         self._buf = ""
         self._original: Any = None
 
-    def __enter__(self) -> _StdoutCapture:
-        """Redirect sys.stdout to this context manager, saving the original stdout.
+    def __enter__(self) -> _StreamCapture:
+        """Redirect the target stream to this context manager, saving the original.
 
         Returns:
-            The _StdoutCapture instance itself, which will now capture writes to sys.stdout.
+            This instance, which will now capture writes to the target stream.
         """
-        self._original = sys.stdout
-        sys.stdout = self  # type: ignore[assignment]
+        self._original = getattr(sys, self._stream_name)
+        if self._stream_name == "stdout":
+            sys.stdout = self  # type: ignore[assignment]
+        else:
+            sys.stderr = self  # type: ignore[assignment]
         return self
 
     def __exit__(self, *_: Any) -> None:
-        """Restore the original stdout and flush any remaining buffered output.
+        """Restore the original stream and flush any remaining buffered output.
 
         Args:
-            *_: Any additional arguments (ignored)
-
-        Returns:
-            None
+            *_: Any additional arguments (ignored).
         """
         if self._buf.strip():
             self._q.put(self._buf.rstrip())
             self._buf = ""
-        sys.stdout = self._original
+        if self._stream_name == "stdout":
+            sys.stdout = self._original
+        else:
+            sys.stderr = self._original
 
     def write(self, text: str) -> int:
-        """Write text to the original stdout and capture complete lines for the queue.
+        """Write text to the original stream and capture complete lines for the queue.
 
-        This method forwards all text to the original stdout and also buffers it to detect complete lines.
-        When a newline is detected, the line is sent to the queue for UI updates.
+        Forwards all text to the original stream and also buffers it to
+        detect complete lines. When a newline is detected, the line is
+        sent to the queue for UI updates.
 
         Args:
-            text: The text to write to stdout.
+            text: The text to write to the target stream.
 
         Returns:
             The number of characters written.
@@ -194,102 +205,25 @@ class _StdoutCapture:
         return len(text)
 
     def flush(self) -> None:
-        """Flush the original stdout.
-
-        Returns:
-            None
-        """
+        """Flush the original stream."""
         self._original.flush()
 
     @property
     def encoding(self) -> str:
-        """Return the encoding of the original stdout, defaulting to 'utf-8' if not available.
-
-        Returns:
-            The encoding of the original stdout.
-        """
+        """Return the encoding of the original stream, defaulting to 'utf-8' if not available."""
         return getattr(self._original, "encoding", "utf-8")
 
 
-class _StderrCapture:
-    """Context manager that redirects sys.stderr to a queue.
+class _StdoutCapture(_StreamCapture):
+    """Context manager that redirects sys.stdout to a queue."""
 
-    This class captures writes to sys.stderr, sends complete lines to a queue for real-time UI updates, and also
-    forwards all output to the original stderr to preserve normal console behavior.
+    _stream_name = "stdout"
 
-    Args:
-        q: A queue to which captured lines will be sent for UI display.
 
-    Returns:
-        An instance of _StderrCapture.
-    """
+class _StderrCapture(_StreamCapture):
+    """Context manager that redirects sys.stderr to a queue."""
 
-    def __init__(self, q: queue.Queue[str]):
-        """Initialize the stderr capture context manager with a queue.
-
-        Args:
-            q: A queue to which captured lines will be sent for UI display.
-
-        Returns:
-            None
-        """
-        self._q = q
-        self._buf = ""
-        self._original: Any = None
-
-    def __enter__(self) -> _StderrCapture:
-        """Redirect sys.stderr to this context manager, saving the original stderr.
-
-        Returns:
-            The _StderrCapture instance itself, which will now capture writes to sys.stderr.
-        """
-        self._original = sys.stderr
-        sys.stderr = self  # type: ignore[assignment]
-        return self
-
-    def __exit__(self, *_: Any) -> None:
-        """Restore the original stderr and flush any remaining buffered output.
-
-        Args:
-            *_: Any additional arguments (ignored)
-
-        Returns:
-            None
-        """
-        if self._buf.strip():
-            self._q.put(self._buf.rstrip())
-            self._buf = ""
-        sys.stderr = self._original
-
-    def write(self, text: str) -> int:
-        """Write text to the original stderr and capture complete lines for the queue.
-
-        This method forwards all text to the original stderr and also buffers it to detect complete lines.
-        When a newline is detected, the line is sent to the queue for UI updates.
-
-        Args:
-            text: The text to write to stderr.
-
-        Returns:
-            The number of characters written.
-        """
-        self._original.write(text)
-        self._buf += text
-        while "\n" in self._buf:
-            line, self._buf = self._buf.split("\n", 1)
-            stripped = line.rstrip()
-            if stripped:
-                self._q.put(stripped)
-        return len(text)
-
-    def flush(self) -> None:
-        """Flush the original stderr."""
-        self._original.flush()
-
-    @property
-    def encoding(self) -> str:
-        """Return the encoding of the original stderr, defaulting to 'utf-8' if not available."""
-        return getattr(self._original, "encoding", "utf-8")
+    _stream_name = "stderr"
 
 
 class _QueueLogHandler(logging.Handler):

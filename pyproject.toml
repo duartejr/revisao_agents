@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "revisao-agents"
-version = "0.2.1"
+version = "0.2.2"
 description = "Sistema agentico para revisão de textos acadêmicos e capítulos técnicos (LangGraph)"
 readme = "README.md"
 requires-python = ">=3.11"
