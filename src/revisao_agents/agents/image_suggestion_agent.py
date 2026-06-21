@@ -11,63 +11,16 @@ with best-effort source references, using LangGraph create_react_agent.
 from __future__ import annotations
 
 import logging
-import re
-from datetime import date
 
 from langchain_core.messages import AIMessage, HumanMessage
 
+from ..core.utils import detect_language
 from ..tools.image_tools import get_image_tools
+from ..utils.llm_utils.date_context import get_today_citation_date
 from ..utils.llm_utils.llm_providers import create_agent_easy
 from ..utils.llm_utils.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)
-
-
-def _today() -> str:
-    return date.today().strftime("%d %b. %Y").lower()
-
-
-def _detect_language(text: str) -> str:
-    """Detect document language (pt or en) from a text sample."""
-    pt_words = [
-        r"\bcomo\b",
-        r"\bpara\b",
-        r"\bque\b",
-        r"\bnão\b",
-        r"\bsão\b",
-        r"\buma\b",
-        r"\bpor\b",
-        r"\bcom\b",
-        r"\besta\b",
-        r"\bneste\b",
-        r"\besses\b",
-        r"\bmodelos\b",
-        r"\bdados\b",
-        r"\bprevisão\b",
-        r"\bseção\b",
-        r"\bresultados\b",
-    ]
-    en_words = [
-        r"\bthe\b",
-        r"\bof\b",
-        r"\band\b",
-        r"\bin\b",
-        r"\bto\b",
-        r"\bis\b",
-        r"\bare\b",
-        r"\bthis\b",
-        r"\bthat\b",
-        r"\bfor\b",
-        r"\bmodels\b",
-        r"\bdata\b",
-        r"\bforecast\b",
-        r"\bsection\b",
-        r"\bresults\b",
-    ]
-    sample = text[:2000].lower()
-    pt_score = sum(1 for p in pt_words if re.search(p, sample))
-    en_score = sum(1 for p in en_words if re.search(p, sample))
-    return "pt" if pt_score >= en_score else "en"
 
 
 def run_image_suggestion_agent(
@@ -96,9 +49,9 @@ def run_image_suggestion_agent(
 
     # Use user_request as a secondary signal when the excerpt is empty or
     # language detection is inconclusive (both scores 0).
-    doc_language = _detect_language(document_excerpt or "")
+    doc_language = detect_language(document_excerpt or "", tie_break="pt")
     if doc_language == "en" and not (document_excerpt or "").strip():
-        doc_language = _detect_language(user_request or "")
+        doc_language = detect_language(user_request or "", tie_break="pt")
     if doc_language == "pt":
         lang_instruction = (
             "Write ALL your output in Brazilian Portuguese (same language as the document). "
@@ -125,7 +78,7 @@ def run_image_suggestion_agent(
     try:
         prompt = load_prompt(
             "common/image_suggestion",
-            today_date=_today(),
+            today_date=get_today_citation_date(),
             document_excerpt=document_excerpt if document_excerpt else "(not provided)",
             user_request=user_request or "(not provided)",
             scope_description=scope_description or "all sections of the document",

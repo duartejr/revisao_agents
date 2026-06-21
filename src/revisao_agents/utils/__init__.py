@@ -24,7 +24,7 @@ from .file_utils import (
     summarize_section,
     truncate,
 )
-from .llm_utils import LLMProvider, get_llm, llm_call, load_prompt, parse_json_safe
+from .llm_utils import LLMProvider, get_llm, llm_call, load_prompt
 from .search_utils import extract_urls, score_url, search_images, search_web
 
 # Legacy imports for backwards compatibility
@@ -35,7 +35,6 @@ __all__ = [
     # LLM
     "load_prompt",
     "llm_call",
-    "parse_json_safe",
     "get_llm",
     "LLMProvider",
     # Search

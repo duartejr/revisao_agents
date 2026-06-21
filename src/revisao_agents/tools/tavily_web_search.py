@@ -13,6 +13,7 @@ from langchain_core.tools import tool
 from tavily import TavilyClient
 
 from ..config import SEARCH_LOGS_DIR, TAVILY_CONFIG
+from ..core.utils import detect_language
 from ..utils.core.commons import get_clean_key
 
 
@@ -130,89 +131,6 @@ def _save_search_md(
 # ============================================================================
 
 
-def _detect_language(text: str) -> str:
-    """
-    Detects whether the text is predominantly in English or Portuguese.
-
-    Args:
-        text: the input text to analyze
-
-    Returns:
-        'en' if English is predominant, 'pt' if Portuguese is predominant
-    """
-    if not text:
-        return "en"
-
-    text_lower = text.lower()
-
-    # Common words in Portuguese
-    pt_words = [
-        "para",
-        "como",
-        "que",
-        "com",
-        "mais",
-        "dos",
-        "das",
-        "pela",
-        "pelo",
-        "são",
-        "foi",
-        "está",
-        "sobre",
-        "entre",
-        "através",
-        "também",
-        "ser",
-        "por",
-        "uma",
-        "seus",
-        "suas",
-        "este",
-        "esta",
-        "pode",
-        "podem",
-    ]
-
-    # Common words in English
-    en_words = [
-        "the",
-        "and",
-        "for",
-        "with",
-        "this",
-        "from",
-        "that",
-        "have",
-        "was",
-        "are",
-        "been",
-        "their",
-        "which",
-        "were",
-        "when",
-        "through",
-        "where",
-        "using",
-        "can",
-        "these",
-        "those",
-        "such",
-        "would",
-        "should",
-    ]
-
-    # Count occurrences of common words for each language
-    count_pt = sum(1 for p in pt_words if f" {p} " in f" {text_lower} ")
-    count_en = sum(1 for p in en_words if f" {p} " in f" {text_lower} ")
-
-    # Also checks for special Portuguese characters
-    if "ã" in text_lower or "ç" in text_lower or "õ" in text_lower:
-        count_pt += 3
-
-    return "en" if count_en >= count_pt else "pt"
-
-
 def _prioritize_by_language(results: list[dict], boost_en: float = 0.3) -> list[dict]:
     """
     Reorders results prioritizing English.
@@ -228,7 +146,7 @@ def _prioritize_by_language(results: list[dict], boost_en: float = 0.3) -> list[
     for r in results:
         # Detects language based on title + snippet
         text_to_detect = f"{r.get('title', '')} {r.get('snippet', r.get('content', ''))}"
-        language = _detect_language(text_to_detect)
+        language = detect_language(text_to_detect)
         r["language"] = language
 
         # Adds boost for English results

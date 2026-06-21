@@ -11,6 +11,9 @@ import re
 
 from .document import _extract_quoted_snippet
 
+_BRACKETED_CITATION_RE = r"\[(\d+)\]"
+_LABELED_CITATION_RE = r"(?:source|citation|reference|refer(?:e|ê)ncia|fonte)\s*#?\s*(\d+)"
+
 
 def _explicit_web_request(user_text: str) -> bool:
     """Detect explicit user intent to perform a web search based on keywords.
@@ -39,20 +42,19 @@ def _explicit_web_request(user_text: str) -> bool:
 
 
 def _extract_citation_number(user_text: str) -> int | None:
-    """Extract a citation number from the user text based on heuristics.
+    """Extract the first citation number mentioned in the user text, in text order.
 
     Args:
         user_text: The input text from the user.
 
     Returns:
-        The citation number if found, otherwise None.
+        The first citation number if found, otherwise None.
     """
-    match = re.search(r"\[(\d+)\]", user_text)
+    match = re.search(_BRACKETED_CITATION_RE, user_text)
     if match:
         return int(match.group(1))
 
-    text = user_text.lower()
-    match = re.search(r"(?:source|citation|reference|refer(?:e|ê)ncia|fonte)\s*#?\s*(\d+)", text)
+    match = re.search(_LABELED_CITATION_RE, user_text.lower())
     if match:
         return int(match.group(1))
     return None
@@ -289,17 +291,11 @@ def _extract_requested_citation_numbers(user_text: str) -> list[int]:
     Returns:
         A sorted list of unique citation numbers.
     """
-    numbers = [int(match) for match in re.findall(r"\[(\d+)\]", user_text)]
+    numbers = [int(match) for match in re.findall(_BRACKETED_CITATION_RE, user_text)]
     if numbers:
         return sorted(dict.fromkeys(numbers))
 
-    fallback = [
-        int(match)
-        for match in re.findall(
-            r"(?:source|citation|reference|refer(?:e|ê)ncia|fonte)\s*#?\s*(\d+)",
-            user_text.lower(),
-        )
-    ]
+    fallback = [int(match) for match in re.findall(_LABELED_CITATION_RE, user_text.lower())]
     return sorted(dict.fromkeys(fallback))
 
 

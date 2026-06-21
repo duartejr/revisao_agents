@@ -427,13 +427,6 @@ def llm_call(
         return None if response_schema else ""
 
 
-def parse_json_safe(text: str, default: Any = None) -> Any:
-    """Extract and parse JSON from text; delegates to core.utils.parse_json_safe."""
-    from ...core.utils import parse_json_safe as _parse
-
-    return _parse(text, default)
-
-
 # ============================================================================
 # FAST TEST  —  python3 llm_providers.py
 # ============================================================================

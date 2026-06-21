@@ -6,7 +6,17 @@ LLM prompts and system messages, preventing agents from ignoring data
 or information from after a hardcoded date.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+
+
+def get_today_citation_date() -> str:
+    """
+    Get today's date formatted for citation/reference text, e.g. "21 jun. 2026".
+
+    Returns:
+        str: Today's date, lowercased, in "%d %b. %Y" format.
+    """
+    return date.today().strftime("%d %b. %Y").lower()
 
 
 def get_current_date_info() -> str:
@@ -55,6 +65,7 @@ def add_date_context_to_system_prompt(system_prompt: str) -> str:
 
 
 __all__ = [
+    "get_today_citation_date",
     "get_current_date_info",
     "add_date_context_to_prompt",
     "add_date_context_to_system_prompt",

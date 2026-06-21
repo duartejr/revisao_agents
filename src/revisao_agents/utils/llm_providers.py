@@ -7,12 +7,10 @@ from .llm_utils.llm_providers import (
     LLMProvider,
     get_llm,
     llm_call,
-    parse_json_safe,
 )
 
 __all__ = [
     "get_llm",
     "LLMProvider",
     "llm_call",
-    "parse_json_safe",
 ]

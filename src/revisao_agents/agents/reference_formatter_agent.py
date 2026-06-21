@@ -13,19 +13,15 @@ first-class LangSmith tracing.
 from __future__ import annotations
 
 import logging
-from datetime import date
 
 from langchain_core.messages import AIMessage, HumanMessage
 
 from ..tools.reference_tools import get_reference_tools
+from ..utils.llm_utils.date_context import get_today_citation_date
 from ..utils.llm_utils.llm_providers import create_agent_easy
 from ..utils.llm_utils.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)
-
-
-def _today() -> str:
-    return date.today().strftime("%d %b. %Y").lower()
 
 
 def run_reference_formatter_agent(
@@ -62,7 +58,7 @@ def run_reference_formatter_agent(
         )
         prompt = load_prompt(
             "common/reference_formatter",
-            today_date=_today(),
+            today_date=get_today_citation_date(),
             references_input=references_input,
             allow_web_hint=allow_web_hint,
         )

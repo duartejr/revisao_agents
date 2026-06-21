@@ -14,19 +14,15 @@ first-class LangSmith tracing.
 from __future__ import annotations
 
 import logging
-from datetime import date
 
 from langchain_core.messages import AIMessage, HumanMessage
 
 from ..tools.reference_tools import get_reference_tools
+from ..utils.llm_utils.date_context import get_today_citation_date
 from ..utils.llm_utils.llm_providers import create_agent_easy
 from ..utils.llm_utils.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)
-
-
-def _today() -> str:
-    return date.today().strftime("%d %b. %Y").lower()
 
 
 def _count_entries(raw_references: str) -> int:
@@ -89,7 +85,7 @@ def run_reference_extractor_agent(
     try:
         prompt = load_prompt(
             "common/reference_extractor",
-            today_date=_today(),
+            today_date=get_today_citation_date(),
             total_items=str(total_items),
             raw_references=raw_references,
             citation_context=citation_context_text,
