@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 class TestMlflowConfig:
     """Tests for observability.mlflow_config constants and env-var reading."""
 
-    def test_experiments_contains_all_five_keys(self):
+    def test_experiments_contains_all_six_keys(self):
         from revisao_agents.observability.mlflow_config import EXPERIMENTS
 
         expected = {
@@ -19,11 +19,13 @@ class TestMlflowConfig:
             "writing_academic",
             "writing_technical",
             "review_chat",
+            "cost_reports",
         }
         assert set(EXPERIMENTS.keys()) == expected
 
     def test_exp_constants_match_experiments_keys(self):
         from revisao_agents.observability.mlflow_config import (
+            EXP_COST_REPORTS,
             EXP_PLANNING_ACADEMIC,
             EXP_PLANNING_TECHNICAL,
             EXP_REVIEW_CHAT,
@@ -37,6 +39,7 @@ class TestMlflowConfig:
         assert EXP_WRITING_ACADEMIC in EXPERIMENTS
         assert EXP_WRITING_TECHNICAL in EXPERIMENTS
         assert EXP_REVIEW_CHAT in EXPERIMENTS
+        assert EXP_COST_REPORTS in EXPERIMENTS
 
     def test_tracking_uri_reads_from_env(self, monkeypatch):
         monkeypatch.setenv("MLFLOW_TRACKING_URI", "sqlite:///./custom.db")

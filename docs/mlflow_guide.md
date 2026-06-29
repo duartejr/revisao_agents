@@ -15,13 +15,19 @@ O MLflow é configurado no pacote `src/revisao_agents/observability/` e rastreia
 | `writing_academic`      | Escrita de revisão acadêmica              |
 | `writing_technical`     | Escrita de revisão técnica                |
 | `review_chat`           | Interações de revisão interativa (chat)   |
+| `cost_reports`          | Relatórios agregados de custo Tavily (`scripts/generate_cost_report.py`, ver seção [Relatório de custos](#relatório-de-custos-w8-story-04)) |
 
-Métricas registradas atualmente em buscas Tavily incrementais:
+Métricas registradas em cada busca Tavily individual (run filho, aninhado via `_tavily_search_span`):
 
 - `latency` — tempo de resposta da busca (segundos)
-- `credits_used` — créditos Tavily consumidos
+- `credits_used` — créditos Tavily consumidos nessa busca
 - `urls_found` — total de URLs encontradas
-- `valid_academic_urls_found` — URLs que passam pelo filtro acadêmico
+- `valid_academic_urls_found` / `valid_technical_urls_found` — URLs que passam pelo filtro de domínio
+
+Params/metrics registrados no run pai (sessão de planejamento completa, via `workflow_run`):
+
+- `params.search_depth` — profundidade de busca da sessão (`basic`/`advanced`), constante durante toda a sessão
+- `metrics.total_credits_used` — créditos Tavily acumulados na sessão inteira, logado ao final (`finalize_*_plan_node`)
 
 ---
 
@@ -174,6 +180,34 @@ def meu_novo_no(state: ReviewState) -> dict:
 `span_type` deve ser um dos valores: `"AGENT"`, `"CHAIN"`, `"TOOL"`, `"UNKNOWN"`.
 
 ---
+
+## Relatório de custos (W8-STORY-04)
+
+O script `scripts/generate_cost_report.py` agrega o gasto de créditos Tavily por sessão de planejamento, agrupado por `review_type` (acadêmico/técnico) e `search_depth` (`basic`/`advanced`):
+
+```bash
+uv run python scripts/generate_cost_report.py
+```
+
+**De onde vêm os dados:** apenas runs **pai** das sessões de planejamento (`planning_academic`, `planning_technical`) — identificados por não ter a tag `tags.mlflow.parentRunId` — são considerados. Métricas de buscas individuais (runs filhos) não entram na agregação porque `search_depth` é uma config de sessão inteira (constante em todas as buscas daquela execução), já espelhada como param do run pai.
+
+**O que é excluído da agregação, e por quê:**
+
+| Critério | Motivo |
+|---|---|
+| `status != "FINISHED"` | Sessão que não terminou não tem `total_credits_used` final confiável |
+| Falta `metrics.total_credits_used` ou `params.search_depth` | Run anterior à instrumentação de custo (não é problema de qualidade, é dado histórico) |
+| `tags.baseline == "true"` | Run de referência sem uso real de Tavily (ver `scripts/run_baseline_mlflow.py`) |
+
+> **Nota:** sessões de `planning_academic` sempre serão excluídas do relatório de custos — esse é o comportamento esperado, não um bug. O workflow acadêmico busca fontes via vector search no MongoDB, não via Tavily, então nunca registra `metrics.total_credits_used`. Apenas sessões de `planning_technical` aparecem na agregação de custos.
+
+**Onde o relatório fica:** nenhum arquivo é salvo em disco. O script cria um run no experimento `cost_reports` e usa `mlflow.log_text` para anexar `cost_report.md` e `cost_summary.csv` como artefatos do run — visíveis na aba **Artifacts** da UI do MLflow. As métricas agregadas por grupo (`avg_credits_per_session__<review_type>_<search_depth>`, etc.) também ficam no run, pra comparar entre execuções do script ao longo do tempo na própria tabela de runs.
+
+**Visualização depth vs. custo:** a UI do MLflow não tem painéis customizados tipo Grafana. Para comparar profundidade de busca vs. custo entre sessões individuais, use o recurso nativo de comparação de runs:
+
+1. Abra `http://localhost:5000` e selecione o experimento `planning_academic` ou `planning_technical`
+2. Selecione duas ou mais sessões (checkbox) e clique em **Compare**
+3. Use o gráfico de **Parallel Coordinates**, com `search_depth` e `total_credits_used` como eixos
 
 ## Próximos passos (Semana 9+)
 
