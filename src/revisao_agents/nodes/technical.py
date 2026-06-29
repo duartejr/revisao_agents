@@ -196,8 +196,8 @@ def refine_technical_plan_node(state: ReviewState) -> dict:
     prompt = load_prompt(
         "technical/refine_plan",
         theme=theme,
-        current_plan=current_plan,
-        last_msg=last_msg,
+        previous_plan=current_plan,
+        last_feedback=last_msg,
         snips=snips,
     )
     ans = get_llm(temperature=prompt.temperature).invoke(prompt.text)
@@ -220,6 +220,12 @@ def finalize_technical_plan_node(state: ReviewState) -> dict:
 
     Returns:
         dict: Updated state with the final technical plan, its path, and status.
+
+    Note:
+        If an MLflow run is active, logs ``state["total_credits_used"]`` (default
+        ``0.0``) as the ``total_credits_used`` metric on that run via
+        ``mlflow.log_metric``. This targets the active *run* directly and is
+        independent of the ``@mlflow.trace`` span on this function.
     """
     theme = state["theme"]
     snips = fmt_snippets(state.get("technical_snippets", [])[:8], 800)
@@ -244,4 +250,13 @@ def finalize_technical_plan_node(state: ReviewState) -> dict:
         + "\n"
     )
     path = save_md(md, f"{PLANS_DIR}/technical_review_plan", theme)
+
+    # Log the cumulative Tavily credit spend to the active MLflow run (the
+    # parent ``planning_technical`` run opened by ``workflow_run`` in the
+    # Gradio handler). This mirrors how ``SearchQualityMetrics.log_all_metrics_to_mlflow``
+    # logs per-search metrics: a plain ``mlflow.log_metric`` call always targets
+    # the currently active *run*, independently of any ``@mlflow.trace`` span.
+    if mlflow.active_run():
+        mlflow.log_metric("total_credits_used", state.get("total_credits_used", 0.0))
+
     return {"final_plan": final_plan, "final_plan_path": path, "status": "completed"}

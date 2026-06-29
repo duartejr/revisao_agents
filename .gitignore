@@ -45,6 +45,7 @@ vector_db*/
 *.md.bak
 management/
 runtime/
+mlartifacts/
 uv.lock
 .github/agents/ai_engineering*
 .github/agents/lin*

@@ -16,6 +16,12 @@ def mlflow_local_store(tmp_path_factory):
     (or whatever ``MLFLOW_TRACKING_URI`` is set to in the environment) when
     the production code calls ``mlflow.start_run``, ``mlflow.set_experiment``,
     or ``mlflow.set_tracking_uri``.
+
+    It also pre-creates and selects a ``unit-tests`` experiment so that real
+    (non-mocked) calls to ``mlflow.start_run`` succeed: a freshly created file
+    store has no "Default" experiment (ID 0) on disk, so the very first
+    ``start_run`` against it would otherwise fail with
+    ``Could not find experiment with ID 0``.
     """
     import os
 
@@ -27,6 +33,7 @@ def mlflow_local_store(tmp_path_factory):
     original_uri = os.environ.get("MLFLOW_TRACKING_URI")
     os.environ["MLFLOW_TRACKING_URI"] = tracking_uri
     mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment("unit-tests")
 
     yield
 

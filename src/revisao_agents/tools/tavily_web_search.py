@@ -6,15 +6,41 @@ Retains all original functionalities (crawlability, language, academic filters).
 
 import os
 import re
+import time
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime
 
 import mlflow
+import requests
 from langchain_core.tools import tool
 from tavily import TavilyClient
+from tavily.errors import (
+    BadRequestError,
+    ForbiddenError,
+    InvalidAPIKeyError,
+    UsageLimitExceededError,
+)
+from tavily.errors import TimeoutError as TavilyTimeoutError
 
 from ..config import SEARCH_LOGS_DIR, TAVILY_CONFIG
 from ..core.utils import detect_language
 from ..utils.core.commons import get_clean_key
+
+# Exceptions actually raised by `TavilyClient.search()` on network/API failure
+# (see tavily.tavily.TavilyClient.search): Tavily's own error classes plus
+# `requests.exceptions.RequestException` for connection-level/HTTP failures.
+# Deliberately narrower than `Exception` so unrelated errors (e.g. MLflow
+# failures inside the same `with` block) are not silently swallowed.
+TAVILY_SEARCH_ERRORS = (
+    requests.exceptions.RequestException,
+    UsageLimitExceededError,
+    ForbiddenError,
+    InvalidAPIKeyError,
+    BadRequestError,
+    TavilyTimeoutError,
+)
 
 
 def _slug(text: str, max_chars: int = 50) -> str:
@@ -30,6 +56,56 @@ def _slug(text: str, max_chars: int = 50) -> str:
     s = re.sub(r"[^\w\s-]", "", text[:max_chars]).strip()
     s = re.sub(r"[\s]+", "_", s).lower()
     return s or "search"
+
+
+@dataclass
+class _TavilySearchSpan:
+    """Handle returned by :func:`_tavily_search_span` for logging extra metrics.
+
+    Attributes:
+        log_metrics: Callback that forwards keyword arguments to
+            ``mlflow.log_metric`` for each entry, allowing callers to log
+            domain-specific metrics (e.g. ``credits_used``, ``urls_found``,
+            ``valid_academic_urls_found``) without the helper needing to know
+            their names in advance.
+    """
+
+    log_metrics: Callable[..., None]
+
+
+@contextmanager
+def _tavily_search_span(query: str, search_depth: str) -> Generator[_TavilySearchSpan, None, None]:
+    """Open a nested MLflow run instrumenting a single Tavily search call.
+
+    Starts a nested MLflow run named ``search:<query[:30]>``, logs the
+    ``search_depth`` parameter on entry, times the duration of the ``with``
+    block, and logs it as the ``latency`` metric on exit. Callers can use the
+    yielded span's ``log_metrics`` callback to record additional metrics
+    (e.g. ``credits_used``, ``urls_found``) without this helper needing to
+    know their names ahead of time. MLflow errors are not caught and
+    propagate to the caller.
+
+    Args:
+        query: The search query string; used to name the nested run.
+        search_depth: The Tavily search depth used for this call (e.g.
+            ``TAVILY_CONFIG.depth``); logged as the ``search_depth`` param.
+
+    Yields:
+        _TavilySearchSpan: An object exposing ``log_metrics(**kwargs)`` to log
+        additional metrics under the same nested run.
+    """
+
+    def _log_metrics(**kwargs: float) -> None:
+        mlflow.log_metrics(kwargs)
+
+    with mlflow.start_run(run_name=f"search:{query[:30]}", nested=True):
+        mlflow.log_param("search_depth", search_depth)
+        start = time.perf_counter()
+        try:
+            yield _TavilySearchSpan(log_metrics=_log_metrics)
+        finally:
+            latency = time.perf_counter() - start
+            mlflow.log_metric("latency", latency)
 
 
 def _save_search_md(
@@ -338,17 +414,21 @@ def filter_technical_urls(urls: list[str]) -> list[str]:
 def search_tavily(queries: list[str], max_results: int = TAVILY_CONFIG.num_results) -> dict:
     """Search for academic articles on Tavily, prioritizing English content.
 
-    Search for academic articles on Tavily.
-    Prioritizes content in ENGLISH, but allows Portuguese.
-    Automatically filters out non-scientific domains.
-    Save each search in ./tavily_searches/ for traceability.
+    Runs one Tavily search per query, allows Portuguese results but boosts
+    English ones, and automatically filters out non-scientific domains. Each
+    query's results are logged under ``./tavily_searches/`` for traceability.
 
     Args:
-        queries: list of search queries
-        max_results: results per query (default TAVILY_CONFIG.num_results)
+        queries: List of search query strings.
+        max_results: Maximum number of results to request per query. Defaults
+            to ``TAVILY_CONFIG.num_results``.
 
     Returns:
-        {"urls_found": [...], "results": [...]}
+        dict: A dictionary with the following keys:
+            - ``"urls_found"``: list[str], deduplicated URLs across all queries.
+            - ``"results"``: list[dict], result objects with ``url``, ``title``,
+              ``snippet``, and ``score`` keys.
+            - ``"usage"``: list[dict], per-query Tavily usage info.
     """
     client = _get_client()
     all_urls: list[str] = []
@@ -450,17 +530,20 @@ def search_tavily_incremental(
             - ``"results"``: list[dict], result objects with ``url``, ``title``,
               ``snippet``, and ``score`` keys.
             - ``"usage"``: dict, Tavily usage info, including a ``"credits"`` key.
+
+    Raises:
+        Exception: Errors raised by Tavily/requests during ``client.search()``
+            (``TAVILY_SEARCH_ERRORS``) are caught and result in the empty-result
+            dict above. Any other exception — e.g. from result post-processing,
+            MLflow span/instrumentation failures, or ``_save_search_md`` — is not
+            caught and propagates to the caller.
     """
-    import time
+    print(f"\n🔎 Incremental Search (EN prioritized): '{query}'")
 
-    import mlflow
+    client = _get_client()
 
-    try:
-        client = _get_client()
-        print(f"\n🔎 Incremental Search (EN prioritized): '{query}'")
-
-        with mlflow.start_run(run_name=f"search:{query[:30]}", nested=True):
-            start = time.perf_counter()
+    with _tavily_search_span(query, TAVILY_CONFIG.depth) as span:
+        try:
             ans = client.search(
                 query=query,
                 search_depth=TAVILY_CONFIG.depth,
@@ -469,92 +552,91 @@ def search_tavily_incremental(
                 include_usage=TAVILY_CONFIG.include_usage,
                 exclude_domains=BLOCKED_DOMAINS,
             )
+        except TAVILY_SEARCH_ERRORS as e:
+            print(f"   ⚠️  Error in Tavily search: {e}")
+            return {
+                "new_urls": [],
+                "total_accumulated": previous_urls,
+                "results": [],
+                "usage": {},
+            }
 
-            latency = time.perf_counter() - start
-            mlflow.log_param("search_depth", TAVILY_CONFIG.depth)
-            mlflow.log_metric("latency", latency)
-            mlflow.log_metric("credits_used", ans.get("usage", {}).get("credits", 0))
+        # Prepare results with language prioritization
+        batch_results = [
+            {
+                "url": r["url"],
+                "title": r.get("title", ""),
+                "snippet": r.get("content", "")[:2000],
+                "score": r.get("score", 0),
+            }
+            for r in ans.get("results", [])
+            if r.get("score", 0) >= 0.7
+        ]
 
-            # Prepare results with language prioritization
-            batch_results = [
-                {
-                    "url": r["url"],
-                    "title": r.get("title", ""),
-                    "snippet": r.get("content", "")[:2000],
-                    "score": r.get("score", 0),
-                }
-                for r in ans.get("results", [])
-                if r.get("score", 0) >= 0.7
-            ]
+        # Prioritizes by language
+        batch_results = _prioritize_by_language(batch_results, boost_en=0.3)
 
-            # Prioritizes by language
-            batch_results = _prioritize_by_language(batch_results, boost_en=0.3)
+        urls_found = [r["url"] for r in batch_results]
+        n_urls_found = len(urls_found)
+        urls_found = filter_academic_urls(urls_found)
 
-            urls_found = [r["url"] for r in batch_results]
-            mlflow.log_metric("urls_found", len(urls_found))
-            urls_found = filter_academic_urls(urls_found)
-            mlflow.log_metric("valid_academic_urls_found", len(urls_found))
-
-        urls_new = [u for u in urls_found if u not in previous_urls]
-        total_accumulated = list(dict.fromkeys(previous_urls + urls_found))
-
-        # Log all 4 quality metrics to the parent workflow run (if one is active).
-        # result_reuse_percent and credit_efficiency_aggregated are computed as
-        # per-call approximations since session state is not available here.
-        if mlflow.active_run():
-            from revisao_agents.observability.search_metrics import SearchQualityMetrics
-
-            credits = ans.get("usage", {}).get("credits", 0.0)
-            reused = [u for u in urls_found if u in previous_urls]
-            result_reuse_pct = round(100 * len(reused) / max(len(urls_found), 1), 2)
-            # credit_efficiency_aggregated requires session-level totals, which
-            # are unavailable at the tool level; it is computed by the node callers.
-            SearchQualityMetrics.log_all_metrics_to_mlflow(
-                {
-                    "search_coverage": SearchQualityMetrics.calculate_search_coverage(urls_new),
-                    "result_reuse_percent": result_reuse_pct,
-                    "credit_efficiency_individual": SearchQualityMetrics.calculate_credit_efficiency_individual(
-                        credits
-                    ),
-                }
-            )
-        n_en = sum(1 for r in batch_results if r.get("language") == "en")
-        n_pt = sum(1 for r in batch_results if r.get("language") == "pt")
-
-        print(f"   ✔ Found      : {len(urls_found)} URLs")
-        print(f"   ✔ New        : {len(urls_new)} URLs")
-        print(f"   ✔ Total acum. : {len(total_accumulated)} URLs")
-        print(f"   📊 Languages : {n_en} English, {n_pt} Portuguese")
-
-        # ── Log ──────────────────────────────────────────────────────────────
-        _save_search_md(
-            "academic_incremental",
-            query,
-            batch_results,
-            extra={
-                "new_urls": len(urls_new),
-                "total_accumulated": len(total_accumulated),
-                "idioma_en": n_en,
-                "idioma_pt": n_pt,
-            },
-            usage={**ans.get("usage", {}), "id": ans.get("request_id", "N/A")},
+        span.log_metrics(
+            credits_used=ans.get("usage", {}).get("credits", 0),
+            urls_found=n_urls_found,
+            valid_academic_urls_found=len(urls_found),
         )
 
-        return {
-            "new_urls": urls_new,
-            "total_accumulated": total_accumulated,
-            "results": batch_results,
-            "usage": ans.get("usage", {}),
-        }
+    urls_new = [u for u in urls_found if u not in previous_urls]
+    total_accumulated = list(dict.fromkeys(previous_urls + urls_found))
 
-    except Exception as e:
-        print(f"   ⚠️  Error in Tavily search: {e}")
-        return {
-            "new_urls": [],
-            "total_accumulated": previous_urls,
-            "results": [],
-            "usage": {},
-        }
+    # Log all 4 quality metrics to the parent workflow run (if one is active).
+    # result_reuse_percent and credit_efficiency_aggregated are computed as
+    # per-call approximations since session state is not available here.
+    if mlflow.active_run():
+        from revisao_agents.observability.search_metrics import SearchQualityMetrics
+
+        credits = ans.get("usage", {}).get("credits", 0.0)
+        reused = [u for u in urls_found if u in previous_urls]
+        result_reuse_pct = round(100 * len(reused) / max(len(urls_found), 1), 2)
+        # credit_efficiency_aggregated requires session-level totals, which
+        # are unavailable at the tool level; it is computed by the node callers.
+        SearchQualityMetrics.log_all_metrics_to_mlflow(
+            {
+                "search_coverage": SearchQualityMetrics.calculate_search_coverage(urls_new),
+                "result_reuse_percent": result_reuse_pct,
+                "credit_efficiency_individual": SearchQualityMetrics.calculate_credit_efficiency_individual(
+                    credits
+                ),
+            }
+        )
+    n_en = sum(1 for r in batch_results if r.get("language") == "en")
+    n_pt = sum(1 for r in batch_results if r.get("language") == "pt")
+
+    print(f"   ✔ Found      : {len(urls_found)} URLs")
+    print(f"   ✔ New        : {len(urls_new)} URLs")
+    print(f"   ✔ Total acum. : {len(total_accumulated)} URLs")
+    print(f"   📊 Languages : {n_en} English, {n_pt} Portuguese")
+
+    # ── Log ──────────────────────────────────────────────────────────────────
+    _save_search_md(
+        "academic_incremental",
+        query,
+        batch_results,
+        extra={
+            "new_urls": len(urls_new),
+            "total_accumulated": len(total_accumulated),
+            "idioma_en": n_en,
+            "idioma_pt": n_pt,
+        },
+        usage={**ans.get("usage", {}), "id": ans.get("request_id", "N/A")},
+    )
+
+    return {
+        "new_urls": urls_new,
+        "total_accumulated": total_accumulated,
+        "results": batch_results,
+        "usage": ans.get("usage", {}),
+    }
 
 
 @tool
@@ -591,18 +673,30 @@ def search_tavily_incremental_tool(
 def search_tavily_technical(
     queries: list[str], max_results: int = TAVILY_CONFIG.num_results
 ) -> dict:
-    """
-    Technical search on Tavily — allows documentation, tutorials,
-    English Wikipedia, online books, reference pages, etc.
-    PRIORITIZES English content.
-    Saves each search in ./tavily_searches/ for traceability.
+    """Search for technical content on Tavily, prioritizing English content.
+
+    Allows documentation, tutorials, English Wikipedia, online books,
+    reference pages, etc., and boosts English results. Each query's results
+    are logged under ``./tavily_searches/`` for traceability.
 
     Args:
-        queries: list of search queries
-        max_results: results per query (default TAVILY_CONFIG.num_results)
+        queries: List of search query strings.
+        max_results: Maximum number of results to request per query. Defaults
+            to ``TAVILY_CONFIG.num_results``.
 
     Returns:
-        {"found_urls": [...], "results": [...]}
+        dict: A dictionary with the following keys:
+            - ``"found_urls"``: list[str], deduplicated, technical-domain-filtered
+              URLs across all queries (see :func:`filter_technical_urls`).
+            - ``"results"``: list[dict], result objects with ``url``, ``title``,
+              ``snippet``, and ``score`` keys.
+
+    Raises:
+        Exception: Errors raised by Tavily/requests during ``client.search()``
+            (``TAVILY_SEARCH_ERRORS``) are caught per-query and that query is
+            skipped. Any other exception — e.g. from result post-processing,
+            MLflow span/instrumentation failures, or ``_save_search_md`` — is not
+            caught and propagates to the caller.
     """
     client = _get_client()
     all_urls: list[str] = []
@@ -611,15 +705,19 @@ def search_tavily_technical(
     for q in queries:
         print(f"🔎 Searching (technical, EN prioritized): {q}")
 
-        try:
-            ans = client.search(
-                query=q[:400],
-                search_depth=TAVILY_CONFIG.depth,
-                max_results=max_results,
-                include_answer=TAVILY_CONFIG.include_answer,
-                include_usage=TAVILY_CONFIG.include_usage,
-                exclude_domains=BLOCKED_DOMAINS,
-            )
+        with _tavily_search_span(q, TAVILY_CONFIG.depth) as span:
+            try:
+                ans = client.search(
+                    query=q[:400],
+                    search_depth=TAVILY_CONFIG.depth,
+                    max_results=max_results,
+                    include_answer=TAVILY_CONFIG.include_answer,
+                    include_usage=TAVILY_CONFIG.include_usage,
+                    exclude_domains=BLOCKED_DOMAINS,
+                )
+            except TAVILY_SEARCH_ERRORS as e:
+                print(f"   ⚠️  Error in query '{q[:50]}': {e}")
+                continue
 
             batch_results = []
             for r in ans.get("results", []):
@@ -641,6 +739,11 @@ def search_tavily_technical(
                 all_urls.append(item["url"])
                 all_results.append(item)
 
+            span.log_metrics(
+                credits_used=ans.get("usage", {}).get("credits", 0),
+                urls_found=len(batch_results),
+            )
+
             # Statistics
             n_en = sum(1 for r in batch_results if r.get("language") == "en")
             n_pt = sum(1 for r in batch_results if r.get("language") == "pt")
@@ -654,9 +757,6 @@ def search_tavily_technical(
                 extra={"idioma_en": n_en, "idioma_pt": n_pt},
                 usage={**ans.get("usage", {}), "id": ans.get("request_id", "N/A")},
             )
-
-        except Exception as e:
-            print(f"   ⚠️  Error in query '{q[:50]}': {e}")
 
     unique_urls = list(dict.fromkeys(all_urls))
     filtered_academic_urls = filter_technical_urls(unique_urls)
@@ -677,34 +777,28 @@ def search_tavily_images(
     queries: list[str],
     max_results: int = TAVILY_CONFIG.num_results,
 ) -> dict:
-    """
-    Search for images related to a topic via Tavily Search.
-    Uses only documented Search image fields (`include_images` and
-    `include_image_descriptions`) and returns the best available metadata.
-    Saves complete log in ./tavily_searches/.
+    """Search for images related to a topic via Tavily Search.
 
-    Ideal for:
-      - Algorithm figures, architectures, flow diagrams
-      - Comparative metric charts
-      - Time series / hydrology visualizations
-      - Technical or scientific illustrations
+    Uses only documented Search image fields (``include_images`` and
+    ``include_image_descriptions``) and returns the best available metadata.
+    Each query's results are logged under ``./tavily_searches/``.
+
+    Ideal for algorithm figures, architecture/flow diagrams, comparative
+    metric charts, time series / hydrology visualizations, and technical or
+    scientific illustrations.
 
     Args:
-        queries    : list of image-oriented search queries
-        max_results: results per query (capped at TAVILY_CONFIG.num_results)
+        queries: List of image-oriented search query strings.
+        max_results: Maximum number of images to return per query, capped at
+            4 regardless of the value passed in.
 
     Returns:
-        {
-          "images": [
-            {
-              "image_url"  : str,   # direct image URL
-              "description": str,   # description generated by Tavily (if available)
-              "source_url" : str,   # best-effort page URL (may be empty)
-              "page_title" : str,   # best-effort page title (may be empty)
-            }, ...
-          ],
-          "total": int,
-        }
+        dict: A dictionary with the following keys:
+            - ``"images"``: list[dict], each with ``image_url`` (direct image
+              URL), ``description`` (Tavily-generated, if available),
+              ``source_url`` (best-effort page URL, may be empty), and
+              ``page_title`` (best-effort page title, may be empty).
+            - ``"total"``: int, total number of images found.
     """
     max_results = min(max_results, 4)
     client = _get_client()
@@ -790,26 +884,23 @@ def search_tavily_images(
 
 @tool
 def extract_tavily(urls: list[str], include_images: bool = True) -> dict:
-    """
-    Extracts full content from web pages via the Tavily Extract API.
-    Save the complete log to ./tavily_searches/.
+    """Extract full content from web pages via the Tavily Extract API.
+
+    URLs are batched in groups of 20 (the Tavily Extract API's per-call
+    limit) and extracted with ``extract_depth="advanced"``. The complete log
+    is saved under ``./tavily_searches/``.
 
     Args:
-        urls           : list of URLs to extract (max. 20 per call)
-        include_images : if True, includes URLs of found images in the extracted content
+        urls: List of URLs to extract. Internally split into batches of 20.
+        include_images: If True, includes URLs of images found on each page
+            in the extracted content.
 
     Returns:
-        {
-          "extracted": [
-            {
-              "url"     : str,
-              "title"   : str,
-              "content" : str,
-              "images" : [str],
-            }, ...
-          ],
-          "failed": [str],
-        }
+        dict: A dictionary with the following keys:
+            - ``"extracted"``: list[dict], each with ``url``, ``title``,
+              ``content`` (raw or rendered page content), and ``images``
+              (list[str], empty if ``include_images`` is False).
+            - ``"failed"``: list[str], URLs that could not be extracted.
     """
     client = _get_client()
     extracted: list[dict] = []
@@ -909,19 +1000,37 @@ def search_tavily_incremental_technician(
             - ``"usage"``: dict, Tavily usage info, including a ``"credits"`` key.
             - ``"urls_found"``: list[str], all URLs returned by this search
               (before deduplication against ``previous_urls``).
-    """
-    try:
-        client = _get_client()
-        print(f"\n🔎 Incremental Technical Search (EN prioritized): '{query}'")
 
-        ans = client.search(
-            query=query[:400],
-            search_depth=TAVILY_CONFIG.depth,
-            max_results=max_results,
-            include_answer=TAVILY_CONFIG.include_answer,
-            include_usage=TAVILY_CONFIG.include_usage,
-            exclude_domains=BLOCKED_DOMAINS,
-        )
+    Raises:
+        Exception: Errors raised by Tavily/requests during ``client.search()``
+            (``TAVILY_SEARCH_ERRORS``) are caught and result in the empty-result
+            dict above. Any other exception — e.g. from result post-processing,
+            MLflow span/instrumentation failures, or ``_save_search_md`` — is not
+            caught and propagates to the caller.
+    """
+    print(f"\n🔎 Incremental Technical Search (EN prioritized): '{query}'")
+
+    client = _get_client()
+
+    with _tavily_search_span(query, TAVILY_CONFIG.depth) as span:
+        try:
+            ans = client.search(
+                query=query[:400],
+                search_depth=TAVILY_CONFIG.depth,
+                max_results=max_results,
+                include_answer=TAVILY_CONFIG.include_answer,
+                include_usage=TAVILY_CONFIG.include_usage,
+                exclude_domains=BLOCKED_DOMAINS,
+            )
+        except TAVILY_SEARCH_ERRORS as e:
+            print(f"   ⚠️  Error in techinical search: {e}")
+            return {
+                "new_urls": [],
+                "total_accumulated": previous_urls,
+                "results": [],
+                "usage": {},
+                "urls_found": [],
+            }
 
         results = [
             {
@@ -938,48 +1047,45 @@ def search_tavily_incremental_technician(
         results = _prioritize_by_language(results, boost_en=0.3)
 
         all_urls = [r["url"] for r in results]
+        n_urls_found = len(all_urls)
         all_urls = filter_technical_urls(all_urls)
 
-        new_urls = [u for u in all_urls if u not in previous_urls]
-        total_accumulated = list(dict.fromkeys(previous_urls + all_urls))
-
-        # Language statistics
-        n_en = sum(1 for r in results if r.get("language") == "en")
-        n_pt = sum(1 for r in results if r.get("language") == "pt")
-
-        print(f"   ✔ Found      : {len(all_urls)} URLs")
-        print(f"   ✔ New        : {len(new_urls)} URLs")
-        print(f"   ✔ Total acum.: {len(total_accumulated)} URLs")
-        print(f"   📊 Languages : {n_en} English, {n_pt} Portuguese")
-
-        # ── Log ──────────────────────────────────────────────────────────────
-        _save_search_md(
-            "incremental_technical",
-            query,
-            results,
-            extra={
-                "new_urls": len(new_urls),
-                "total_accumulated": len(total_accumulated),
-                "language_en": n_en,
-                "language_pt": n_pt,
-            },
-            usage={**ans.get("usage", {}), "id": ans.get("request_id", "N/A")},
+        span.log_metrics(
+            credits_used=ans.get("usage", {}).get("credits", 0),
+            urls_found=n_urls_found,
+            valid_technical_urls_found=len(all_urls),
         )
 
-        return {
-            "new_urls": new_urls,
-            "total_accumulated": total_accumulated,
-            "results": results,
-            "usage": ans.get("usage", {}),
-            "urls_found": all_urls,
-        }
+    new_urls = [u for u in all_urls if u not in previous_urls]
+    total_accumulated = list(dict.fromkeys(previous_urls + all_urls))
 
-    except Exception as e:
-        print(f"   ⚠️  Error in techinical search: {e}")
-        return {
-            "new_urls": [],
-            "total_accumulated": previous_urls,
-            "results": [],
-            "usage": {},
-            "urls_found": [],
-        }
+    # Language statistics
+    n_en = sum(1 for r in results if r.get("language") == "en")
+    n_pt = sum(1 for r in results if r.get("language") == "pt")
+
+    print(f"   ✔ Found      : {len(all_urls)} URLs")
+    print(f"   ✔ New        : {len(new_urls)} URLs")
+    print(f"   ✔ Total acum.: {len(total_accumulated)} URLs")
+    print(f"   📊 Languages : {n_en} English, {n_pt} Portuguese")
+
+    # ── Log ──────────────────────────────────────────────────────────────────
+    _save_search_md(
+        "incremental_technical",
+        query,
+        results,
+        extra={
+            "new_urls": len(new_urls),
+            "total_accumulated": len(total_accumulated),
+            "language_en": n_en,
+            "language_pt": n_pt,
+        },
+        usage={**ans.get("usage", {}), "id": ans.get("request_id", "N/A")},
+    )
+
+    return {
+        "new_urls": new_urls,
+        "total_accumulated": total_accumulated,
+        "results": results,
+        "usage": ans.get("usage", {}),
+        "urls_found": all_urls,
+    }

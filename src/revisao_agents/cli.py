@@ -104,8 +104,15 @@ def run_planning(
 
     config = {"configurable": {"thread_id": thread_id}}
 
+    from revisao_agents.config import TAVILY_CONFIG
+
     _run_name = f"{review_type_norm}/{theme[:40]}"
-    _params = {"review_type": review_type_norm, "rounds": rounds, "thread_id": thread_id}
+    _params = {
+        "review_type": review_type_norm,
+        "rounds": rounds,
+        "thread_id": thread_id,
+        "search_depth": TAVILY_CONFIG.depth,
+    }
     from contextlib import AbstractContextManager
     from typing import Any
 

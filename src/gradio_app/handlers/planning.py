@@ -14,7 +14,7 @@ from datetime import datetime
 
 import mlflow
 
-from revisao_agents.config import validate_runtime_config
+from revisao_agents.config import TAVILY_CONFIG, validate_runtime_config
 from revisao_agents.graphs.checkpoints import get_checkpointer
 from revisao_agents.observability import workflow_run
 from revisao_agents.observability.mlflow_config import EXP_PLANNING_ACADEMIC, EXP_PLANNING_TECHNICAL
@@ -180,7 +180,12 @@ def start_planning(
             with workflow_run(
                 exp,
                 run_name,
-                params={"theme": theme, "review_type": current_type, "rounds": rounds},
+                params={
+                    "theme": theme,
+                    "review_type": current_type,
+                    "rounds": rounds,
+                    "search_depth": TAVILY_CONFIG.depth,
+                },
             ) as active_run:
                 run_id = active_run.info.run_id
                 for _ in app.stream(state_init, config):

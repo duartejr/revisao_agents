@@ -44,6 +44,7 @@ dev = [
     "pre-commit>=3.7",
     "fastmcp>=2.0",
     "types-PyYAML>=6.0",
+    "types-requests>=2.32",
 ]
 
 [project.scripts]
