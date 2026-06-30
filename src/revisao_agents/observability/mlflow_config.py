@@ -20,7 +20,7 @@ import os
 #:     This is evaluated lazily at call time so that loading order of ``.env`` does not matter.
 def get_tracking_uri() -> str:
     """Return the MLflow tracking URI, reading the environment variable at call time."""
-    return os.getenv("MLFLOW_TRACKING_URI", "sqlite:///./mlruns/mlflow.db")
+    return os.getenv("MLFLOW_TRACKING_URI", "sqlite:///./runtime/mlruns/mlflow.db")
 
 
 # ---------------------------------------------------------------------------
