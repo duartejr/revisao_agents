@@ -1,13 +1,19 @@
 """
 evaluators.py - Evaluation logic for search snippet assessment in the academic review agent.
 
-Objective:
-This module defines the evaluation process for assessing the relevance, academic quality, and citation potential of search
-snippets extracted during the academic review process. It utilizes specialized judges for each evaluation dimension and combines their outputs into a structured format for further analysis.
-The main function, `evaluate_search_snippets`, takes a list of snippets and their corresponding URLs, along with the original query and interview metadata, and returns a list of `SnippetEvaluation` objects containing the results of the evaluations.
+This module defines the evaluation process for assessing the relevance, academic quality,
+and citation potential of search snippets extracted during the academic review workflow.
+It delegates scoring to specialized MLflow judges and aggregates their outputs into
+structured ``SnippetEvaluation`` objects.
+
+Public functions:
+    extract_domain: Parse a URL and return its network location (domain).
+    evaluate_search_snippets: Run all three judges against a batch of snippets and return
+        evaluation results as a list of ``SnippetEvaluation`` objects.
+    log_snippet_evaluations_to_mlflow: Persist evaluation results and aggregate metrics to
+        the active MLflow run for later analysis.
 """
 
-import json
 import logging
 from typing import Literal
 
@@ -41,27 +47,6 @@ def extract_domain(url: str) -> str:
     except Exception as e:
         logger.warning(f"Failed to extract domain from URL '{url}': {e}")
         return "unknown"
-
-
-def parse_judge_response(response_dict: object, judge_name: str) -> dict:
-    """Parse the response from a judge and handle any errors or unexpected formats.
-
-    Args:
-        response_dict: The raw response from the judge — typically a JSON string
-            (per the make_judge contract) but tolerated as a dict or other value.
-        judge_name: The name of the judge for logging purposes.
-
-    Returns:
-        A dictionary containing the parsed response, or an empty dictionary if
-        parsing fails or the response is not a JSON object.
-    """
-    try:
-        if isinstance(response_dict, str):
-            response_dict = json.loads(response_dict)
-        return response_dict if isinstance(response_dict, dict) else {}
-    except Exception as e:
-        logger.warning(f"Failed to parse response from judge '{judge_name}': {e}")
-        return {}
 
 
 @mlflow.trace
@@ -147,17 +132,18 @@ async def evaluate_search_snippets(
                     "user_goals": interview_metadata.get("user_goals", ""),
                 }
             )
-
-            academic_value = (
-                academic_feedback.value
-                if isinstance(academic_feedback, Feedback)
-                else academic_feedback
+            academic_quality = (
+                str(
+                    academic_feedback.value
+                    if isinstance(academic_feedback, Feedback)
+                    else academic_feedback
+                ).lower()
+                == "yes"
             )
-            academic_response = parse_judge_response(academic_value, judge_name="academic_quality")
-            academic_quality = academic_response.get("academic_quality", False)
-            academic_quality_rationale = academic_response.get(
-                "reason",
-                f"Source: {domain} | Techinical: {academic_response.get('technical_soundness', 'unknown')}",
+            academic_quality_rationale = (
+                academic_feedback.rationale
+                if isinstance(academic_feedback, Feedback) and academic_feedback.rationale
+                else f"Source: {domain}"
             )
 
             # Judge 3: Citation Potential
@@ -170,18 +156,18 @@ async def evaluate_search_snippets(
                     "user_goals": interview_metadata.get("user_goals", ""),
                 }
             )
-
-            citation_value = (
-                citation_feedback.value
-                if isinstance(citation_feedback, Feedback)
-                else citation_feedback
+            citation_potential = (
+                str(
+                    citation_feedback.value
+                    if isinstance(citation_feedback, Feedback)
+                    else citation_feedback
+                ).lower()
+                == "yes"
             )
-            citation_response = parse_judge_response(
-                citation_value, judge_name="citation_potential"
-            )
-            citation_potential = citation_response.get("citation_potential", False)
-            citation_potential_rationale = citation_response.get(
-                "reason", f"Specificity: {citation_response.get('specificity_score', '?')}/10"
+            citation_potential_rationale = (
+                citation_feedback.rationale
+                if isinstance(citation_feedback, Feedback) and citation_feedback.rationale
+                else "Citation potential assessment"
             )
 
             # Combine into SnippetEvaluation
