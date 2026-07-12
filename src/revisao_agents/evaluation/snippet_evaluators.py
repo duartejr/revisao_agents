@@ -1,10 +1,10 @@
 """
 snippet_evaluators.py - MLflow judges for evaluating search snippets in the academic review workflow.
 
-Impelements three judges:
+Implements three judges:
 1. Relevance Judge: Evaluates how relevant a search snippet is to the user's query.
 2. Academic Quality Judge: Assesses whether the snippet contains technically solid information from reputable sources.
-3. Citation Potential Judge: Determines if the snippet is suitable for use as a citation in an
+3. Citation Potential Judge: Determines if the snippet is suitable for use as a citation in an academic paper.
 """
 
 import logging
@@ -24,8 +24,8 @@ def get_relevance_judge() -> RelevanceToQuery:
 
     Note:
         - Returns "yes" or "no"
-        - Don't requires a cutomized model or instructions, as it's a built-in judge with predefined behavior.
-        - Optmized for search and retrieval evaluation, providing consistent relevance assessments based on the query and snippet content."""
+        - Does not require a customized model or instructions, as it's a built-in judge with predefined behavior.
+        - Optimized for search and retrieval evaluation, providing consistent relevance assessments based on the query and snippet content."""
     return RelevanceToQuery(name="search_relevance")
 
 
@@ -33,36 +33,28 @@ def get_academic_quality_judge() -> Judge:
     """Create a judge to evaluate the academic quality of a search snippet based on technical soundness, source credibility, and alignment with user goals.
 
     Criteria:
-        Content + Source = Solid techinical information from reputable sources.
+        Content + Source = Solid technical information from reputable sources.
 
     Returns:
         An instance of a judge to evaluate the academic quality of search snippets.
+        Returns "yes" if the snippet meets academic quality standards, "no" otherwise.
     """
     return make_judge(
         name="academic_quality",
-        instructions="""Evaluate if the snippet contains technically solid information and is from respectable sources.
+        instructions="""Evaluate if the snippet contains technically solid information from a reputable source aligned with the user's research goals.
 
-        Snippet: {{ outputs['snippet'] }}
-        URL Domain: {{ outputs['domain'] }}
-        Interview Goals: {{ outputs['user_goals'] }}
+        Outputs (contains snippet, domain, user_goals): {{ outputs }}
 
-        Criteria:
-        - Technical Soundness: Is the information accurate, well-explained, and follows the best practices?
-        - Source Credibility: Is the information from a reputable source (e.g., academic papers, official documentation, well-known experts)?
-        - Alignment with User Goals: Does the information align with the user's interview goals and help them achieve their objectives?
+        Answer "yes" only if ALL three criteria are met:
+        - Technical Soundness: the information is accurate, well-explained, and follows best practices
+        - Source Credibility: the source is reputable (academic papers, official documentation, well-known experts)
+        - Alignment with User Goals: the information helps the user achieve their research objectives
 
-        Return JSON with:
-        {
-            "academic_quality": true|false,
-            "technical_soundness": "excellent|good|poor|weak",
-            "source_credibility": "high|medium|low",
-            "alignment_with_user_goals": "high|medium|low",
-            "reason": "A rationale for the academic quality assessment, citing specific aspects of the snippet and its source."
-        }
+        Answer "no" if any criterion is not met.
 
-        Don't include markdown formatting in the response, just return the JSON object as specified.
+        Reply with only "yes" or "no".
         """,
-        model="openai:/gpt-4-mini",
+        model="openai:/gpt-4o-mini",
         description="Judge to evaluate the academic quality of search snippets based on technical soundness, source credibility, and alignment with user goals.",
     )
 
@@ -78,31 +70,21 @@ def get_citation_potential_judge() -> Judge:
     """
     return make_judge(
         name="citation_potential",
-        instructions="""Evaluate if the snippet is suitable for use as citation/evidence.
+        instructions="""Evaluate if this snippet can be used to support an academic claim in a research paper.
 
-        Snippet: {{ outputs['snippet'] }}
-        User Goals: {{ outputs['user_goals'] }}
+        Outputs (contains snippet, user_goals): {{ outputs }}
 
-        Can i use this specific snippet to support/sustain an academic claim in a research paper?
+        Answer "yes" only if ALL criteria are met:
+        - Specificity: contains concrete, quotable information
+        - Source Attribution: author or publication is identifiable
+        - Authority: the source is authoritative on this topic
+        - Context Preservation: the snippet will make sense when cited out of context
 
-        Criteria:
-        - Specificity: Does it contain concrete, quotable information?
-        - Source Attribution: Is authos/publication clear?
-        - Authority: Is the source authoritaive of this topic?
-        - Context Preservation: Will the snippet make sense when cited?
+        Answer "no" if any criterion is not met.
 
-        Return JSON with:
-        {
-            "citation_potential": true|false,
-            "specificity_score": 0-10,
-            "attribution_clarity": "clear|mediocre|absent",
-            "authority_level": "high|medium|low",
-            "reason": "A rationale for the citation potential assessment, citing specific aspects of the snippet and its source."
-        }
-
-        Don't include markdown formatting in the response, just return the JSON object as specified.
+        Reply with only "yes" or "no".
         """,
-        model="openai:/gpt-4-mini",
+        model="openai:/gpt-4o-mini",
         description="Judge to evaluate if a search snippet is suitable for use as a citation in an academic paper based on criteria such as specificity, source attribution, authority, and context preservation.",
     )
 
@@ -131,6 +113,16 @@ def get_or_create_relevance_judge() -> RelevanceToQuery:
 
 
 def get_or_create_academic_quality_judge() -> Judge:
+    """Get or create a singleton instance of the academic quality judge.
+
+    This function ensures that only one instance of the academic quality judge is created
+    and reused across evaluations, optimizing resource usage and maintaining consistency
+    in academic quality assessments.
+
+    Returns:
+        An instance of the academic quality Judge, either newly created or reused from a
+        previous instantiation.
+    """
     global _academic_quality_judge
     if _academic_quality_judge is None:
         _academic_quality_judge = get_academic_quality_judge()
@@ -139,6 +131,16 @@ def get_or_create_academic_quality_judge() -> Judge:
 
 
 def get_or_create_citation_potential_judge() -> Judge:
+    """Get or create a singleton instance of the citation potential judge.
+
+    This function ensures that only one instance of the citation potential judge is created
+    and reused across evaluations, optimizing resource usage and maintaining consistency
+    in citation potential assessments.
+
+    Returns:
+        An instance of the citation potential Judge, either newly created or reused from a
+        previous instantiation.
+    """
     global _citation_potential_judge
     if _citation_potential_judge is None:
         _citation_potential_judge = get_citation_potential_judge()
