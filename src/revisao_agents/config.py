@@ -26,6 +26,33 @@ def _env_clean(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip().strip("'").strip('"')
 
 
+def _env_float(name: str, default: float) -> float:
+    """Read env var as a float, falling back to ``default`` when unset/empty.
+
+    Mirrors the fail-loud behavior of ``TavilySearchConfig.load_from_env``
+    (e.g. ``TAVILY_NUM_RESULTS``): an explicitly-set but non-numeric value
+    raises rather than silently falling back, so misconfiguration is caught
+    at startup instead of producing a confusing runtime threshold.
+
+    Args:
+        name: name of the environment variable to read.
+        default: default value if the env var is unset or empty.
+
+    Returns:
+        The parsed float value.
+
+    Raises:
+        ValueError: If the env var is set to a non-numeric value.
+    """
+    raw = _env_clean(name)
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError as err:
+        raise ValueError(f"Invalid {name}: {raw!r} is not a number") from err
+
+
 # ── Configuration Constants ────────────────────────────────────────────────
 
 # MongoDB Atlas
@@ -47,6 +74,13 @@ MAX_IMAGES_SECTION = 6
 DELAY_BETWEEN_SECTIONS = 5
 EXTRACT_MIN_CHARS = 500
 SNIPPET_MIN_SCORE = 0.7
+
+# Tavily web search result filtering (src/revisao_agents/tools/tavily_web_search.py).
+# Kept separate from SNIPPET_MIN_SCORE (MongoDB corpus filtering) even though the
+# default values currently match — the two gate independent data sources and may
+# need to diverge as each is tuned.
+TAVILY_RESULT_MIN_SCORE = _env_float("TAVILY_RESULT_MIN_SCORE", 0.7)
+LANGUAGE_BOOST_EN = _env_float("LANGUAGE_BOOST_EN", 0.3)
 
 # Chunking and embeddings
 CHUNK_SIZE = 2400

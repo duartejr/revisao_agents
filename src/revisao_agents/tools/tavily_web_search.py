@@ -24,7 +24,7 @@ from tavily.errors import (
 )
 from tavily.errors import TimeoutError as TavilyTimeoutError
 
-from ..config import SEARCH_LOGS_DIR, TAVILY_CONFIG
+from ..config import LANGUAGE_BOOST_EN, SEARCH_LOGS_DIR, TAVILY_CONFIG, TAVILY_RESULT_MIN_SCORE
 from ..core.utils import detect_language
 from ..utils.core.commons import get_clean_key
 
@@ -207,7 +207,7 @@ def _save_search_md(
 # ============================================================================
 
 
-def _prioritize_by_language(results: list[dict], boost_en: float = 0.3) -> list[dict]:
+def _prioritize_by_language(results: list[dict], boost_en: float = LANGUAGE_BOOST_EN) -> list[dict]:
     """
     Reorders results prioritizing English.
     Adds a boost to the score of English results.
@@ -453,7 +453,7 @@ def search_tavily(queries: list[str], max_results: int = TAVILY_CONFIG.num_resul
             )
 
             for r in res_en.get("results", []):
-                if r.get("score", 0) < 0.7:
+                if r.get("score", 0) < TAVILY_RESULT_MIN_SCORE:
                     continue
 
                 item = {
@@ -465,7 +465,7 @@ def search_tavily(queries: list[str], max_results: int = TAVILY_CONFIG.num_resul
                 batch_results.append(item)
 
             # Prioritizes by language (detects and boosts English)
-            batch_results = _prioritize_by_language(batch_results, boost_en=0.3)
+            batch_results = _prioritize_by_language(batch_results, boost_en=LANGUAGE_BOOST_EN)
 
             # Adds to global results
             for item in batch_results:
@@ -570,11 +570,11 @@ def search_tavily_incremental(
                 "score": r.get("score", 0),
             }
             for r in ans.get("results", [])
-            if r.get("score", 0) >= 0.7
+            if r.get("score", 0) >= TAVILY_RESULT_MIN_SCORE
         ]
 
         # Prioritizes by language
-        batch_results = _prioritize_by_language(batch_results, boost_en=0.3)
+        batch_results = _prioritize_by_language(batch_results, boost_en=LANGUAGE_BOOST_EN)
 
         urls_found = [r["url"] for r in batch_results]
         n_urls_found = len(urls_found)
@@ -721,7 +721,7 @@ def search_tavily_technical(
 
             batch_results = []
             for r in ans.get("results", []):
-                if r.get("score", 0) < 0.7:
+                if r.get("score", 0) < TAVILY_RESULT_MIN_SCORE:
                     continue
 
                 item = {
@@ -733,7 +733,7 @@ def search_tavily_technical(
                 batch_results.append(item)
 
             # Prioritizes by language (detects and boosts English)
-            batch_results = _prioritize_by_language(batch_results, boost_en=0.3)
+            batch_results = _prioritize_by_language(batch_results, boost_en=LANGUAGE_BOOST_EN)
 
             for item in batch_results:
                 all_urls.append(item["url"])
@@ -1040,11 +1040,11 @@ def search_tavily_incremental_technician(
                 "score": r.get("score", 0),
             }
             for r in ans.get("results", [])
-            if r.get("score", 0) >= 0.7
+            if r.get("score", 0) >= TAVILY_RESULT_MIN_SCORE
         ]
 
         # Prioritize by language
-        results = _prioritize_by_language(results, boost_en=0.3)
+        results = _prioritize_by_language(results, boost_en=LANGUAGE_BOOST_EN)
 
         all_urls = [r["url"] for r in results]
         n_urls_found = len(all_urls)

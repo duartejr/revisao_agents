@@ -48,3 +48,16 @@ EXPERIMENTS: dict[str, str] = {
     EXP_REVIEW_CHAT: "Review Chat — interactive review interaction metrics",
     EXP_COST_REPORTS: "Cost Reports — Tavily credit spend aggregated by depth/workflow type",
 }
+
+# ---------------------------------------------------------------------------
+# On-demand experiment-analysis constants — created by the script that
+# writes to them (``mlflow.set_experiment`` creates if missing), not part of
+# ``EXPERIMENTS``/``initialize_experiments()`` since they aren't tied to the
+# interactive app's startup path.
+# ---------------------------------------------------------------------------
+
+EXP_AB_DEPTH_EXPERIMENTS: str = "ab_depth_experiments"  # scripts/run_ab_depth_experiment.py
+EXP_PLANNING_REFINEMENT_AB: str = (
+    "planning_refinement_ab"  # scripts/run_refinement_ab_experiment.py
+)
+EXP_EXPERIMENT_REPORTS: str = "experiment_reports"  # scripts/generate_experiment_report.py

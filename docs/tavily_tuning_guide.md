@@ -104,6 +104,32 @@ Usado para rastreamento de custos pelo sistema de logs do agente (`_save_search_
 
 ---
 
+### `TAVILY_RESULT_MIN_SCORE`
+
+Pontuação mínima de relevância (campo `score` retornado pelo Tavily) para um resultado ser mantido. Resultados abaixo do limiar são descartados antes de entrarem no plano ou na escrita. Aplicado em todos os pontos de filtragem de `search_tavily`, `search_tavily_incremental`, `search_tavily_technical` e `search_tavily_incremental_technician` (`src/revisao_agents/tools/tavily_web_search.py`).
+
+| Valor | Efeito |
+|---|---|
+| `0.7` (padrão) | Descarta resultados de relevância baixa/moderada; favorece precisão |
+| Menor (ex.: `0.5`) | Mantém mais resultados; favorece cobertura, com risco de ruído |
+| Maior (ex.: `0.85`) | Muito restritivo; pode retornar poucos ou nenhum resultado |
+
+> Este limiar é distinto de `SNIPPET_MIN_SCORE` (`src/revisao_agents/config.py`), que filtra chunks do corpus indexado no MongoDB — fontes de dados diferentes, hoje com o mesmo valor padrão por coincidência, não por acoplamento.
+
+### `LANGUAGE_BOOST_EN`
+
+Bônus somado ao `score` de resultados detectados como inglês antes da reordenação por idioma (`_prioritize_by_language`), refletindo a preferência do agente por fontes acadêmicas em inglês.
+
+| Valor | Efeito |
+|---|---|
+| `0.3` (padrão) | Prioriza moderadamente resultados em inglês sobre os demais |
+| `0.0` | Sem priorização de idioma; ordena apenas por `score` bruto |
+| `1.0` | Prioriza fortemente inglês, mesmo sobre resultados de maior score bruto |
+
+Ver [Guia de Métricas de Avaliação](EVALUATION_METRICS_GUIDE.md) para como esses limiares se relacionam com as métricas de qualidade de busca.
+
+---
+
 ## 3. Estimativa de custo e créditos
 
 ### Custo em créditos por consulta

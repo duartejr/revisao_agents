@@ -555,3 +555,36 @@ def test_search_tavily_technical_span_includes_search_latency():
     latency_calls = [call for call in mock_log_metric.call_args_list if call.args[0] == "latency"]
     assert len(latency_calls) == 1
     assert latency_calls[0].args[1] >= sleep_seconds
+
+
+# ── W9-STORY-05: config-driven thresholds ──────────────────────────────────
+
+
+def test_prioritize_by_language_default_boost_matches_config():
+    """The function's default ``boost_en`` must come from config, not a local
+    hardcoded literal, so a single env var controls every call site."""
+    from revisao_agents.config import LANGUAGE_BOOST_EN
+    from revisao_agents.tools import tavily_web_search as tws
+
+    results = [{"title": "English text about machine learning", "content": "", "score": 0.5}]
+    boosted = tws._prioritize_by_language(results)
+
+    assert boosted[0]["score"] == pytest.approx(min(1.0, 0.5 + LANGUAGE_BOOST_EN))
+
+
+def test_prioritize_by_language_custom_boost_overrides_default():
+    from revisao_agents.tools import tavily_web_search as tws
+
+    results = [{"title": "English text about machine learning", "content": "", "score": 0.5}]
+    boosted = tws._prioritize_by_language(results, boost_en=0.1)
+
+    assert boosted[0]["score"] == pytest.approx(0.6)
+
+
+def test_tavily_result_min_score_reads_from_config():
+    """Sites filtering Tavily results by score must reference the shared
+    config constant rather than a hardcoded ``0.7`` literal."""
+    from revisao_agents.config import TAVILY_RESULT_MIN_SCORE
+    from revisao_agents.tools import tavily_web_search as tws
+
+    assert tws.TAVILY_RESULT_MIN_SCORE == TAVILY_RESULT_MIN_SCORE

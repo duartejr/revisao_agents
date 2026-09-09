@@ -1,10 +1,11 @@
 """
 snippet_evaluators.py - MLflow judges for evaluating search snippets in the academic review workflow.
 
-Implements three judges:
+Implements four judges:
 1. Relevance Judge: Evaluates how relevant a search snippet is to the user's query.
 2. Academic Quality Judge: Assesses whether the snippet contains technically solid information from reputable sources.
 3. Citation Potential Judge: Determines if the snippet is suitable for use as a citation in an academic paper.
+4. Plan Quality Judge: Rates the coherence and completeness of a generated review plan (W9-STORY-03).
 """
 
 import logging
@@ -89,10 +90,42 @@ def get_citation_potential_judge() -> Judge:
     )
 
 
+def get_plan_quality_judge() -> Judge:
+    """Create a judge to rate the coherence and completeness of a review plan.
+
+    Used by the W9-STORY-03 planning-efficiency A/B experiment to compare
+    plans generated with the language/ambiguity refinement layer active vs
+    bypassed.
+
+    Returns:
+        An instance of a judge that rates plan quality on a 1-10 scale.
+    """
+    return make_judge(
+        name="plan_quality",
+        instructions="""Rate the coherence and completeness of this review plan on a scale from 1 (incoherent or incomplete) to 10 (excellent, well-structured, comprehensive).
+
+        Theme: {{ inputs }}
+        Plan: {{ outputs }}
+
+        Consider:
+        - Structural coherence: sections build logically toward the stated theme
+        - Completeness: covers the breadth expected for the theme
+        - Specificity: engages with the actual topic rather than generic filler
+        """,
+        model="openai:/gpt-4o-mini",
+        # Enforces an integer `feedback.value` via structured outputs, instead of
+        # asking the model to reply with "only a number" and regex-parsing free
+        # text — see mlflow.genai.judges.make_judge's `feedback_value_type` docs.
+        feedback_value_type=int,
+        description="Judge to rate the coherence and completeness of a generated review plan on a 1-10 scale.",
+    )
+
+
 # Singleton instances of judges to be reused across evaluations
 _relevance_judge: RelevanceToQuery | None = None
 _academic_quality_judge: Judge | None = None
 _citation_potential_judge: Judge | None = None
+_plan_quality_judge: Judge | None = None
 
 
 def get_or_create_relevance_judge() -> RelevanceToQuery:
@@ -146,3 +179,17 @@ def get_or_create_citation_potential_judge() -> Judge:
         _citation_potential_judge = get_citation_potential_judge()
         logger.debug("Created new citation potential judge instance.")
     return _citation_potential_judge
+
+
+def get_or_create_plan_quality_judge() -> Judge:
+    """Get or create a singleton instance of the plan quality judge.
+
+    Returns:
+        An instance of the plan quality Judge, either newly created or reused
+        from a previous instantiation.
+    """
+    global _plan_quality_judge
+    if _plan_quality_judge is None:
+        _plan_quality_judge = get_plan_quality_judge()
+        logger.debug("Created new plan quality judge instance.")
+    return _plan_quality_judge

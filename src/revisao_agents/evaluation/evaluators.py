@@ -1,15 +1,19 @@
 """
-evaluators.py - Evaluation logic for search snippet assessment in the academic review agent.
+evaluators.py - Evaluation logic for search snippet and plan quality assessment in the
+academic review agent.
 
 This module defines the evaluation process for assessing the relevance, academic quality,
-and citation potential of search snippets extracted during the academic review workflow.
-It delegates scoring to specialized MLflow judges and aggregates their outputs into
-structured ``SnippetEvaluation`` objects.
+and citation potential of search snippets extracted during the academic review workflow, as
+well as the overall coherence/completeness of a generated review plan. It delegates scoring
+to specialized MLflow judges and aggregates their outputs into structured ``SnippetEvaluation``
+objects (or a plain float score for plans).
 
 Public functions:
     extract_domain: Parse a URL and return its network location (domain).
-    evaluate_search_snippets: Run all three judges against a batch of snippets and return
-        evaluation results as a list of ``SnippetEvaluation`` objects.
+    evaluate_search_snippets: Run all three snippet judges against a batch of snippets and
+        return evaluation results as a list of ``SnippetEvaluation`` objects.
+    evaluate_plan_quality: Score a generated review plan's coherence and completeness via
+        LLM-as-judge.
     log_snippet_evaluations_to_mlflow: Persist evaluation results and aggregate metrics to
         the active MLflow run for later analysis.
 """
@@ -23,6 +27,7 @@ from mlflow.entities.assessment import Feedback
 from .snippet_evaluators import (
     get_or_create_academic_quality_judge,
     get_or_create_citation_potential_judge,
+    get_or_create_plan_quality_judge,
     get_or_create_relevance_judge,
 )
 from .types import SnippetEvaluation
@@ -201,6 +206,56 @@ async def evaluate_search_snippets(
     logger.info(f"Completed evaluation of {len(evaluations)} snippets for query: '{query}'")
 
     return evaluations
+
+
+async def evaluate_plan_quality(theme: str, plan: str) -> float:
+    """Score a generated review plan's coherence and completeness via LLM-as-judge.
+
+    Used by the W9-STORY-03 planning-efficiency A/B experiment to compare
+    plans produced with the language/ambiguity refinement layer active vs
+    bypassed.
+
+    Args:
+        theme: The review theme the plan was generated for.
+        plan: The plan text to score. Truncated to the first 4000 characters
+            before being sent to the judge.
+
+    Returns:
+        A score from 1.0 to 10.0, or 0.0 if the plan is empty, the judge
+        returned a value that could not be coerced to ``int``, or the
+        coerced value fell outside the [1, 10] range.
+
+    Raises:
+        Exception: Whatever the underlying judge call raises (e.g. LLM API
+            errors) — not caught here, since a failed evaluation and a
+            successful "0 quality" evaluation are different outcomes callers
+            may want to handle differently. Callers running this unattended
+            (e.g. a batch experiment script) should catch around this call.
+    """
+    if not plan.strip():
+        logger.warning("evaluate_plan_quality: empty plan for theme '%s'", theme)
+        return 0.0
+
+    judge = get_or_create_plan_quality_judge()
+    result = judge(inputs={"theme": theme}, outputs={"plan": plan[:4000]})
+
+    # `feedback_value_type=int` on the judge (see get_plan_quality_judge) makes
+    # MLflow enforce an integer value via structured outputs, so no free-text
+    # parsing is needed here — only range validation. The judge call can
+    # return either a bare int or a Feedback wrapping one, depending on the
+    # backend (same dual shape the other judges in this module handle).
+    raw_value = result.value if isinstance(result, Feedback) else result
+    try:
+        score = int(raw_value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        logger.warning("evaluate_plan_quality: judge returned a non-integer value '%r'", raw_value)
+        return 0.0
+
+    if not (1 <= score <= 10):
+        logger.warning("evaluate_plan_quality: judge score %d out of range [1, 10]", score)
+        return 0.0
+
+    return float(score)
 
 
 def log_snippet_evaluations_to_mlflow(

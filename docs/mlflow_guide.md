@@ -16,6 +16,11 @@ O MLflow é configurado no pacote `src/revisao_agents/observability/` e rastreia
 | `writing_technical`     | Escrita de revisão técnica                |
 | `review_chat`           | Interações de revisão interativa (chat)   |
 | `cost_reports`          | Relatórios agregados de custo Tavily (`scripts/generate_cost_report.py`, ver seção [Relatório de custos](#relatório-de-custos-w8-story-04)) |
+| `ab_depth_experiments`  | A/B de profundidade Tavily (`scripts/run_ab_depth_experiment.py`, W9-STORY-02) |
+| `planning_refinement_ab`| A/B da camada de refinamento de linguagem/ambiguidade (`scripts/run_refinement_ab_experiment.py`, W9-STORY-03) |
+| `experiment_reports`    | Relatórios de decisão agregando os dois A/B acima (`scripts/generate_experiment_report.py`, W9-STORY-04) |
+
+Os três últimos são criados sob demanda pelo próprio script que grava neles (`mlflow.set_experiment` cria se não existir) — não fazem parte da inicialização automática da aplicação (ver [Inicialização automática de experimentos](#inicialização-automática-de-experimentos)). Ver o [Guia de Métricas de Avaliação](EVALUATION_METRICS_GUIDE.md) para o significado de cada métrica logada por esses experimentos.
 
 Métricas registradas em cada busca Tavily individual (run filho, aninhado via `_tavily_search_span`):
 
@@ -211,4 +216,4 @@ uv run python scripts/generate_cost_report.py
 
 ## Próximos passos (Semana 9+)
 
-- Módulo de avaliação em `src/revisao_agents/evaluation/`
+- Módulo de avaliação em `src/revisao_agents/evaluation/` — ver o [Guia de Métricas de Avaliação](EVALUATION_METRICS_GUIDE.md) para o significado de cada métrica automática e de LLM-as-judge, e como executar avaliações localmente.
