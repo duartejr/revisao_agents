@@ -9,8 +9,11 @@ Nodes for interview, pausing, and routing decisions:
 Prompts are loaded from YAML files in prompts/common/.
 """
 
+import os
+
 import mlflow
 
+from ..core.utils import detect_language
 from ..state import ReviewState
 from ..utils.file_utils.helpers import (
     fmt_chunks,
@@ -25,6 +28,25 @@ from ..utils.llm_utils.prompt_loader import get_prompt_field, load_prompt
 TERMINATION_PT = {"fim", "terminar", "sair", "encerrar", "pronto", "acabar"}
 TERMINATION_EN = {"end", "finish", "exit", "done", "stop", "quit"}
 TERMINATION = TERMINATION_PT | TERMINATION_EN
+
+# Env var name for the W9-STORY-03 refinement A/B bypass. Defaults to disabled
+# so production behavior is unchanged unless a caller opts in explicitly (see
+# scripts/run_refinement_ab_experiment.py, the only intended caller).
+BYPASS_REFINEMENT_ENV_VAR = "BYPASS_REFINEMENT_LAYER"
+
+
+def _refinement_bypassed() -> bool:
+    """Return True when the language/ambiguity refinement layer should be skipped.
+
+    Controlled by the ``BYPASS_REFINEMENT_LAYER`` environment variable, read at
+    call time (not import time) so tests and experiment scripts can toggle it
+    per-run. Absent or any value other than ``"true"`` (case-insensitive) keeps
+    production behavior unchanged.
+
+    Returns:
+        True if the refinement layer should be bypassed, False otherwise.
+    """
+    return os.getenv(BYPASS_REFINEMENT_ENV_VAR, "false").strip().lower() == "true"
 
 
 def build_search_query(state: ReviewState) -> str:
@@ -203,8 +225,31 @@ def identify_and_refine_node(state: ReviewState) -> dict:
               ``("assistant", <message>)`` tuple to display to the user.
               **Appended** to the existing history via the
               ``operator.add`` reducer defined on the field.
+
+    Note:
+        When the ``BYPASS_REFINEMENT_LAYER`` environment variable is set to
+        ``"true"``, this node skips the LLM vagueness/language check entirely
+        and returns a pre-refined response built from a cheap heuristic
+        (:func:`revisao_agents.core.utils.detect_language`), with no
+        ``interview_history`` entry (no HITL pause). This exists solely to
+        support the W9-STORY-03 planning-efficiency A/B experiment
+        (``scripts/run_refinement_ab_experiment.py``); the flag defaults to
+        off and must never be set in production.
     """
     import re
+
+    if _refinement_bypassed():
+        theme = state.get("theme", "")
+        return {
+            "theme": theme,
+            "detected_language": detect_language(theme, tie_break="en").upper(),
+            "is_theme_vague": False,
+            "is_theme_refined": True,
+            "refinement_feedback": [
+                "BYPASSED: refinement layer disabled via BYPASS_REFINEMENT_LAYER"
+            ],
+            "interview_history": [],
+        }
 
     original_theme = state.get("theme", "")
 

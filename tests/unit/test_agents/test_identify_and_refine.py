@@ -149,3 +149,59 @@ class TestIdentifyAndRefineNode:
         assert len(result["interview_history"]) == 1
         role, _msg = result["interview_history"][0]
         assert role == "assistant"
+
+
+class TestRefinementBypass:
+    """Unit tests for the W9-STORY-03 ``BYPASS_REFINEMENT_LAYER`` bypass flag.
+
+    Confirms the flag defaults to off (production path unaffected) and that
+    enabling it skips the LLM call entirely rather than merely changing its
+    outcome.
+    """
+
+    def test_bypass_disabled_by_default_calls_llm(self, monkeypatch):
+        from revisao_agents.nodes.common import identify_and_refine_node
+
+        monkeypatch.delenv("BYPASS_REFINEMENT_LAYER", raising=False)
+        llm_content = "DETECTED LANGUAGE: EN\nIS THE THEME VAGUE? NO\n"
+        fake_llm = MagicMock()
+        fake_llm.invoke.return_value = _make_llm_response(llm_content)
+
+        with patch("revisao_agents.nodes.common.get_llm", return_value=fake_llm):
+            identify_and_refine_node(_make_state(theme="Reinforcement learning"))
+
+        fake_llm.invoke.assert_called_once()
+
+    def test_bypass_enabled_skips_llm_and_refines_immediately(self, monkeypatch):
+        from revisao_agents.nodes.common import identify_and_refine_node
+
+        monkeypatch.setenv("BYPASS_REFINEMENT_LAYER", "true")
+        fake_llm = MagicMock()
+
+        with patch("revisao_agents.nodes.common.get_llm", return_value=fake_llm):
+            result = identify_and_refine_node(_make_state(theme="machine learning"))
+
+        fake_llm.invoke.assert_not_called()
+        assert result["is_theme_refined"] is True
+        assert result["is_theme_vague"] is False
+        assert result["detected_language"] == "EN"
+        assert result["interview_history"] == []
+        assert result["theme"] == "machine learning"
+
+    def test_bypass_is_case_insensitive_and_rejects_truthy_junk(self, monkeypatch):
+        from revisao_agents.nodes.common import identify_and_refine_node
+
+        monkeypatch.setenv("BYPASS_REFINEMENT_LAYER", "TRUE")
+        fake_llm = MagicMock()
+        with patch("revisao_agents.nodes.common.get_llm", return_value=fake_llm):
+            identify_and_refine_node(_make_state(theme="AI"))
+        fake_llm.invoke.assert_not_called()
+
+        monkeypatch.setenv("BYPASS_REFINEMENT_LAYER", "1")
+        fake_llm2 = MagicMock()
+        fake_llm2.invoke.return_value = _make_llm_response(
+            "DETECTED LANGUAGE: EN\nIS THE THEME VAGUE? NO\n"
+        )
+        with patch("revisao_agents.nodes.common.get_llm", return_value=fake_llm2):
+            identify_and_refine_node(_make_state(theme="AI"))
+        fake_llm2.invoke.assert_called_once()

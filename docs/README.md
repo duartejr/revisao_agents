@@ -54,6 +54,7 @@ Documentação detalhada de cada aba da interface Gradio:
 | [session_management.md](session_management.md) | Ciclo de vida de sessões, backends de checkpoint e retomada de sessões |
 | [troubleshooting.md](troubleshooting.md) | Erros comuns e FAQ |
 | [mlflow_guide.md](mlflow_guide.md) | Rastreamento de experimentos com MLflow — setup, experimentos canônicos, runs de baseline |
+| [EVALUATION_METRICS_GUIDE.md](EVALUATION_METRICS_GUIDE.md) | Métricas automáticas e de LLM-as-judge — significado, limiares de filtragem relacionados, como executar avaliações localmente |
 
 ---
 
@@ -97,3 +98,5 @@ uv run revisao-agents --help
 | `TAVILY_SEARCH_DEPTH` | opcional | Profundidade da busca Tavily: `ultra-fast`, `fast`, `basic` (padrão), `advanced` |
 | `TAVILY_NUM_RESULTS` | opcional | Número de resultados por consulta Tavily (1–10, padrão: `5`) |
 | `TAVILY_INCLUDE_USAGE` | opcional | Inclui metadados de créditos usados na resposta Tavily (`true`/`false`, padrão: `true`) |
+| `TAVILY_RESULT_MIN_SCORE` | opcional | Score mínimo de relevância Tavily para manter um resultado (0.0–1.0, padrão: `0.7`) — ver [tavily_tuning_guide.md](tavily_tuning_guide.md) |
+| `LANGUAGE_BOOST_EN` | opcional | Bônus de score para resultados em inglês antes da reordenação por idioma (0.0–1.0, padrão: `0.3`) — ver [tavily_tuning_guide.md](tavily_tuning_guide.md) |
