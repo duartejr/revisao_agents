@@ -159,11 +159,17 @@ Além do autolog, os nós críticos do grafo são instrumentados com `@mlflow.tr
 | Nó | `span_type` |
 |---|---|
 | `interview_node`, `identify_and_refine_node` | `AGENT` |
-| `initial_academic_plan_node`, `refine_academic_plan_node`, `finalize_academic_plan_node` | `AGENT` |
+| `initial_academic_plan_node`, `refine_academic_search_node`, `refine_academic_plan_node`, `finalize_academic_plan_node` | `AGENT` |
 | `initial_technical_plan_node`, `refine_technical_plan_node`, `finalize_technical_plan_node` | `AGENT` |
+| `initial_technical_search_node`, `refine_technical_search_node` | `RETRIEVER` |
 | `write_sections_node` | `AGENT` |
+| `parse_plan_node`, `consolidate_node` | `AGENT` |
+| `run_review_agent`, `run_image_suggestion_agent`, `run_reference_formatter_agent`, `run_reference_extractor_agent` | `AGENT` |
 | `_thought_phase`, `_observation_phase`, `_draft_phase` | `CHAIN` |
 | `search_tavily_incremental` | `TOOL` |
+| `evaluate_search_snippets` | (bare `@mlflow.trace`, no explicit `span_type`) |
+
+Desde a Week 10 (W10-STORY-06), a cobertura inclui todos os nós em `src/revisao_agents/nodes/` (incluindo o pipeline de escrita) e todos os agentes em `src/revisao_agents/agents/`.
 
 ### Visualizando traces
 
@@ -182,7 +188,7 @@ def meu_novo_no(state: ReviewState) -> dict:
     ...
 ```
 
-`span_type` deve ser um dos valores: `"AGENT"`, `"CHAIN"`, `"TOOL"`, `"UNKNOWN"`.
+`span_type` deve ser um dos valores: `"AGENT"`, `"CHAIN"`, `"TOOL"`, `"RETRIEVER"`, `"UNKNOWN"`.
 
 ---
 

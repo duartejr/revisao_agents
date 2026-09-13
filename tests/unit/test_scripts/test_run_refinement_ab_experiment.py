@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from typer.testing import CliRunner
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[3] / "scripts" / "run_refinement_ab_experiment.py"
 
@@ -246,3 +247,132 @@ async def test_main_async_logs_params_and_metrics_per_run(refinement_script):
     logged_params: dict = mock_mlflow.log_params.call_args.args[0]
     assert "language_detected" in logged_params
     assert "clarification_used" in logged_params
+
+
+def test_test_cases_has_at_least_eight_pt_en_mixed_themes(refinement_script):
+    """Week 10 scale-up target: >=8 themes, keeping a PT/EN mix (not all one language)."""
+    cases = refinement_script.TEST_CASES
+    assert len(cases) >= 8
+
+    ascii_only = [c["vague_theme"].isascii() for c in cases]
+    assert any(ascii_only), "expected at least one English (ASCII) theme"
+    assert not all(ascii_only), "expected at least one Portuguese theme with accented characters"
+
+
+async def test_main_async_rejects_unrecognized_workflow_type(refinement_script):
+    """A genuinely unrecognized workflow_type must fail loudly, before any
+    graph/network work starts, rather than silently reaching
+    build_review_graph's lenient normalization — see the docstring's Raises
+    section for why an unvalidated mismatch would corrupt experiment data."""
+    with pytest.raises(ValueError, match="workflow_type must be"):
+        await refinement_script.main_async(workflow_type="not_a_real_workflow")
+
+
+async def test_main_async_normalizes_workflow_type_case(refinement_script):
+    """workflow_type is matched case-insensitively (stripped/lowercased)
+    before being used, so 'ACADEMIC' behaves the same as 'academic'."""
+    single_case = [{"vague_theme": "AI", "clarification": "A specific clarified theme."}]
+    fake_result = {
+        "theme": "AI",
+        "final_theme": "AI",
+        "arm": "refined",
+        "workflow_type": "academic",
+        "clarification_used": True,
+        "language_detected": "EN",
+        "session_duration": 1.23,
+        "refinement_rounds": 2,
+        "plan_section_count": 3,
+        "plan_quality_score": 7.0,
+        "final_plan_generated": True,
+    }
+
+    mock_mlflow = MagicMock()
+    mock_mlflow.start_run.return_value.__enter__.return_value = MagicMock()
+    mock_mlflow.start_run.return_value.__exit__.return_value = False
+    fake_run_single_arm = AsyncMock(return_value=fake_result)
+
+    with (
+        patch.object(refinement_script, "TEST_CASES", single_case),
+        patch.object(refinement_script, "mlflow", mock_mlflow),
+        patch.object(refinement_script, "get_tracking_uri", return_value="file:///tmp/mlruns-test"),
+        patch.object(refinement_script, "run_single_arm", fake_run_single_arm),
+    ):
+        await refinement_script.main_async(workflow_type="  ACADEMIC  ")
+
+    mock_mlflow.log_param.assert_any_call("workflow_type", "academic")
+
+
+async def test_main_async_logs_workflow_type_param(refinement_script):
+    """main_async() must log workflow_type alongside theme/arm, and pass it through
+    to run_single_arm, so technical vs. academic runs are distinguishable in
+    ``planning_refinement_ab`` once the academic cross-check becomes runnable."""
+    single_case = [{"vague_theme": "AI", "clarification": "A specific clarified theme."}]
+    fake_result = {
+        "theme": "AI",
+        "final_theme": "AI",
+        "arm": "refined",
+        "workflow_type": "academic",
+        "clarification_used": True,
+        "language_detected": "EN",
+        "session_duration": 1.23,
+        "refinement_rounds": 2,
+        "plan_section_count": 3,
+        "plan_quality_score": 7.0,
+        "final_plan_generated": True,
+    }
+
+    mock_mlflow = MagicMock()
+    mock_mlflow.start_run.return_value.__enter__.return_value = MagicMock()
+    mock_mlflow.start_run.return_value.__exit__.return_value = False
+    fake_run_single_arm = AsyncMock(return_value=fake_result)
+
+    with (
+        patch.object(refinement_script, "TEST_CASES", single_case),
+        patch.object(refinement_script, "mlflow", mock_mlflow),
+        patch.object(refinement_script, "get_tracking_uri", return_value="file:///tmp/mlruns-test"),
+        patch.object(refinement_script, "run_single_arm", fake_run_single_arm),
+    ):
+        await refinement_script.main_async(workflow_type="academic")
+
+    mock_mlflow.log_param.assert_any_call("workflow_type", "academic")
+    for call in fake_run_single_arm.call_args_list:
+        assert call.kwargs["workflow_type"] == "academic"
+
+
+# ── CLI wiring (Typer) ───────────────────────────────────────────────────────
+
+
+def test_cli_workflow_type_flag_is_wired_to_main_async(refinement_script):
+    """The --workflow-type/-w flag must reach main_async with the parsed value."""
+    runner = CliRunner()
+    fake_main_async = AsyncMock()
+
+    with patch.object(refinement_script, "main_async", fake_main_async):
+        result = runner.invoke(refinement_script.app, ["--workflow-type", "academic"])
+
+    assert result.exit_code == 0
+    fake_main_async.assert_called_once_with(workflow_type="academic")
+
+
+def test_cli_workflow_type_short_flag(refinement_script):
+    """The -w short alias must behave identically to --workflow-type."""
+    runner = CliRunner()
+    fake_main_async = AsyncMock()
+
+    with patch.object(refinement_script, "main_async", fake_main_async):
+        result = runner.invoke(refinement_script.app, ["-w", "technical"])
+
+    assert result.exit_code == 0
+    fake_main_async.assert_called_once_with(workflow_type="technical")
+
+
+def test_cli_default_workflow_type_is_technical(refinement_script):
+    """With no flag, main_async must be called with the documented default."""
+    runner = CliRunner()
+    fake_main_async = AsyncMock()
+
+    with patch.object(refinement_script, "main_async", fake_main_async):
+        result = runner.invoke(refinement_script.app, [])
+
+    assert result.exit_code == 0
+    fake_main_async.assert_called_once_with(workflow_type="technical")

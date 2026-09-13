@@ -44,12 +44,12 @@ def _depth_runs_df(rows: list[dict]) -> pd.DataFrame:
     return pd.DataFrame([{**base, **row} for row in rows])
 
 
-# ── _fetch_runs ──────────────────────────────────────────────────────────────
+# ── fetch_runs ──────────────────────────────────────────────────────────────
 
 
 def test_fetch_runs_empty_search_runs_returns_empty_df(ger):
     with patch.object(ger.mlflow, "search_runs", return_value=pd.DataFrame()):
-        result = ger._fetch_runs(ger.EXP_AB_DEPTH_EXPERIMENTS, ger.DEPTH_METRICS, "depth")
+        result = ger.fetch_runs(ger.EXP_AB_DEPTH_EXPERIMENTS, ger.DEPTH_METRICS, "depth")
     assert result.empty
 
 
@@ -58,7 +58,7 @@ def test_fetch_runs_missing_required_columns_returns_empty_df(ger):
     not raise KeyError."""
     runs = pd.DataFrame([{"run_id": "r1", "status": "FINISHED"}])
     with patch.object(ger.mlflow, "search_runs", return_value=runs):
-        result = ger._fetch_runs(ger.EXP_AB_DEPTH_EXPERIMENTS, ger.DEPTH_METRICS, "depth")
+        result = ger.fetch_runs(ger.EXP_AB_DEPTH_EXPERIMENTS, ger.DEPTH_METRICS, "depth")
     assert result.empty
 
 
@@ -96,7 +96,7 @@ def test_fetch_runs_filters_unfinished_and_incomplete(ger):
         ]
     )
     with patch.object(ger.mlflow, "search_runs", return_value=runs):
-        result = ger._fetch_runs(ger.EXP_AB_DEPTH_EXPERIMENTS, ger.DEPTH_METRICS, "depth")
+        result = ger.fetch_runs(ger.EXP_AB_DEPTH_EXPERIMENTS, ger.DEPTH_METRICS, "depth")
 
     assert len(result) == 1
     assert result.iloc[0]["depth"] == "fast"

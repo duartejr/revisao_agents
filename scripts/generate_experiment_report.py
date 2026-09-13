@@ -104,7 +104,7 @@ REFINEMENT_METRICS = [
 ]
 
 
-def _fetch_runs(experiment_name: str, metric_names: list[str], group_param: str) -> pd.DataFrame:
+def fetch_runs(experiment_name: str, metric_names: list[str], group_param: str) -> pd.DataFrame:
     """Fetch finished runs for one experiment, normalized to plain metric/group columns.
 
     Args:
@@ -143,7 +143,7 @@ def summarize(runs: pd.DataFrame, group_col: str, metric_names: list[str]) -> pd
     """Aggregate run-level metrics into per-variant count/mean/min/max.
 
     Args:
-        runs: Output of :func:`_fetch_runs`.
+        runs: Output of :func:`fetch_runs`.
         group_col: Column to group by (e.g. ``"depth"`` or ``"arm"``).
         metric_names: Metric columns to aggregate.
 
@@ -355,11 +355,11 @@ def main() -> None:
     mlflow.set_tracking_uri(uri)
     print(f"MLflow tracking URI: {uri}\n")
 
-    depth_runs = _fetch_runs(EXP_AB_DEPTH_EXPERIMENTS, DEPTH_METRICS, "depth")
+    depth_runs = fetch_runs(EXP_AB_DEPTH_EXPERIMENTS, DEPTH_METRICS, "depth")
     depth_summary = summarize(depth_runs, "depth", DEPTH_METRICS)
     depth_recommendation = recommend_depth(depth_summary, ("fast", "basic", "advanced"))
 
-    refinement_runs = _fetch_runs(EXP_PLANNING_REFINEMENT_AB, REFINEMENT_METRICS, "arm")
+    refinement_runs = fetch_runs(EXP_PLANNING_REFINEMENT_AB, REFINEMENT_METRICS, "arm")
     refinement_summary = summarize(refinement_runs, "arm", REFINEMENT_METRICS)
     refinement_recommendation = recommend_refinement(refinement_summary, ("refined", "bypassed"))
 

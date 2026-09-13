@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 
+import mlflow
 from langchain_core.messages import AIMessage, HumanMessage
 
 from ..tools.reference_tools import get_reference_tools
@@ -24,6 +25,7 @@ from ..utils.llm_utils.prompt_loader import load_prompt
 logger = logging.getLogger(__name__)
 
 
+@mlflow.trace(name="reference_formatter_agent", span_type="AGENT")
 def run_reference_formatter_agent(
     references_input: str,
     allow_web: bool = True,

@@ -8,6 +8,8 @@ import os
 import re
 from datetime import datetime
 
+import mlflow
+
 from ...config import REVIEWS_DIR, llm_call
 from ...core.schemas.writer_config import WriterConfig
 from ...state import TechnicalWriterState
@@ -17,6 +19,7 @@ from .text_filters import _strip_figure_table_refs
 logger = logging.getLogger(__name__)
 
 
+@mlflow.trace(name="consolidate", span_type="AGENT")
 def consolidate_node(state: TechnicalWriterState) -> dict:
     """Consolidates written sections into a final document.
 

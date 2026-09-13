@@ -94,10 +94,24 @@ Não há um comando `make` dedicado — as avaliações rodam como parte de scri
 
 ```bash
 # A/B de profundidade de busca Tavily (fast/basic/advanced) — usa evaluate_search_snippets
-uv run python scripts/run_ab_depth_experiment.py
+# --runs-per-depth (Week 10): repete a execução N vezes por profundidade (padrão: 1)
+# --depths (Week 10): restringe quais variantes rodam (padrão: todas), útil para
+# retomar uma execução parcial/interrompida sem reconsumir créditos nas que já terminaram
+uv run python scripts/run_ab_depth_experiment.py --runs-per-depth 10 --depths basic,advanced
 
 # A/B da camada de refinamento de linguagem/ambiguidade — usa evaluate_plan_quality
-uv run python scripts/run_refinement_ab_experiment.py
+# --workflow-type (Week 10): "technical" (padrão, funciona hoje) ou "academic"
+# (requer MongoDB Atlas acessível — ver roadmap.md §6)
+uv run python scripts/run_refinement_ab_experiment.py --workflow-type technical
+
+# Significância estatística (Week 10) — Welch's t-test + IC 95% por métrica/par
+# de variantes, sobre os dados já logados pelos dois scripts acima
+uv run python scripts/analyze_experiment_significance.py
+
+# Amostragem para o dataset de rotulagem manual de relevância (Week 10) — ver
+# data/eval/README.md para o passo humano necessário em seguida
+uv run python scripts/sample_relevance_labels.py
+uv run python scripts/compute_relevance_agreement.py
 ```
 
 Para avaliar snippets ou um plano isoladamente, sem rodar um experimento completo:
@@ -118,7 +132,7 @@ score = asyncio.run(evaluate_plan_quality(theme="...", plan="## Introdução\n..
 
 Ambos exigem `OPENAI_API_KEY` configurado — os judges usam `openai:/gpt-4o-mini` independentemente de `LLM_PROVIDER` (mesma exigência da geração de embeddings, ver CLAUDE.md "Key Gotchas").
 
-Testes unitários (sem custo de API, tudo mockado): `uv run --extra dev pytest tests/unit/test_scripts/ tests/unit/test_agents/test_identify_and_refine.py`.
+Testes unitários (sem custo de API, tudo mockado): `uv run --extra dev pytest tests/unit/test_scripts/ tests/unit/test_agents/`.
 
 ---
 
@@ -127,8 +141,8 @@ Testes unitários (sem custo de API, tudo mockado): `uv run --extra dev pytest t
 1. `make mlflow-start` e acesse `http://127.0.0.1:5000`
 2. Selecione o experimento relevante:
    - `ab_depth_experiments` — resultados de `run_ab_depth_experiment.py`
-   - `planning_refinement_ab` — resultados de `run_refinement_ab_experiment.py`
-   - `experiment_reports` — relatórios agregados (`scripts/generate_experiment_report.py`)
+   - `planning_refinement_ab` — resultados de `run_refinement_ab_experiment.py` (params incluem `workflow_type` desde a Week 10)
+   - `experiment_reports` — relatórios agregados (`scripts/generate_experiment_report.py` e, desde a Week 10, `scripts/analyze_experiment_significance.py`)
 3. Métricas numéricas (as tabelas acima) aparecem na coluna de métricas de cada run; artefatos JSON por variante ficam na aba **Artifacts**
 4. Valores categóricos (ex.: `language_detected`) aparecem como **params**, não métricas — o MLflow só aceita valores numéricos em `log_metric` (ver [Tracking API](https://mlflow.org/docs/latest/tracking/))
 
