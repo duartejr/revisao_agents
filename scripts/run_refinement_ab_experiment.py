@@ -80,6 +80,7 @@ import time
 from pathlib import Path
 
 import mlflow
+import typer
 
 # Ensure repo root is on sys.path when running directly with `uv run python`
 _ROOT = Path(__file__).resolve().parent.parent
@@ -116,21 +117,60 @@ TEST_CASES: list[dict] = [
             "Modelos de aprendizado de máquina para previsão de secas no semiárido brasileiro."
         ),
     },
+    {
+        "vague_theme": "segurança cibernética",
+        "clarification": (
+            "Técnicas de detecção de intrusão baseadas em aprendizado de máquina para "
+            "redes IoT industriais."
+        ),
+    },
+    {
+        "vague_theme": "renewable energy storage",
+        "clarification": (
+            "Lithium-ion battery degradation models for grid-scale solar energy storage systems."
+        ),
+    },
+    {
+        "vague_theme": "processamento de linguagem natural",
+        "clarification": (
+            "Modelos de linguagem de grande porte aplicados à sumarização automática "
+            "de laudos médicos em português."
+        ),
+    },
+    {
+        "vague_theme": "autonomous vehicles",
+        "clarification": (
+            "Sensor fusion approaches combining LiDAR and camera data for pedestrian "
+            "detection in urban autonomous driving."
+        ),
+    },
+    {
+        "vague_theme": "biotecnologia agrícola",
+        "clarification": (
+            "Edição genética CRISPR aplicada ao desenvolvimento de variedades de soja "
+            "resistentes à seca no Cerrado brasileiro."
+        ),
+    },
 ]
 
 
-def _build_initial_state(theme: str) -> dict:
-    """Build the minimal ReviewState dict expected by the academic workflow entry point.
+def _build_initial_state(theme: str, workflow_type: str = "technical") -> dict:
+    """Build the minimal ReviewState dict expected by the planning workflow entry point.
 
     Args:
         theme: The review theme to plan for.
+        workflow_type: ``"technical"`` (Tavily-backed) or ``"academic"``
+            (MongoDB-backed). Both graphs share the same generic state fields;
+            the technical-only fields are harmless no-ops for the academic
+            graph since LangGraph state updates aren't strictly validated
+            against unused keys.
 
     Returns:
         A state dict matching the fields ``revisao_agents.cli.run_planning`` initializes.
     """
     return {
         "theme": theme,
-        "review_type": "technical",
+        "review_type": workflow_type,
         "relevant_chunks": [],
         "technical_snippets": [],
         "technical_urls": [],
@@ -144,8 +184,14 @@ def _build_initial_state(theme: str) -> dict:
     }
 
 
-async def run_single_arm(theme: str, clarification: str | None, bypass: bool, run_id: str) -> dict:
-    """Run one (theme, arm) pair through the academic planning workflow to completion.
+async def run_single_arm(
+    theme: str,
+    clarification: str | None,
+    bypass: bool,
+    run_id: str,
+    workflow_type: str = "technical",
+) -> dict:
+    """Run one (theme, arm) pair through the planning workflow to completion.
 
     Args:
         theme: The (intentionally vague) review theme.
@@ -154,6 +200,9 @@ async def run_single_arm(theme: str, clarification: str | None, bypass: bool, ru
         bypass: If True, sets ``BYPASS_REFINEMENT_LAYER`` for the duration of
             this run so the refinement layer is skipped.
         run_id: Unique thread id for this graph execution.
+        workflow_type: ``"technical"`` (Tavily-backed, default) or
+            ``"academic"`` (MongoDB-backed) — see the module docstring for why
+            technical is the default while MongoDB Atlas is unreachable.
 
     Returns:
         A dict with the measured metrics and metadata for this run.
@@ -165,9 +214,9 @@ async def run_single_arm(theme: str, clarification: str | None, bypass: bool, ru
 
     clarification_used = False
     try:
-        graph = build_review_graph(review_type="technical")
+        graph = build_review_graph(review_type=workflow_type)
         config = {"configurable": {"thread_id": run_id}}
-        state_init = _build_initial_state(theme)
+        state_init = _build_initial_state(theme, workflow_type=workflow_type)
 
         t0 = time.perf_counter()
         refinement_rounds = 0
@@ -228,6 +277,7 @@ async def run_single_arm(theme: str, clarification: str | None, bypass: bool, ru
             "theme": theme,
             "final_theme": final_theme,
             "arm": "bypassed" if bypass else "refined",
+            "workflow_type": workflow_type,
             "clarification_used": clarification_used,
             "language_detected": final_state.get("detected_language", "UNKNOWN"),
             "session_duration": session_duration,
@@ -240,8 +290,30 @@ async def run_single_arm(theme: str, clarification: str | None, bypass: bool, ru
         os.environ.pop(BYPASS_REFINEMENT_ENV_VAR, None)
 
 
-async def main_async() -> None:
-    """Run the refinement A/B experiment for all test cases and both arms, logging to MLflow."""
+async def main_async(workflow_type: str = "technical") -> None:
+    """Run the refinement A/B experiment for all test cases and both arms, logging to MLflow.
+
+    Args:
+        workflow_type: ``"technical"`` (default) or ``"academic"``, matched
+            case-insensitively. The academic arm requires a reachable
+            MongoDB Atlas cluster — see the module docstring.
+
+    Raises:
+        ValueError: If ``workflow_type`` (after stripping/lowercasing) is not
+            exactly ``"technical"`` or ``"academic"``. Rejecting anything
+            else here — rather than letting an unrecognized value silently
+            reach ``build_review_graph``'s own lenient normalization — matters
+            because ``nodes.common.interview_node`` does its own *case-sensitive*
+            check against ``{"tecnico", "technical"}`` on the raw
+            ``state["review_type"]`` value; a value that ``build_review_graph``
+            would still resolve to the technical graph (e.g. ``"Technical"``)
+            could otherwise silently route the interview step down the
+            academic branch instead, corrupting the experiment's own metrics.
+    """
+    workflow_type = workflow_type.strip().lower()
+    if workflow_type not in {"technical", "academic"}:
+        raise ValueError(f"workflow_type must be 'technical' or 'academic', got {workflow_type!r}")
+
     mlflow.set_tracking_uri(get_tracking_uri())
     mlflow.set_experiment(EXP_PLANNING_REFINEMENT_AB)
 
@@ -254,12 +326,14 @@ async def main_async() -> None:
                 print(f"Running arm='{arm}' theme={case['vague_theme']!r}")
                 mlflow.log_param("theme", case["vague_theme"])
                 mlflow.log_param("arm", arm)
+                mlflow.log_param("workflow_type", workflow_type)
 
                 result = await run_single_arm(
                     theme=case["vague_theme"],
                     clarification=case["clarification"],
                     bypass=bypass,
                     run_id=run_id,
+                    workflow_type=workflow_type,
                 )
 
                 mlflow.log_params(
@@ -286,9 +360,29 @@ async def main_async() -> None:
                 )
 
 
+app = typer.Typer(add_completion=False)
+
+
+@app.command()
+def run(
+    workflow_type: str = typer.Option(
+        "technical",
+        "--workflow-type",
+        "-w",
+        help=(
+            "Which planning workflow to exercise: 'technical' (Tavily-backed, "
+            "default — works today) or 'academic' (MongoDB-backed — requires "
+            "a reachable MongoDB Atlas cluster)."
+        ),
+    ),
+) -> None:
+    """Run the refinement A/B experiment for all test cases and both arms."""
+    asyncio.run(main_async(workflow_type=workflow_type))
+
+
 def main() -> None:
     """Entry point for the script."""
-    asyncio.run(main_async())
+    app()
 
 
 if __name__ == "__main__":

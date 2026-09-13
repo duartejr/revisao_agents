@@ -16,6 +16,7 @@ import re
 from datetime import datetime
 from typing import Any
 
+import mlflow
 from langchain_core.messages import (
     AIMessage,
     HumanMessage,
@@ -125,6 +126,7 @@ def _recover_tool_call_from_exception(exc: Exception) -> dict[str, Any] | None:
 # ── public API ────────────────────────────────────────────────────────────
 
 
+@mlflow.trace(name="review_agent", span_type="AGENT")
 def run_review_agent(
     document_content: str,
     document_sections: list[dict],
@@ -144,6 +146,8 @@ def run_review_agent(
         chat_history: Previous ``[{"role": ..., "content": ...}, ...]`` pairs.
         allow_web: ``True`` when user explicitly asked for web search.
         pending_edit: Current pending edit dict, or ``None``.
+        target_hint: Optional dict with hints about the target section/paragraph
+            for edit proposals, or ``None``.
         max_iterations: Max tool-call round-trips.
 
     Returns:

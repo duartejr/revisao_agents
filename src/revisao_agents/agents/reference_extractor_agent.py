@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 
+import mlflow
 from langchain_core.messages import AIMessage, HumanMessage
 
 from ..tools.reference_tools import get_reference_tools
@@ -34,6 +35,7 @@ def _count_entries(raw_references: str) -> int:
     return max(count, 1)
 
 
+@mlflow.trace(name="reference_extractor_agent", span_type="AGENT")
 def run_reference_extractor_agent(
     raw_references: str,
     citation_context: dict[int, list[str]] | None = None,

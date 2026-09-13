@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 
+import mlflow
 from langchain_core.messages import AIMessage, HumanMessage
 
 from ..core.utils import detect_language
@@ -23,6 +24,7 @@ from ..utils.llm_utils.prompt_loader import load_prompt
 logger = logging.getLogger(__name__)
 
 
+@mlflow.trace(name="image_suggestion_agent", span_type="AGENT")
 def run_image_suggestion_agent(
     document_excerpt: str,
     user_request: str,

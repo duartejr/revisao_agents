@@ -5,6 +5,8 @@ Part of the nodes/writing subpackage.
 
 import logging
 
+import mlflow
+
 from ...core.schemas.writer_config import WriterConfig
 from ...state import TechnicalWriterState
 from ...utils.file_utils.helpers import parse_academic_plan, parse_technical_plan
@@ -12,6 +14,7 @@ from ...utils.file_utils.helpers import parse_academic_plan, parse_technical_pla
 logger = logging.getLogger(__name__)
 
 
+@mlflow.trace(name="parse_plan", span_type="AGENT")
 def parse_plan_node(state: TechnicalWriterState) -> dict:
     """Parses a plan file and extracts sections. Supports both technical and academic modes.
 

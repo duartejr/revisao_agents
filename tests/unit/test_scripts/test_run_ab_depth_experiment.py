@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from typer.testing import CliRunner
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[3] / "scripts" / "run_ab_depth_experiment.py"
 
@@ -131,3 +132,232 @@ async def test_main_async_logs_experiment_params_and_metrics(ab_script):
     # JSON artifact saved with the right name
     artifact_filename = mock_mlflow.log_dict.call_args.args[1]
     assert artifact_filename == "ab_results_fast.json"
+
+
+async def test_main_async_runs_per_depth_creates_distinct_indexed_runs(ab_script):
+    """When ``runs_per_depth`` > 1, each repetition must be its own MLflow run
+    with an index-suffixed name and a logged ``run_index`` param.
+
+    DEPTHS is reduced to ["fast"] so the test only needs to reason about the
+    repetition axis, not the depth axis.
+    """
+    fake_client = MagicMock()
+    fake_client.search.return_value = {
+        "results": [{"url": "https://example.com", "content": "some content"}],
+        "usage": {"credits": 2},
+    }
+
+    fake_evaluation = MagicMock(
+        relevance_score=0.8, academic_quality=True, citation_potential=False
+    )
+
+    mock_mlflow = MagicMock()
+    mock_mlflow.start_run.return_value.__enter__.return_value = MagicMock()
+    mock_mlflow.start_run.return_value.__exit__.return_value = False
+
+    with (
+        patch.object(ab_script, "DEPTHS", ["fast"]),
+        patch.object(ab_script, "mlflow", mock_mlflow),
+        patch.object(ab_script, "TavilyClient", return_value=fake_client),
+        patch.object(
+            ab_script, "evaluate_search_snippets", AsyncMock(return_value=[fake_evaluation])
+        ),
+        patch.object(ab_script, "get_tracking_uri", return_value="file:///tmp/mlruns-test"),
+        patch.object(ab_script, "get_clean_key", return_value="fake-key"),
+    ):
+        await ab_script.main_async(runs_per_depth=3)
+
+    run_names = [call.kwargs["run_name"] for call in mock_mlflow.start_run.call_args_list]
+    assert run_names == ["depth_fast_run_0", "depth_fast_run_1", "depth_fast_run_2"]
+
+    run_index_calls = [
+        call for call in mock_mlflow.log_param.call_args_list if call.args[0] == "run_index"
+    ]
+    assert [call.args[1] for call in run_index_calls] == [0, 1, 2]
+
+
+# ── CLI wiring (Typer) ───────────────────────────────────────────────────────
+
+
+def test_cli_runs_per_depth_flag_is_wired_to_main_async(ab_script):
+    """The --runs-per-depth/-n flag must reach main_async with the parsed int."""
+    runner = CliRunner()
+    fake_main_async = AsyncMock()
+
+    with patch.object(ab_script, "main_async", fake_main_async):
+        result = runner.invoke(ab_script.app, ["--runs-per-depth", "5"])
+
+    assert result.exit_code == 0
+    fake_main_async.assert_called_once_with(runs_per_depth=5, depths=ab_script.DEPTHS)
+
+
+def test_cli_runs_per_depth_short_flag(ab_script):
+    """The -n short alias must behave identically to --runs-per-depth."""
+    runner = CliRunner()
+    fake_main_async = AsyncMock()
+
+    with patch.object(ab_script, "main_async", fake_main_async):
+        result = runner.invoke(ab_script.app, ["-n", "3"])
+
+    assert result.exit_code == 0
+    fake_main_async.assert_called_once_with(runs_per_depth=3, depths=ab_script.DEPTHS)
+
+
+def test_cli_rejects_runs_per_depth_below_one(ab_script):
+    """The min=1 constraint must reject 0 or negative values at the CLI layer."""
+    runner = CliRunner()
+    result = runner.invoke(ab_script.app, ["--runs-per-depth", "0"])
+    assert result.exit_code != 0
+
+
+def test_cli_default_runs_per_depth_is_one(ab_script):
+    """With no flag, main_async must be called with the documented default of 1."""
+    runner = CliRunner()
+    fake_main_async = AsyncMock()
+
+    with patch.object(ab_script, "main_async", fake_main_async):
+        result = runner.invoke(ab_script.app, [])
+
+    assert result.exit_code == 0
+    fake_main_async.assert_called_once_with(runs_per_depth=1, depths=ab_script.DEPTHS)
+
+
+def test_cli_depths_flag_restricts_to_selected_subset(ab_script):
+    """--depths must parse a comma-separated subset and pass it through as a list."""
+    runner = CliRunner()
+    fake_main_async = AsyncMock()
+
+    with patch.object(ab_script, "main_async", fake_main_async):
+        result = runner.invoke(ab_script.app, ["--depths", "advanced"])
+
+    assert result.exit_code == 0
+    fake_main_async.assert_called_once_with(runs_per_depth=1, depths=["advanced"])
+
+
+def test_cli_depths_short_flag_parses_multiple_values(ab_script):
+    """The -d short alias must split multiple comma-separated depths, trimming whitespace."""
+    runner = CliRunner()
+    fake_main_async = AsyncMock()
+
+    with patch.object(ab_script, "main_async", fake_main_async):
+        result = runner.invoke(ab_script.app, ["-d", "fast, basic"])
+
+    assert result.exit_code == 0
+    fake_main_async.assert_called_once_with(runs_per_depth=1, depths=["fast", "basic"])
+
+
+# ── main_async depths validation ────────────────────────────────────────────
+
+
+async def test_main_async_rejects_unknown_depth(ab_script):
+    """An unrecognized depth value must fail loudly rather than silently
+    running zero iterations for it (a plain `for depth in []`-style typo
+    would otherwise produce an empty, silently-incomplete experiment)."""
+    with pytest.raises(ValueError, match="Unknown depth"):
+        await ab_script.main_async(depths=["not_a_real_depth"])
+
+
+async def test_main_async_rejects_empty_depths_list(ab_script):
+    """An explicit empty list must fail loudly, not silently run zero
+    iterations and exit 0 with no signal that nothing happened — a real gap
+    found in review: `--depths ""` (or a comma-only value) parses to `[]`
+    at the CLI layer and would otherwise reach this function unnoticed."""
+    with pytest.raises(ValueError, match="must not be empty"):
+        await ab_script.main_async(depths=[])
+
+
+async def test_main_async_normalizes_depth_case(ab_script):
+    """Depths are matched case-insensitively, mirroring the sibling
+    refinement script's workflow_type normalization — "ADVANCED" must
+    behave identically to "advanced", not raise."""
+    fake_client = MagicMock()
+    fake_client.search.return_value = {
+        "results": [{"url": "https://example.com", "content": "some content"}],
+        "usage": {"credits": 2},
+    }
+    fake_evaluation = MagicMock(
+        relevance_score=0.8, academic_quality=True, citation_potential=False
+    )
+    mock_mlflow = MagicMock()
+    mock_mlflow.start_run.return_value.__enter__.return_value = MagicMock()
+    mock_mlflow.start_run.return_value.__exit__.return_value = False
+
+    with (
+        patch.object(ab_script, "mlflow", mock_mlflow),
+        patch.object(ab_script, "TavilyClient", return_value=fake_client),
+        patch.object(
+            ab_script, "evaluate_search_snippets", AsyncMock(return_value=[fake_evaluation])
+        ),
+        patch.object(ab_script, "get_tracking_uri", return_value="file:///tmp/mlruns-test"),
+        patch.object(ab_script, "get_clean_key", return_value="fake-key"),
+    ):
+        await ab_script.main_async(depths=["  ADVANCED  "])
+
+    mock_mlflow.log_param.assert_any_call("depth", "advanced")
+
+
+async def test_main_async_deduplicates_repeated_depths(ab_script):
+    """A duplicated depth value must run once, not once per occurrence — a
+    copy-paste/shell-quoting mistake (e.g. `--depths fast,fast`) must not
+    silently double the Tavily credit spend for that depth."""
+    fake_client = MagicMock()
+    fake_client.search.return_value = {
+        "results": [{"url": "https://example.com", "content": "some content"}],
+        "usage": {"credits": 2},
+    }
+    fake_evaluation = MagicMock(
+        relevance_score=0.8, academic_quality=True, citation_potential=False
+    )
+    mock_mlflow = MagicMock()
+    mock_mlflow.start_run.return_value.__enter__.return_value = MagicMock()
+    mock_mlflow.start_run.return_value.__exit__.return_value = False
+
+    with (
+        patch.object(ab_script, "mlflow", mock_mlflow),
+        patch.object(ab_script, "TavilyClient", return_value=fake_client),
+        patch.object(
+            ab_script, "evaluate_search_snippets", AsyncMock(return_value=[fake_evaluation])
+        ),
+        patch.object(ab_script, "get_tracking_uri", return_value="file:///tmp/mlruns-test"),
+        patch.object(ab_script, "get_clean_key", return_value="fake-key"),
+    ):
+        await ab_script.main_async(depths=["fast", "fast", "advanced"])
+
+    depth_calls = [
+        call.args[1] for call in mock_mlflow.log_param.call_args_list if call.args[0] == "depth"
+    ]
+    assert depth_calls == ["fast", "advanced"]
+
+
+async def test_main_async_depths_restricts_which_variants_run(ab_script):
+    """Passing depths=["advanced"] must only execute that depth, leaving
+    fast/basic untouched — this is what makes resuming a partial run
+    possible without re-spending credits on already-finished depths."""
+    fake_client = MagicMock()
+    fake_client.search.return_value = {
+        "results": [{"url": "https://example.com", "content": "some content"}],
+        "usage": {"credits": 2},
+    }
+    fake_evaluation = MagicMock(
+        relevance_score=0.8, academic_quality=True, citation_potential=False
+    )
+    mock_mlflow = MagicMock()
+    mock_mlflow.start_run.return_value.__enter__.return_value = MagicMock()
+    mock_mlflow.start_run.return_value.__exit__.return_value = False
+
+    with (
+        patch.object(ab_script, "mlflow", mock_mlflow),
+        patch.object(ab_script, "TavilyClient", return_value=fake_client),
+        patch.object(
+            ab_script, "evaluate_search_snippets", AsyncMock(return_value=[fake_evaluation])
+        ),
+        patch.object(ab_script, "get_tracking_uri", return_value="file:///tmp/mlruns-test"),
+        patch.object(ab_script, "get_clean_key", return_value="fake-key"),
+    ):
+        await ab_script.main_async(depths=["advanced"])
+
+    mock_mlflow.log_param.assert_any_call("depth", "advanced")
+    depth_calls = [
+        call.args[1] for call in mock_mlflow.log_param.call_args_list if call.args[0] == "depth"
+    ]
+    assert depth_calls == ["advanced"]
