@@ -22,6 +22,7 @@ revisao_agents/
 │   │           ├── document.py      ← Listagem de arquivos de revisão
 │   │           ├── intent.py        ← Detecção de intenção do usuário
 │   │           ├── images.py        ← Máquina de estados de sugestão de imagens
+│   │           ├── reviewer.py      ← Journal Reviewer Mode (relatório + follow-up, somente leitura)
 │   │           └── references.py   ← Pipeline de enriquecimento de referências
 │   └── revisao_agents/    ← Pacote principal
 │       ├── agents/        ← Agentes de chamada de ferramentas e de saída estruturada (review_agent, image_suggestion, reference_*, journal_reviewer_agent); não são nós do LangGraph
@@ -136,9 +137,36 @@ handlers/review.py  (review_chat_turn / start_review_session)
         ├─► review_parts/intent.py     (detecção de intenção)
         ├─► review_parts/images.py     (sugestão de imagens)
         ├─► review_parts/references.py (enriquecimento de referências)
+        ├─► review_parts/reviewer.py   (Journal Reviewer Mode — ramo antecipado, ver abaixo)
         ├─► agents/review_agent.py     (ReAct loop, MAX_ITERATIONS=6)
         └─► tools/review_tools.py      (Tavily, se web ativado)
 ```
+
+### Journal Reviewer Mode
+
+Com o checkbox **🧑‍⚖️ Journal Reviewer Mode** ligado, `review_chat_turn(..., reviewer_mode=True)` desvia para
+`review_parts/reviewer.py::handle_reviewer_turn` **antes** de qualquer classificador de referência/edição
+(retorno único). O ramo é somente leitura: não escreve a cópia de trabalho nem toca em `pending_edit`.
+
+```
+handle_reviewer_turn
+   ├─ sem relatório guardado (ou "gerar novamente")
+   │     └─► agents/journal_reviewer_agent.run_journal_review
+   │            ├─ build_review_context  (orçamento JOURNAL_REVIEW_MAX_CHARS + marcador de truncamento)
+   │            ├─ prompts/common/journal_reviewer.yaml
+   │            └─ config.llm_call(response_schema=JournalReviewReport)   ← sem ferramentas
+   │         → session_state["journal_review_report"] / ["journal_review_markdown"] / ["journal_review_doc_hash"]
+   └─ com relatório guardado (follow-up)
+         └─► agents/review_agent.run_review_agent(system_prompt_override=journal_reviewer_followup.yaml)
+              (ferramentas de evidência ativas; marcadores de edição descartados;
+               aviso de relatório desatualizado se o hash do documento mudou)
+```
+
+A detecção de "gerar novamente" é uma regex que exige que a **mensagem inteira** seja o pedido (verbo imperativo + substantivo de relatório, ou "novamente/again", com "please/por favor" opcional),
+de modo que perguntas *sobre* o relatório não o regeneram.
+
+O esquema (`core/schemas/journal_review.py`) é o contrato; cada geração gera um run no experimento MLflow
+`journal_review` (ver [guia do MLflow](mlflow_guide.md)). Os relatórios vivem apenas no `session_state`.
 
 ## Provedores LLM suportados
 

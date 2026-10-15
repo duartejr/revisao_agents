@@ -39,6 +39,7 @@ from .review_parts.intent import (
     _is_citation_usage_query,
     _is_negative_confirmation,
 )
+from .review_parts.reviewer import handle_reviewer_turn
 
 
 def start_review_session(
@@ -128,6 +129,7 @@ def review_chat_turn(
     history: list,
     session_state: dict,
     web_enabled: bool = False,
+    reviewer_mode: bool = False,
 ) -> tuple[list, dict, str, str]:
     """Handles a chat turn during the review session, processing the user's message and updating the session state accordingly.
 
@@ -136,6 +138,11 @@ def review_chat_turn(
         history (list): The list of previous messages in the chat history, where each message is a dictionary with 'role' and 'content' keys.
         session_state (dict): The current state of the review session, containing information such as the working copy path, current markdown content, pending edits, and retrieval trace.
         web_enabled (bool, optional): A flag indicating whether web search is enabled for reference retrieval. Defaults to False.
+        reviewer_mode (bool, optional): When ``True``, the turn is delegated to
+            ``review_parts.reviewer.handle_reviewer_turn`` (read-only referee report and
+            follow-ups) and returned immediately, before any citation/edit routing; the working
+            copy and ``pending_edit`` are left untouched. Empty-message and missing-session
+            guards still run first. Defaults to False.
 
     Returns:
         tuple: A tuple containing the updated chat history, session state, status message, and working copy content.
@@ -166,6 +173,12 @@ def review_chat_turn(
     session_state["current_markdown"] = markdown
     sections = _split_sections(markdown)
     allow_web = bool(web_enabled) or _explicit_web_request(user_msg)
+    # Reviewer mode is read-only and must short-circuit before every
+    # reference/edit classifier below.
+    if reviewer_mode:
+        return handle_reviewer_turn(
+            user_msg, history, session_state, markdown, sections, language, allow_web=allow_web
+        )
     pending_edit = session_state.get("pending_edit") or {}
     pending_reference_action = session_state.get("pending_reference_action") or {}
     awaiting_reference_confirmation = bool(session_state.get("awaiting_reference_confirmation"))
