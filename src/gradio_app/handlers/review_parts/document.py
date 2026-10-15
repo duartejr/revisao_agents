@@ -24,6 +24,34 @@ def list_review_files() -> list[str]:
     return sorted(glob.glob(os.path.join(REVIEWS_DIR, "*.md")))
 
 
+def _is_allowed_review_path(path: str) -> bool:
+    """Return whether ``path`` lives inside the configured reviews directory.
+
+    Accepts files under ``REVIEWS_DIR`` (default ``./runtime/reviews``) and, for
+    backward compatibility, paths relative to a top-level ``reviews/`` folder.
+    The path must also point to an existing regular file (resolved against the
+    current working directory when relative); the ``REVIEWS_DIR`` check resolves
+    symlinks and ``..`` segments before comparing.
+
+    Args:
+        path: Normalized (``os.path.normpath``) path of the selected review file.
+
+    Returns:
+        ``True`` when ``path`` is an existing file inside an allowed reviews
+        directory, ``False`` otherwise (missing file, outside the directories,
+        or paths on a different drive on Windows).
+    """
+    if not os.path.isfile(path):
+        return False
+    if path.startswith("reviews/"):
+        return True
+    root = os.path.realpath(REVIEWS_DIR)
+    try:
+        return os.path.commonpath([os.path.realpath(path), root]) == root
+    except ValueError:  # e.g. different drives on Windows
+        return False
+
+
 def _working_copy_path(review_file: str) -> str:
     """Generate a unique working copy path for a given review file.
 

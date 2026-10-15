@@ -21,6 +21,7 @@ from revisao_agents.observability.mlflow_config import EXP_REVIEW_CHAT, get_trac
 from .base import _atomic_write, _detect_user_language, _localized_text, _read_md
 from .review_parts import references as review_refs
 from .review_parts.document import (
+    _is_allowed_review_path,
     _resolve_target_hint,
     _split_sections,
     _working_copy_path,
@@ -71,7 +72,7 @@ def start_review_session(
         )
 
     normalized = os.path.normpath(review_file)
-    if not normalized.startswith("reviews/"):
+    if not _is_allowed_review_path(normalized):
         return (
             history,
             session_state,
