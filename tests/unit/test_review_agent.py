@@ -10,6 +10,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from revisao_agents.agents.review_agent import (
     _extract_edit_proposal,
     _parse_agent_response,
@@ -571,3 +573,27 @@ class TestSystemPrompt:
         assert "REVISED_TEXT_START" in system_msg
         assert "search_evidence" in system_msg
         assert "search_evidence_sources" in system_msg
+
+
+class TestSystemPromptOverride:
+    @pytest.mark.parametrize("override", ["CUSTOM PROMPT", ""])
+    def test_override_replaces_default_system_prompt(self, override):
+        """Any non-None override (even empty) must bypass the citation/edit prompt."""
+        fake_llm = MagicMock()
+        fake_llm.bind_tools.return_value = fake_llm
+        fake_llm.invoke.return_value = _fake_llm_response("ok")
+
+        with (
+            patch("revisao_agents.agents.review_agent.get_raw_llm", return_value=fake_llm),
+            patch("revisao_agents.agents.review_agent._build_system_prompt") as default_prompt,
+        ):
+            run_review_agent(
+                document_content=SAMPLE_MARKDOWN,
+                document_sections=SECTIONS,
+                user_message="hello",
+                chat_history=[],
+                system_prompt_override=override,
+            )
+
+        default_prompt.assert_not_called()
+        assert fake_llm.invoke.call_args[0][0][0].content == override
