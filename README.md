@@ -232,7 +232,7 @@ revisao_agents/
 │   │       ├── base.py, planning.py, review.py, writing.py, tools.py
 │   │       └── review_parts/  ← document, intent, images, references
 │   └── revisao_agents/    ← Pacote principal
-│       ├── agents/        ← Nós do LangGraph
+│       ├── agents/        ← Agentes de chamada de ferramentas e de saída estruturada (revisão, imagens, referências, revisor de periódico)
 │       ├── tools/         ← Ferramentas LangChain
 │       ├── workflows/     ← Grafos de estado
 │       ├── nodes/         ← Nós especializados de escrita

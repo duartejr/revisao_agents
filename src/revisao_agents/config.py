@@ -26,6 +26,34 @@ def _env_clean(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip().strip("'").strip('"')
 
 
+def _env_int(name: str, default: int, minimum: int | None = None) -> int:
+    """Read env var as an int, falling back to ``default`` when unset/empty.
+
+    Fails loud on a non-integer value, mirroring :func:`_env_float`.
+
+    Args:
+        name: name of the environment variable to read.
+        default: default value if the env var is unset or empty.
+        minimum: optional inclusive lower bound for a *set* value.
+
+    Returns:
+        The parsed int value.
+
+    Raises:
+        ValueError: If the env var is set to a non-integer value or below ``minimum``.
+    """
+    raw = _env_clean(name)
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as err:
+        raise ValueError(f"Invalid {name}: {raw!r} is not an integer") from err
+    if minimum is not None and value < minimum:
+        raise ValueError(f"Invalid {name}: {value} is below the minimum of {minimum}")
+    return value
+
+
 def _env_float(name: str, default: float) -> float:
     """Read env var as a float, falling back to ``default`` when unset/empty.
 
@@ -81,6 +109,11 @@ SNIPPET_MIN_SCORE = 0.7
 # need to diverge as each is tuned.
 TAVILY_RESULT_MIN_SCORE = _env_float("TAVILY_RESULT_MIN_SCORE", 0.7)
 LANGUAGE_BOOST_EN = _env_float("LANGUAGE_BOOST_EN", 0.3)
+
+# Journal Reviewer Mode (src/revisao_agents/agents/journal_reviewer_agent.py):
+# max characters of the review document sent to the referee prompt. Longer
+# documents are clipped at a section boundary with an explicit truncation marker.
+JOURNAL_REVIEW_MAX_CHARS = _env_int("JOURNAL_REVIEW_MAX_CHARS", 30000, minimum=1000)
 
 # Chunking and embeddings
 CHUNK_SIZE = 2400

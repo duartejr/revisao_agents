@@ -15,6 +15,7 @@ O MLflow é configurado no pacote `src/revisao_agents/observability/` e rastreia
 | `writing_academic`      | Escrita de revisão acadêmica              |
 | `writing_technical`     | Escrita de revisão técnica                |
 | `review_chat`           | Interações de revisão interativa (chat)   |
+| `journal_review`        | Journal Reviewer Mode: um run por relatório gerado, com as notas `methodology_score`, `contribution_score`, `novelty_score` e `writing_quality_score` (métricas) e `overall_recommendation`, `review_file`, `provider`, `model`, `prompt_version`, `truncated` (parâmetros); o trace `journal_review` fica no mesmo experimento |
 | `cost_reports`          | Relatórios agregados de custo Tavily (`scripts/generate_cost_report.py`, ver seção [Relatório de custos](#relatório-de-custos-w8-story-04)) |
 | `ab_depth_experiments`  | A/B de profundidade Tavily (`scripts/run_ab_depth_experiment.py`, W9-STORY-02) |
 | `planning_refinement_ab`| A/B da camada de refinamento de linguagem/ambiguidade (`scripts/run_refinement_ab_experiment.py`, W9-STORY-03) |
