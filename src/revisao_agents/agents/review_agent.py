@@ -136,6 +136,7 @@ def run_review_agent(
     pending_edit: dict | None = None,
     target_hint: dict | None = None,
     max_iterations: int = MAX_AGENT_ITERATIONS,
+    system_prompt_override: str | None = None,
 ) -> dict:
     """Execute one turn of the review agent.
 
@@ -149,6 +150,12 @@ def run_review_agent(
         target_hint: Optional dict with hints about the target section/paragraph
             for edit proposals, or ``None``.
         max_iterations: Max tool-call round-trips.
+        system_prompt_override: Any non-``None`` value (including an empty
+            string) is used verbatim as the system prompt instead of the
+            citation/edit review prompt; ``document_content``,
+            ``document_sections`` and ``pending_edit`` are then not injected
+            into the prompt, so the override must carry whatever document
+            context the model needs. Used by Journal Reviewer Mode follow-ups.
 
     Returns:
         ``dict`` with keys:
@@ -166,13 +173,16 @@ def run_review_agent(
         provider_name=provider_name,
     )
 
-    system_prompt = _build_system_prompt(
-        document_content,
-        document_sections,
-        allow_web,
-        pending_edit,
-        include_full_document=not is_groq,
-    )
+    if system_prompt_override is not None:
+        system_prompt = system_prompt_override
+    else:
+        system_prompt = _build_system_prompt(
+            document_content,
+            document_sections,
+            allow_web,
+            pending_edit,
+            include_full_document=not is_groq,
+        )
 
     # Build LangChain message list
     messages: list[Any] = [SystemMessage(content=system_prompt)]
