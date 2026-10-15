@@ -100,3 +100,4 @@ uv run revisao-agents --help
 | `TAVILY_INCLUDE_USAGE` | opcional | Inclui metadados de créditos usados na resposta Tavily (`true`/`false`, padrão: `true`) |
 | `TAVILY_RESULT_MIN_SCORE` | opcional | Score mínimo de relevância Tavily para manter um resultado (0.0–1.0, padrão: `0.7`) — ver [tavily_tuning_guide.md](tavily_tuning_guide.md) |
 | `LANGUAGE_BOOST_EN` | opcional | Bônus de score para resultados em inglês antes da reordenação por idioma (0.0–1.0, padrão: `0.3`) — ver [tavily_tuning_guide.md](tavily_tuning_guide.md) |
+| `JOURNAL_REVIEW_MAX_CHARS` | opcional | Máximo de caracteres do documento enviados ao Journal Reviewer Mode (inteiro ≥ 1000, padrão: `30000`) — ver [ui/review_chat.md](ui/review_chat.md) |

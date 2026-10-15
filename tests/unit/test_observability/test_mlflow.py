@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 class TestMlflowConfig:
     """Tests for observability.mlflow_config constants and env-var reading."""
 
-    def test_experiments_contains_all_six_keys(self):
+    def test_experiments_contains_all_keys(self):
         from revisao_agents.observability.mlflow_config import EXPERIMENTS
 
         expected = {
@@ -20,6 +20,7 @@ class TestMlflowConfig:
             "writing_technical",
             "review_chat",
             "cost_reports",
+            "journal_review",
         }
         assert set(EXPERIMENTS.keys()) == expected
 
