@@ -8,6 +8,7 @@ Sistema agêntico para planejamento e escrita de revisões acadêmicas e capítu
 - **Planeja revisões** com entrevista guiada por IA (Human-in-the-Loop)
 - **Escreve seções** completas buscando evidências no corpus local (MongoDB) e na web (Tavily)
 - **Revisa interativamente** textos gerados via chat com o agente
+- **Avalia como um revisor de periódico (Journal Reviewer Mode)** — relatório estruturado com notas de 1–10 para metodologia, contribuição, novidade e qualidade da escrita, seguido de perguntas de acompanhamento (somente leitura; notas geradas por LLM e não calibradas)
 - **Indexa PDFs** locais em base vetorial para busca semântica
 - **Formata referências** a partir de arquivos YAML/JSON nos padrões ABNT, APA, IEEE etc.
 

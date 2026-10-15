@@ -47,6 +47,7 @@ from gradio_app.handlers import (  # noqa: E402
     start_review_session,
     start_writing,
 )
+from gradio_app.handlers.base import _detect_user_language, _localized_text  # noqa: E402
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Custom CSS — minimal ChatGPT-inspired theme
@@ -596,6 +597,11 @@ def build_app() -> gr.Blocks:
                         value=False,
                         info="Enable this so the agent can search for papers online.",
                     )
+                    review_reviewer_toggle = gr.Checkbox(
+                        label="🧑‍⚖️ Journal Reviewer Mode",
+                        value=False,
+                        info="Referee report with rubric scores, then follow-up questions. Read-only: never edits the document.",
+                    )
                     review_status = gr.Textbox(
                         label="Status",
                         interactive=False,
@@ -649,43 +655,44 @@ def build_app() -> gr.Blocks:
                 outputs=[review_chatbot, review_session, review_status, review_preview],
             )
 
-            def _on_review_send(user_msg, chatbot, session, web_toggle):
+            def _on_review_send(user_msg, chatbot, session, web_toggle, reviewer_toggle):
+                if reviewer_toggle and (user_msg or "").strip():
+                    # Reviewer calls take several seconds: show progress first.
+                    wait = _localized_text(
+                        _detect_user_language(user_msg),
+                        "⏳ O revisor está avaliando o documento...",
+                        "⏳ The reviewer is evaluating the document...",
+                    )
+                    yield chatbot, session, wait, gr.update(), gr.update()
                 history, session_state, status, preview = review_chat_turn(
-                    user_msg, chatbot, session, web_toggle
+                    user_msg, chatbot, session, web_toggle, reviewer_mode=bool(reviewer_toggle)
                 )
-                return history, session_state, status, preview, gr.update(value="")
+                yield history, session_state, status, preview, gr.update(value="")
+
+            _review_send_inputs = [
+                review_input,
+                review_chatbot,
+                review_session,
+                review_web_toggle,
+                review_reviewer_toggle,
+            ]
+            _review_send_outputs = [
+                review_chatbot,
+                review_session,
+                review_status,
+                review_preview,
+                review_input,
+            ]
 
             review_send.click(
                 fn=_on_review_send,
-                inputs=[
-                    review_input,
-                    review_chatbot,
-                    review_session,
-                    review_web_toggle,
-                ],
-                outputs=[
-                    review_chatbot,
-                    review_session,
-                    review_status,
-                    review_preview,
-                    review_input,
-                ],
+                inputs=_review_send_inputs,
+                outputs=_review_send_outputs,
             )
             review_input.submit(
                 fn=_on_review_send,
-                inputs=[
-                    review_input,
-                    review_chatbot,
-                    review_session,
-                    review_web_toggle,
-                ],
-                outputs=[
-                    review_chatbot,
-                    review_session,
-                    review_status,
-                    review_preview,
-                    review_input,
-                ],
+                inputs=_review_send_inputs,
+                outputs=_review_send_outputs,
             )
 
             review_confirm.click(
