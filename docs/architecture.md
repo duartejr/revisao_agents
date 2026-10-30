@@ -24,14 +24,14 @@ revisao_agents/
 │   │           ├── images.py        ← Máquina de estados de sugestão de imagens
 │   │           └── references.py   ← Pipeline de enriquecimento de referências
 │   └── revisao_agents/    ← Pacote principal
-│       ├── agents/        ← Nós do LangGraph (funções por workflow)
+│       ├── agents/        ← Agentes de chamada de ferramentas e de saída estruturada (review_agent, image_suggestion, reference_*, journal_reviewer_agent); não são nós do LangGraph
 │       ├── graphs/        ← StateGraph definitions
 │       ├── nodes/         ← Nós especializados (escrita por seções, verificação)
 │       ├── workflows/     ← Montagem de workflows (academic, technical, writing)
 │       ├── tools/         ← LangChain @tool wrappers (busca, referências, web)
 │       ├── prompts/       ← Templates YAML de prompts versionados
 │       ├── core/
-│       │   └── schemas/   ← Pydantic models compartilhados
+│       │   └── schemas/   ← Pydantic models compartilhados (inclui journal_review.py)
 │       ├── utils/         ← Utilitários (llm_providers, vector_store, tavily, …)
 │       ├── observability/ ← Rastreamento MLflow (experimentos, métricas)
 │       ├── evaluation/    ← Avaliadores de qualidade de busca/snippets

@@ -37,6 +37,7 @@ EXP_WRITING_ACADEMIC: str = "writing_academic"
 EXP_WRITING_TECHNICAL: str = "writing_technical"
 EXP_REVIEW_CHAT: str = "review_chat"
 EXP_COST_REPORTS: str = "cost_reports"
+EXP_JOURNAL_REVIEW: str = "journal_review"
 
 #: Mapping of canonical experiment names to human-readable descriptions.
 #: Keys are the MLflow experiment names; values are display descriptions.
@@ -47,6 +48,7 @@ EXPERIMENTS: dict[str, str] = {
     EXP_WRITING_TECHNICAL: "Technical Writing — section generation quality metrics",
     EXP_REVIEW_CHAT: "Review Chat — interactive review interaction metrics",
     EXP_COST_REPORTS: "Cost Reports — Tavily credit spend aggregated by depth/workflow type",
+    EXP_JOURNAL_REVIEW: "Journal Reviewer — rubric scores of referee reports on generated reviews",
 }
 
 # ---------------------------------------------------------------------------
